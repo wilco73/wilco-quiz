@@ -176,7 +176,8 @@ app.post('/api/start-quiz', (req, res) => {
     lobby.session = {
       currentQuestionIndex: 0,
       status: 'active',
-      startedAt: Date.now()
+      startedAt: Date.now(),
+      questionStartTime: Date.now() // Timestamp du début de la question
     };
     lobby.participants.forEach(p => {
       p.hasAnswered = false;
@@ -194,19 +195,35 @@ app.post('/api/submit-answer', (req, res) => {
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
   
-  if (lobby) {
+  if (lobby && lobby.session) {
     const participant = lobby.participants.find(p => p.participantId === participantId);
-    if (participant) {
+    if (participant && !participant.hasAnswered) {
+      // Vérifier si le temps n'est pas écoulé
+      const quiz = db.quizzes.find(q => q.id === lobby.quizId);
+      const currentQuestion = quiz?.questions[lobby.session.currentQuestionIndex];
+      const timer = currentQuestion?.timer || 0;
+      
+      if (timer > 0) {
+        const elapsed = Math.floor((Date.now() - lobby.session.questionStartTime) / 1000);
+        if (elapsed > timer) {
+          // Temps écoulé, ne pas accepter la réponse
+          return res.json({ success: false, message: 'Temps écoulé' });
+        }
+      }
+      
       participant.hasAnswered = true;
       participant.currentAnswer = answer;
       const qIndex = lobby.session.currentQuestionIndex;
       if (!participant.answers) participant.answers = {};
       participant.answers[qIndex] = answer;
+      
+      writeDB(db);
+      res.json({ success: true });
+    } else {
+      res.json({ success: false, message: 'Déjà répondu ou participant introuvable' });
     }
-    writeDB(db);
-    res.json({ success: true });
   } else {
-    res.json({ success: false });
+    res.json({ success: false, message: 'Lobby introuvable' });
   }
 });
 
@@ -219,16 +236,19 @@ app.post('/api/next-question', (req, res) => {
     const quiz = db.quizzes.find(q => q.id === lobby.quizId);
     if (lobby.session.currentQuestionIndex < quiz.questions.length - 1) {
       lobby.session.currentQuestionIndex++;
+      lobby.session.questionStartTime = Date.now(); // Nouveau timestamp pour la nouvelle question
       lobby.participants.forEach(p => {
         p.hasAnswered = false;
         p.currentAnswer = '';
       });
+      writeDB(db);
+      res.json({ success: true });
     } else {
       lobby.session.status = 'finished';
       lobby.status = 'finished';
+      writeDB(db);
+      res.json({ success: true, finished: true });
     }
-    writeDB(db);
-    res.json({ success: true });
   } else {
     res.json({ success: false });
   }
