@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as api from './services/api';
 import { saveSession, getSession, clearSession } from './services/storage';
 import { useQuizData } from './hooks/useQuizData';
@@ -71,7 +71,8 @@ const App = () => {
         clearInterval(pollingIntervalRef.current);
       }
     };
-  }, [view, isAdmin, currentLobby]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, isAdmin, currentLobby?.id]);
 
   // Mettre à jour le lobby actuel
   const updateCurrentLobby = async () => {
@@ -280,14 +281,15 @@ const App = () => {
     }
   };
 
-  const handleNextQuestion = async (lobbyId) => {
+  // Utiliser useCallback pour stabiliser la référence de la fonction
+  const handleNextQuestion = useCallback(async (lobbyId) => {
     try {
       await api.nextQuestion(lobbyId);
       await loadLobbies();
     } catch (error) {
       console.error('Erreur:', error);
     }
-  };
+  }, [loadLobbies]);
 
   const handleValidateAnswer = async (lobbyId, participantId, isCorrect) => {
     try {

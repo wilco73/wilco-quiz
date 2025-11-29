@@ -7,7 +7,7 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
 
   const quiz = activeLobby ? quizzes.find(q => q.id === activeLobby.quizId) : null;
   const currentQuestion = quiz?.questions[activeLobby?.session?.currentQuestionIndex];
-  const allAnswered = activeLobby?.participants?.every(p => p.hasAnswered);
+  const allAnswered = activeLobby?.participants?.every(p => p.hasAnswered) || false;
   const answeredCount = activeLobby?.participants?.filter(p => p.hasAnswered).length || 0;
 
   // Gestion du timer
@@ -38,18 +38,28 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
       setTimeRemaining(newRemaining);
 
       // Passer automatiquement à la question suivante si le temps est écoulé
-      if (newRemaining === 0) {
+      if (newRemaining === 0 && onNextQuestion) {
         clearInterval(interval);
         setTimeout(() => {
-          if (onNextQuestion) {
-            onNextQuestion(activeLobby.id);
-          }
+          onNextQuestion(activeLobby.id);
         }, 2000); // Attendre 2 secondes avant de passer
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [activeLobby?.id, currentQuestion?.id, activeLobby?.session?.currentQuestionIndex]);
+  }, [activeLobby?.id, activeLobby?.session?.currentQuestionIndex, activeLobby?.session?.questionStartTime, currentQuestion?.timer, currentQuestion?.id, onNextQuestion]);
+
+  // Passage automatique si tous ont répondu
+  useEffect(() => {
+    if (allAnswered && activeLobby && onNextQuestion && (!currentQuestion?.timer || currentQuestion.timer === 0)) {
+      // Attendre 2 secondes puis passer automatiquement
+      const timeout = setTimeout(() => {
+        onNextQuestion(activeLobby.id);
+      }, 2000);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [allAnswered, activeLobby?.id, currentQuestion?.timer, onNextQuestion]);
 
   if (!activeLobby) {
     return (
@@ -173,7 +183,16 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
         <div className="bg-green-100 rounded-lg p-4 text-center animate-pulse">
           <p className="font-bold text-green-700 flex items-center justify-center gap-2">
             <Check className="w-5 h-5" />
-            Tous ont répondu ! Cliquez sur "Question suivante"
+            Tous ont répondu ! Passage automatique dans 2 secondes...
+          </p>
+        </div>
+      )}
+
+      {allAnswered && (!currentQuestion?.timer || currentQuestion.timer === 0) && (
+        <div className="bg-green-100 rounded-lg p-4 text-center animate-pulse">
+          <p className="font-bold text-green-700 flex items-center justify-center gap-2">
+            <Check className="w-5 h-5" />
+            Tous ont répondu ! Passage automatique...
           </p>
         </div>
       )}
