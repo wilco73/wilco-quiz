@@ -4,35 +4,60 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 const DB_FILE = path.join(__dirname, 'db.json');
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 
+// Fonction d'initialisation de la base de données
 function initDB() {
   if (!fs.existsSync(DB_FILE)) {
     const initialData = {
       teams: [],
       participants: [],
       quizzes: [],
+      questions: [],
       lobbies: [],
       admins: [{ id: '1', username: 'admin', password: 'admin123' }]
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
+    console.log('📂 Base de données initialisée');
   }
 }
 
 function readDB() {
-  return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  try {
+    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  } catch (error) {
+    console.error('❌ Erreur lecture DB:', error);
+    return { teams: [], participants: [], quizzes: [], questions: [], lobbies: [], admins: [] };
+  }
 }
 
 function writeDB(data) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error('❌ Erreur écriture DB:', error);
+  }
 }
 
 initDB();
 
+// ==================== CONFIG ====================
+app.get('/api/config', (req, res) => {
+  const protocol = req.protocol;
+  const host = req.get('host');
+  res.json({
+    apiUrl: `${protocol}://${host}/api`,
+    pollInterval: 1000,
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// ==================== ADMIN ====================
 app.post('/api/admin-login', (req, res) => {
   const { username, password } = req.body;
   const db = readDB();
@@ -40,7 +65,9 @@ app.post('/api/admin-login', (req, res) => {
   res.json(admin ? { success: true, username: admin.username } : { success: false, message: 'Identifiants incorrects' });
 });
 
-app.get('/api/teams', (req, res) => res.json(readDB().teams));
+// ==================== TEAMS ====================
+app.get('/api/teams', (req, res) => res.json(readDB().teams || []));
+
 app.post('/api/teams', (req, res) => {
   const db = readDB();
   db.teams = req.body;
@@ -48,7 +75,9 @@ app.post('/api/teams', (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/api/participants', (req, res) => res.json(readDB().participants));
+// ==================== PARTICIPANTS ====================
+app.get('/api/participants', (req, res) => res.json(readDB().participants || []));
+
 app.post('/api/participants', (req, res) => {
   const db = readDB();
   db.participants = req.body;
@@ -56,7 +85,9 @@ app.post('/api/participants', (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/api/quizzes', (req, res) => res.json(readDB().quizzes));
+// ==================== QUIZZES ====================
+app.get('/api/quizzes', (req, res) => res.json(readDB().quizzes || []));
+
 app.post('/api/quizzes', (req, res) => {
   const db = readDB();
   db.quizzes = req.body;
@@ -64,7 +95,21 @@ app.post('/api/quizzes', (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/api/lobbies', (req, res) => res.json(readDB().lobbies));
+// ==================== QUESTIONS ====================
+app.get('/api/questions', (req, res) => {
+  const db = readDB();
+  res.json(db.questions || []);
+});
+
+app.post('/api/questions', (req, res) => {
+  const db = readDB();
+  db.questions = req.body;
+  writeDB(db);
+  res.json({ success: true });
+});
+
+// ==================== LOBBIES ====================
+app.get('/api/lobbies', (req, res) => res.json(readDB().lobbies || []));
 
 app.post('/api/create-lobby', (req, res) => {
   const { quizId } = req.body;
@@ -92,7 +137,15 @@ app.post('/api/join-lobby', (req, res) => {
   }
   
   if (!lobby.participants.find(p => p.participantId === participantId)) {
-    lobby.participants.push({ participantId, pseudo, teamName, hasAnswered: false, currentAnswer: '', answers: {}, validations: {} });
+    lobby.participants.push({ 
+      participantId, 
+      pseudo, 
+      teamName, 
+      hasAnswered: false, 
+      currentAnswer: '', 
+      answers: {}, 
+      validations: {} 
+    });
   }
   writeDB(db);
   res.json({ success: true });
@@ -212,8 +265,59 @@ app.post('/api/validate-answer', (req, res) => {
   }
 });
 
+app.post('/api/delete-lobby', (req, res) => {
+  const { lobbyId } = req.body;
+  const db = readDB();
+  db.lobbies = db.lobbies.filter(l => l.id !== lobbyId);
+  writeDB(db);
+  res.json({ success: true });
+});
+
+// ==================== PRODUCTION: SERVIR LE CLIENT REACT ====================
+if (process.env.NODE_ENV === 'production') {
+  const clientBuildPath = path.join(__dirname, '../client/build');
+  
+  // Vérifier que le dossier build existe
+  if (fs.existsSync(clientBuildPath)) {
+    app.use(express.static(clientBuildPath));
+    
+    // Toutes les routes non-API renvoient index.html (pour le routing React)
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(clientBuildPath, 'index.html'));
+    });
+    
+    console.log('📦 Client React servi depuis', clientBuildPath);
+  } else {
+    console.warn('⚠️  Dossier build du client introuvable. Exécutez "npm run build" dans le dossier client.');
+  }
+}
+
+// ==================== DÉMARRAGE DU SERVEUR ====================
 app.listen(PORT, () => {
-  console.log(`✅ Serveur sur http://localhost:${PORT}`);
-  console.log(`📁 DB: ${DB_FILE}`);
-  console.log(`🔑 Admin: admin / admin123`);
+  console.log('');
+  console.log('╔══════════════════════════════════════════╗');
+  console.log('║   🎮 WILCO QUIZ SERVER                  ║');
+  console.log('╚══════════════════════════════════════════╝');
+  console.log('');
+  console.log(`✅ Serveur démarré sur http://localhost:${PORT}`);
+  console.log(`📂 Base de données: ${DB_FILE}`);
+  console.log(`🔑 Admin par défaut: admin / admin123`);
+  console.log(`🌍 Environnement: ${process.env.NODE_ENV || 'development'}`);
+  console.log('');
+  console.log('📡 Endpoints API disponibles:');
+  console.log('   GET  /api/config');
+  console.log('   POST /api/admin-login');
+  console.log('   GET  /api/teams, /api/participants, /api/quizzes, /api/questions, /api/lobbies');
+  console.log('   POST /api/create-lobby, /api/join-lobby, /api/start-quiz, etc.');
+  console.log('');
+  
+  if (process.env.NODE_ENV === 'production') {
+    console.log('🚀 Mode PRODUCTION - Client React intégré');
+  } else {
+    console.log('🔧 Mode DEVELOPMENT - Client React sur port séparé (ex: 3000)');
+  }
+  
+  console.log('');
+  console.log('Appuyez sur Ctrl+C pour arrêter le serveur');
+  console.log('');
 });
