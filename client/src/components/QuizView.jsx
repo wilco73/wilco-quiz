@@ -25,7 +25,7 @@ const QuizView = ({
     }
   }, [currentSession?.currentQuestionIndex, hasAnswered, isFinished]);
 
-  // Gestion du timer
+  // ✅ CORRECTION: Utiliser le temps du serveur
   useEffect(() => {
     if (!question || hasAnswered || isFinished) {
       setTimeRemaining(null);
@@ -39,28 +39,37 @@ const QuizView = ({
       return;
     }
 
-    // Calculer le temps restant basé sur le début de la question
-    const questionStartTime = currentSession?.questionStartTime || Date.now();
-    const elapsed = Math.floor((Date.now() - questionStartTime) / 1000);
-    const remaining = Math.max(0, timer - elapsed);
-    
-    setTimeRemaining(remaining);
+    // ✅ NOUVEAU: Utiliser timeRemaining du serveur si disponible
+    if (currentLobby.timeRemaining !== undefined) {
+      setTimeRemaining(currentLobby.timeRemaining);
+      
+      // Si le temps est écoulé côté serveur, empêcher la soumission
+      if (currentLobby.timeRemaining === 0 && !hasAnswered) {
+        // Le serveur a décidé que le temps est écoulé
+        return;
+      }
+    } else {
+      // Fallback sur le calcul côté client (pour compatibilité)
+      const questionStartTime = currentSession?.questionStartTime || currentLobby.questionStartTime || Date.now();
+      const elapsed = Math.floor((Date.now() - questionStartTime) / 1000);
+      const remaining = Math.max(0, timer - elapsed);
+      setTimeRemaining(remaining);
+    }
 
-    // Mettre à jour chaque seconde
+    // Mise à jour locale chaque seconde (synchronisée avec le serveur via polling)
     const interval = setInterval(() => {
-      const newElapsed = Math.floor((Date.now() - questionStartTime) / 1000);
-      const newRemaining = Math.max(0, timer - newElapsed);
-      setTimeRemaining(newRemaining);
-
-      // Soumettre automatiquement la réponse si le temps est écoulé
-      if (newRemaining === 0 && !hasAnswered) {
-        clearInterval(interval);
-        onSubmitAnswer();
+      if (currentLobby.timeRemaining !== undefined) {
+        setTimeRemaining(currentLobby.timeRemaining);
+      } else {
+        const questionStartTime = currentSession?.questionStartTime || currentLobby.questionStartTime || Date.now();
+        const newElapsed = Math.floor((Date.now() - questionStartTime) / 1000);
+        const newRemaining = Math.max(0, timer - newElapsed);
+        setTimeRemaining(newRemaining);
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [question?.id, currentSession?.currentQuestionIndex, hasAnswered, isFinished]);
+  }, [question?.id, currentSession?.currentQuestionIndex, hasAnswered, isFinished, currentLobby.timeRemaining]);
 
   if (!currentSession || !currentLobby) return null;
 
@@ -87,6 +96,9 @@ const QuizView = ({
     );
   }
 
+  // ✅ NOUVEAU: Vérifier si le temps est écoulé (serveur fait autorité)
+  const isTimeExpired = timeRemaining === 0 && question?.timer > 0;
+
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-4xl mx-auto">
@@ -106,7 +118,7 @@ const QuizView = ({
             </div>
           </div>
 
-          {/* Timer pour le participant */}
+          {/* Timer */}
           {timeRemaining !== null && !hasAnswered && (
             <div className="mb-4">
               <div className="flex items-center justify-center gap-2 mb-2">
@@ -115,14 +127,13 @@ const QuizView = ({
                   {timeRemaining}s
                 </span>
               </div>
-              {/* Barre de progression */}
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
                   className={`h-3 rounded-full transition-all ${timeRemaining <= 5 ? 'bg-red-600' : 'bg-blue-600'}`}
                   style={{ width: `${(timeRemaining / (question.timer || 1)) * 100}%` }}
                 />
               </div>
-              {timeRemaining <= 5 && (
+              {timeRemaining <= 5 && timeRemaining > 0 && (
                 <p className="text-center text-red-600 font-bold mt-2 animate-pulse">
                   ⏰ Dépêchez-vous !
                 </p>
@@ -147,13 +158,23 @@ const QuizView = ({
             )}
             
             {question?.type === 'video' && question?.media && (
-              <video controls autoplay className="w-full rounded-lg mb-4">
+              <video 
+                key={`video-${currentSession?.currentQuestionIndex}-${question.id}`}
+                controls 
+                autoPlay 
+                className="w-full rounded-lg mb-4"
+              >
                 <source src={question.media} />
               </video>
             )}
             
             {question?.type === 'audio' && question?.media && (
-              <audio controls autoplay className="w-full mb-4">
+              <audio 
+                key={`audio-${currentSession?.currentQuestionIndex}-${question.id}`}
+                controls 
+                autoPlay 
+                className="w-full mb-4"
+              >
                 <source src={question.media} />
               </audio>
             )}
@@ -169,6 +190,12 @@ const QuizView = ({
               </div>
               <p className="text-sm text-gray-600">⏳ Attente des autres participants...</p>
             </div>
+          ) : isTimeExpired ? (
+            <div className="bg-red-50 border-2 border-red-500 rounded-lg p-6 text-center">
+              <Clock className="w-12 h-12 mx-auto text-red-600 mb-2" />
+              <p className="font-bold text-red-700 mb-2">⏰ Temps écoulé !</p>
+              <p className="text-sm text-gray-600">En attente de la question suivante...</p>
+            </div>
           ) : (
             <>
               <input
@@ -178,27 +205,21 @@ const QuizView = ({
                 onChange={(e) => setMyAnswer(e.target.value)}
                 placeholder="Votre réponse..."
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none mb-4"
-                onKeyPress={(e) => e.key === 'Enter' && !hasAnswered && onSubmitAnswer()}
-                disabled={timeRemaining === 0}
+                onKeyPress={(e) => e.key === 'Enter' && !hasAnswered && !isTimeExpired && onSubmitAnswer()}
+                disabled={isTimeExpired}
               />
 
               <button
                 onClick={onSubmitAnswer}
-                disabled={timeRemaining === 0}
+                disabled={isTimeExpired}
                 className={`w-full py-3 rounded-lg font-semibold ${
-                  timeRemaining === 0 
+                  isTimeExpired
                     ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
                     : 'bg-purple-600 text-white hover:bg-purple-700'
                 }`}
               >
-                {timeRemaining === 0 ? '⏰ Temps écoulé' : 'Valider ma réponse'}
+                {isTimeExpired ? '⏰ Temps écoulé' : 'Valider ma réponse'}
               </button>
-
-              {timeRemaining === 0 && (
-                <p className="text-center text-red-600 mt-2 font-bold">
-                  Temps écoulé ! En attente de la question suivante...
-                </p>
-              )}
             </>
           )}
         </div>
