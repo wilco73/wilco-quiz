@@ -15,12 +15,17 @@ const LoginView = ({ onLogin }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <Trophy className="w-16 h-16 mx-auto text-purple-600 mb-4" />
-          <h1 className="text-3xl font-bold text-gray-800">Quiz & Blindtest</h1>
-          <p className="text-gray-600 mt-2">
-            {isAdminMode ? 'Connexion Admin' : 'Connexion Participant'}
-          </p>
+        <div className="flex content-center item-center text-center mb-8">
+          <div className="text-center m-auto">
+              <img src="/resources/images/aurore_question.png" className="mx-auto icone text-purple-600 mb-4"/>
+            </div>
+            <div className="text-center m-auto">
+              <h1 className="text-3xl font-bold text-gray-800">Wilco Quiz</h1>
+              <h3 className="text-3xl text-gray-800 mt-2">2e édition</h3>
+              <p className="text-gray-600 mt-2">
+                {isAdminMode ? 'Connexion Admin' : 'Connexion Participant'}
+              </p>
+          </div>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -64,10 +69,6 @@ const LoginView = ({ onLogin }) => {
             {isAdminMode ? '← Mode Participant' : 'Mode Admin'}
           </button>
         </form>
-
-        <p className="text-xs text-gray-500 text-center mt-6">
-          {isAdminMode ? 'admin / admin123' : 'Première connexion = création'}
-        </p>
       </div>
     </div>
   );

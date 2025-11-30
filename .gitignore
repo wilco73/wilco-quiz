@@ -27,3 +27,5 @@ yarn-error.log*
 
 # Database (à enlever si vous voulez sauvegarder les données)
 server/db.json
+/client/src/resources/quiz
+/client/public/resources/quiz

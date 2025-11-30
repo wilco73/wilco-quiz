@@ -28,6 +28,10 @@
   color: #61dafb;
 }
 
+.icone {
+  max-height: 10rem;
+}
+
 @keyframes App-logo-spin {
   from {
     transform: rotate(0deg);

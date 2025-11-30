@@ -206,6 +206,7 @@ const AdminDashboard = ({
           {activeTab === 'questions' && (
             <QuestionBank
               questions={questions}
+              quizzes={quizzes}
               onSave={onSaveQuestions}
             />
           )}

@@ -139,17 +139,21 @@ const QuizView = ({
             </h4>
 
             {question?.type === 'image' && question?.media && (
-              <img src={question.media} alt="Question" className="max-w-full h-auto rounded-lg mb-4" />
+              <div className="flex content-center item-center text-center mb-8">
+                <div className="text-center m-auto">
+                  <img src={question.media} alt="Question" className="max-w-md h-auto rounded-lg mb-4" />
+                </div>
+              </div>
             )}
             
             {question?.type === 'video' && question?.media && (
-              <video controls className="w-full rounded-lg mb-4">
+              <video controls autoplay className="w-full rounded-lg mb-4">
                 <source src={question.media} />
               </video>
             )}
             
             {question?.type === 'audio' && question?.media && (
-              <audio controls className="w-full mb-4">
+              <audio controls autoplay className="w-full mb-4">
                 <source src={question.media} />
               </audio>
             )}
