@@ -20,7 +20,6 @@ const App = () => {
   const [myAnswer, setMyAnswer] = useState('');
   const [hasAnswered, setHasAnswered] = useState(false);
 
-  // Hook personnalisé pour les données
   // ✅ CORRECTION: Activer le polling aussi pour l'admin
   const shouldPoll = view !== 'login';
   const {
@@ -38,8 +37,6 @@ const App = () => {
     loadLobbies
   } = useQuizData(shouldPoll);
 
-  const pollingIntervalRef = useRef(null);
-
   // Restaurer la session au chargement
   useEffect(() => {
     const savedSession = getSession();
@@ -55,61 +52,36 @@ const App = () => {
     }
   }, []);
 
-  // Polling pour les lobbies en mode participant
+  // ✅ Synchroniser le currentLobby avec les mises à jour des lobbies
   useEffect(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
+    if (currentLobby && lobbies.length > 0) {
+      const updated = lobbies.find(l => l.id === currentLobby.id);
+      if (updated) {
+        // Détecter changement de question
+        const oldQuestionIndex = currentSession?.currentQuestionIndex || 0;
+        const newQuestionIndex = updated.session?.currentQuestionIndex || 0;
 
-    if (view !== 'login' && !isAdmin && currentLobby) {
-      pollingIntervalRef.current = setInterval(async () => {
-        await updateCurrentLobby();
-      }, 1000);
-    }
+        setCurrentLobby(updated);
 
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, [view, isAdmin, currentLobby]);
+        // Démarrage de la session
+        if (updated.session && !currentSession) {
+          setCurrentSession(updated.session);
+          if (!isAdmin) setView('quiz');
+        }
 
-  // Mettre à jour le lobby actuel
-  const updateCurrentLobby = async () => {
-    try {
-      const lobbiesData = await api.fetchLobbies();
-      setLobbies(lobbiesData);
+        // Mise à jour de la session
+        if (updated.session) {
+          setCurrentSession(updated.session);
 
-      if (currentLobby) {
-        const updated = lobbiesData.find(l => l.id === currentLobby.id);
-        if (updated) {
-          setCurrentLobby(updated);
-
-          // Démarrage de la session
-          if (updated.session && !currentSession) {
-            setCurrentSession(updated.session);
-            setView('quiz');
-          }
-
-          // Mise à jour de la session
-          if (updated.session && currentSession) {
-            const oldQuestionIndex = currentSession.currentQuestionIndex || 0;
-            const newQuestionIndex = updated.session.currentQuestionIndex || 0;
-
-            setCurrentSession(updated.session);
-
-            // Nouvelle question : réinitialiser la réponse
-            if (newQuestionIndex > oldQuestionIndex) {
-              setMyAnswer('');
-              setHasAnswered(false);
-            }
+          // Nouvelle question : réinitialiser la réponse (participants uniquement)
+          if (newQuestionIndex > oldQuestionIndex && !isAdmin) {
+            setMyAnswer('');
+            setHasAnswered(false);
           }
         }
       }
-    } catch (error) {
-      console.error('Erreur mise à jour lobby:', error);
     }
-  };
+  }, [lobbies, isAdmin]);
 
   // ==================== HANDLERS LOGIN ====================
   const handleLogin = async (teamName, pseudo, password, isAdminLogin = false) => {

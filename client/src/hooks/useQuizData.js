@@ -42,6 +42,20 @@ export const useQuizData = (shouldPoll = false) => {
     }
   };
 
+  // ✅ NOUVEAU: Charger lobbies ET teams pour avoir les scores à jour
+  const loadLobbiesAndTeams = async () => {
+    try {
+      const [lobbiesData, teamsData] = await Promise.all([
+        api.fetchLobbies(),
+        api.fetchTeams()
+      ]);
+      setLobbies(lobbiesData);
+      setTeams(teamsData);
+    } catch (error) {
+      console.error('Erreur chargement lobbies et teams:', error);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -52,8 +66,9 @@ export const useQuizData = (shouldPoll = false) => {
     }
 
     if (shouldPoll) {
+      // ✅ CORRECTION: Utiliser loadLobbiesAndTeams au lieu de loadLobbies
       pollingIntervalRef.current = setInterval(() => {
-        loadLobbies();
+        loadLobbiesAndTeams();
       }, POLL_INTERVAL);
     }
 
@@ -77,6 +92,7 @@ export const useQuizData = (shouldPoll = false) => {
     setLobbies,
     loading,
     loadData,
-    loadLobbies
+    loadLobbies,
+    loadLobbiesAndTeams
   };
 };
