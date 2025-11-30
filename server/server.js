@@ -176,8 +176,7 @@ app.post('/api/start-quiz', (req, res) => {
     lobby.session = {
       currentQuestionIndex: 0,
       status: 'active',
-      startedAt: Date.now(),
-      questionStartTime: Date.now() // Timestamp du début de la question
+      startedAt: Date.now()
     };
     lobby.participants.forEach(p => {
       p.hasAnswered = false;
@@ -195,105 +194,49 @@ app.post('/api/submit-answer', (req, res) => {
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
   
-  if (lobby && lobby.session) {
+  if (lobby) {
     const participant = lobby.participants.find(p => p.participantId === participantId);
-    if (participant && !participant.hasAnswered) {
-      // Vérifier si le temps n'est pas écoulé
-      const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-      const currentQuestion = quiz?.questions[lobby.session.currentQuestionIndex];
-      const timer = currentQuestion?.timer || 0;
-      
-      if (timer > 0) {
-        const elapsed = Math.floor((Date.now() - lobby.session.questionStartTime) / 1000);
-        if (elapsed > timer) {
-          // Temps écoulé, ne pas accepter la réponse
-          return res.json({ success: false, message: 'Temps écoulé' });
-        }
-      }
-      
+    if (participant) {
       participant.hasAnswered = true;
       participant.currentAnswer = answer;
       const qIndex = lobby.session.currentQuestionIndex;
       if (!participant.answers) participant.answers = {};
       participant.answers[qIndex] = answer;
-      
-      writeDB(db);
-      res.json({ success: true });
-    } else {
-      res.json({ success: false, message: 'Déjà répondu ou participant introuvable' });
     }
+    writeDB(db);
+    res.json({ success: true });
   } else {
-    res.json({ success: false, message: 'Lobby introuvable' });
-  }
-});
-
-// app.post('/api/next-question', (req, res) => {
-//   const { lobbyId } = req.body;
-//   const db = readDB();
-//   const lobby = db.lobbies.find(l => l.id === lobbyId);
-  
-//   if (lobby && lobby.session) {
-//     const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-//     if (lobby.session.currentQuestionIndex < quiz.questions.length - 1) {
-//       lobby.session.currentQuestionIndex++;
-//       lobby.session.questionStartTime = Date.now(); // Nouveau timestamp pour la nouvelle question
-//       lobby.participants.forEach(p => {
-//         p.hasAnswered = false;
-//         p.currentAnswer = '';
-//       });
-//       writeDB(db);
-//       res.json({ success: true });
-//     } else {
-//       lobby.session.status = 'finished';
-//       lobby.status = 'finished';
-//       writeDB(db);
-//       res.json({ success: true, finished: true });
-//     }
-//   } else {
-//     res.json({ success: false });
-//   }
-// });
-
-app.post('/api/next-question', (req, res) => {
-  const { lobbyId } = req.body;
-  console.log('\n=== NEXT QUESTION REÇU ===');
-  console.log('lobbyId:', lobbyId);
-  
-  const db = readDB();
-  const lobby = db.lobbies.find(l => l.id === lobbyId);
-  
-  console.log('Lobby trouvé:', lobby ? 'OUI' : 'NON');
-  
-  if (lobby && lobby.session) {
-    const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-    console.log('Index actuel:', lobby.session.currentQuestionIndex);
-    console.log('Total questions:', quiz?.questions.length);
-    
-    if (lobby.session.currentQuestionIndex < quiz.questions.length - 1) {
-      lobby.session.currentQuestionIndex++;
-      lobby.session.questionStartTime = Date.now();
-      lobby.participants.forEach(p => {
-        p.hasAnswered = false;
-        p.currentAnswer = '';
-      });
-      writeDB(db);
-      console.log('✅ Nouvel index:', lobby.session.currentQuestionIndex);
-      res.json({ success: true });
-    } else {
-      lobby.session.status = 'finished';
-      lobby.status = 'finished';
-      writeDB(db);
-      console.log('✅ Quiz terminé');
-      res.json({ success: true, finished: true });
-    }
-  } else {
-    console.log('❌ ERREUR: Lobby ou session introuvable');
     res.json({ success: false });
   }
 });
 
+app.post('/api/next-question', (req, res) => {
+  const { lobbyId } = req.body;
+  const db = readDB();
+  const lobby = db.lobbies.find(l => l.id === lobbyId);
+  
+  if (lobby && lobby.session) {
+    const quiz = db.quizzes.find(q => q.id === lobby.quizId);
+    if (lobby.session.currentQuestionIndex < quiz.questions.length - 1) {
+      lobby.session.currentQuestionIndex++;
+      lobby.participants.forEach(p => {
+        p.hasAnswered = false;
+        p.currentAnswer = '';
+      });
+    } else {
+      lobby.session.status = 'finished';
+      lobby.status = 'finished';
+    }
+    writeDB(db);
+    res.json({ success: true });
+  } else {
+    res.json({ success: false });
+  }
+});
+
+// ✅ CORRECTION 4: Logique de validation corrigée avec questionIndex
 app.post('/api/validate-answer', (req, res) => {
-  const { lobbyId, participantId, isCorrect } = req.body;
+  const { lobbyId, participantId, questionIndex, isCorrect } = req.body;
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
   
@@ -302,7 +245,9 @@ app.post('/api/validate-answer', (req, res) => {
     const quiz = db.quizzes.find(q => q.id === lobby.quizId);
     
     if (participant && quiz) {
-      const qIndex = lobby.session.currentQuestionIndex;
+      // Utiliser questionIndex au lieu de currentQuestionIndex
+      const qIndex = questionIndex !== undefined ? questionIndex : lobby.session.currentQuestionIndex;
+      
       if (!participant.validations) participant.validations = {};
       participant.validations[qIndex] = isCorrect;
       
@@ -316,10 +261,10 @@ app.post('/api/validate-answer', (req, res) => {
       writeDB(db);
       res.json({ success: true });
     } else {
-      res.json({ success: false });
+      res.json({ success: false, message: 'Participant ou quiz introuvable' });
     }
   } else {
-    res.json({ success: false });
+    res.json({ success: false, message: 'Lobby introuvable' });
   }
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as api from './services/api';
 import { saveSession, getSession, clearSession } from './services/storage';
 import { useQuizData } from './hooks/useQuizData';
@@ -21,7 +21,7 @@ const App = () => {
   const [hasAnswered, setHasAnswered] = useState(false);
 
   // Hook personnalisé pour les données
-  // IMPORTANT: Activer le polling pour TOUS (admin ET participants)
+  // ✅ CORRECTION: Activer le polling aussi pour l'admin
   const shouldPoll = view !== 'login';
   const {
     teams,
@@ -72,8 +72,7 @@ const App = () => {
         clearInterval(pollingIntervalRef.current);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, isAdmin, currentLobby?.id]);
+  }, [view, isAdmin, currentLobby]);
 
   // Mettre à jour le lobby actuel
   const updateCurrentLobby = async () => {
@@ -214,12 +213,8 @@ const App = () => {
     if (hasAnswered) return;
 
     try {
-      const result = await api.submitAnswer(currentLobby.id, currentUser.id, myAnswer);
-      if (result.success) {
-        setHasAnswered(true);
-      } else {
-        console.log('Réponse non acceptée:', result.message);
-      }
+      await api.submitAnswer(currentLobby.id, currentUser.id, myAnswer);
+      setHasAnswered(true);
     } catch (error) {
       console.error('Erreur:', error);
     }
@@ -286,28 +281,20 @@ const App = () => {
     }
   };
 
-  // Utiliser useCallback pour stabiliser la référence de la fonction
-  const handleNextQuestion = useCallback(async (lobbyId) => {
-    console.log('handleNextQuestion appelé avec lobbyId:', lobbyId);
+  // ✅ CORRECTION 1: Ajout de la fonction manquante handleNextQuestion
+  const handleNextQuestion = async (lobbyId) => {
     try {
-      const result = await api.nextQuestion(lobbyId);
-      console.log('Résultat nextQuestion:', result);
-      
-      if (result.success) {
-        // Forcer le rechargement immédiat
-        await loadLobbies();
-        console.log('Lobbies rechargés après nextQuestion');
-      } else {
-        console.error('nextQuestion a échoué:', result);
-      }
+      await api.nextQuestion(lobbyId);
+      await loadLobbies();
     } catch (error) {
-      console.error('Erreur handleNextQuestion:', error);
+      console.error('Erreur:', error);
     }
-  }, [loadLobbies]);
+  };
 
-  const handleValidateAnswer = async (lobbyId, participantId, isCorrect) => {
+  // ✅ CORRECTION 2: Signature correcte avec questionIndex
+  const handleValidateAnswer = async (lobbyId, participantId, questionIndex, isCorrect) => {
     try {
-      await api.validateAnswer(lobbyId, participantId, isCorrect);
+      await api.validateAnswer(lobbyId, participantId, questionIndex, isCorrect);
       await loadLobbies();
       
       // Recharger les équipes pour mettre à jour les scores

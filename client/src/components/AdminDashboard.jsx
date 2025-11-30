@@ -17,7 +17,7 @@ const AdminDashboard = ({
   onDeleteQuiz,
   onCreateLobby,
   onStartQuiz,
-  onNextQuestion,  // ← VÉRIFIER QUE CETTE LIGNE EXISTE
+  onNextQuestion,
   onValidateAnswer,
   onDeleteLobby,
   onResetScores,
@@ -39,9 +39,6 @@ const AdminDashboard = ({
     { id: 'monitoring', label: 'Suivi Direct', icon: Monitor },
     { id: 'validation', label: 'Validation', icon: Check }
   ];
-
-  // AJOUT: Log pour vérifier que la fonction arrive bien
-  console.log('AdminDashboard - onNextQuestion:', typeof onNextQuestion);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
@@ -225,7 +222,7 @@ const AdminDashboard = ({
             <LiveMonitoring
               lobbies={lobbies}
               quizzes={quizzes}
-              onNextQuestion={onNextQuestion}  // ← VÉRIFIER QUE CETTE LIGNE EXISTE
+              onNextQuestion={onNextQuestion}
             />
           )}
 

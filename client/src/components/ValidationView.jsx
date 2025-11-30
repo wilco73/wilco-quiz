@@ -47,14 +47,14 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                       {isValidated === undefined && (
                         <div className="flex gap-2">
                           <button
-                            onClick={() => onValidateAnswer(lobby.id, participant.participantId, true)}
+                            onClick={() => onValidateAnswer(lobby.id, participant.participantId, qIndex, true)}
                             className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm flex items-center gap-1"
                           >
                             <Check className="w-3 h-3" />
                             Valider ({question.points || 1} pts)
                           </button>
                           <button
-                            onClick={() => onValidateAnswer(lobby.id, participant.participantId, false)}
+                            onClick={() => onValidateAnswer(lobby.id, participant.participantId, qIndex, false)}
                             className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm flex items-center gap-1"
                           >
                             <XCircle className="w-3 h-3" />

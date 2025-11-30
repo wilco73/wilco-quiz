@@ -55,7 +55,7 @@ export const saveQuizzes = async (quizzes) => {
   return res.json();
 };
 
-// ==================== QUESTIONS (NOUVEAU) ====================
+// ==================== QUESTIONS ====================
 export const fetchQuestions = async () => {
   const res = await fetch(`${API_URL}/questions`);
   return res.json();
@@ -130,11 +130,12 @@ export const nextQuestion = async (lobbyId) => {
   return res.json();
 };
 
-export const validateAnswer = async (lobbyId, participantId, isCorrect) => {
+// ✅ CORRECTION 3: Ajout de questionIndex dans la signature
+export const validateAnswer = async (lobbyId, participantId, questionIndex, isCorrect) => {
   const res = await fetch(`${API_URL}/validate-answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lobbyId, participantId, isCorrect })
+    body: JSON.stringify({ lobbyId, participantId, questionIndex, isCorrect })
   });
   return res.json();
 };
