@@ -1,14 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Eye, Check, Clock, SkipForward } from 'lucide-react';
 
 const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
   const [timeRemaining, setTimeRemaining] = useState(null);
+  const hasAutoPassedRef = useRef(false);
   const activeLobby = lobbies.find(l => l.status === 'playing');
 
   const quiz = activeLobby ? quizzes.find(q => q.id === activeLobby.quizId) : null;
   const currentQuestion = quiz?.questions[activeLobby?.session?.currentQuestionIndex];
   const allAnswered = activeLobby?.participants?.every(p => p.hasAnswered) || false;
   const answeredCount = activeLobby?.participants?.filter(p => p.hasAnswered).length || 0;
+
+  // Reset du flag quand la question change
+  useEffect(() => {
+    hasAutoPassedRef.current = false;
+  }, [activeLobby?.session?.currentQuestionIndex]);
 
   // Gestion du timer
   useEffect(() => {
@@ -24,35 +30,41 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
       return;
     }
 
-    // Calculer le temps restant basé sur le début de la question
+    // Calculer le temps restant
     const questionStartTime = activeLobby.session?.questionStartTime || Date.now();
-    const elapsed = Math.floor((Date.now() - questionStartTime) / 1000);
-    const remaining = Math.max(0, timer - elapsed);
-    
-    setTimeRemaining(remaining);
-
-    // Mettre à jour chaque seconde
-    const interval = setInterval(() => {
-      const newElapsed = Math.floor((Date.now() - questionStartTime) / 1000);
-      const newRemaining = Math.max(0, timer - newElapsed);
-      setTimeRemaining(newRemaining);
-
-      // Passer automatiquement à la question suivante si le temps est écoulé
-      if (newRemaining === 0 && onNextQuestion) {
-        clearInterval(interval);
+    const updateTimer = () => {
+      const elapsed = Math.floor((Date.now() - questionStartTime) / 1000);
+      const remaining = Math.max(0, timer - elapsed);
+      setTimeRemaining(remaining);
+      
+      // Passer automatiquement si le temps est écoulé
+      if (remaining === 0 && !hasAutoPassedRef.current) {
+        hasAutoPassedRef.current = true;
+        console.log('Timer écoulé - passage automatique');
         setTimeout(() => {
-          onNextQuestion(activeLobby.id);
-        }, 2000); // Attendre 2 secondes avant de passer
+          if (onNextQuestion) {
+            onNextQuestion(activeLobby.id);
+          }
+        }, 1000);
       }
-    }, 1000);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [activeLobby?.id, activeLobby?.session?.currentQuestionIndex, activeLobby?.session?.questionStartTime, currentQuestion?.timer, currentQuestion?.id, onNextQuestion]);
+  }, [activeLobby?.id, activeLobby?.session?.currentQuestionIndex, activeLobby?.session?.questionStartTime, currentQuestion?.timer, onNextQuestion]);
 
-  // Passage automatique si tous ont répondu
+  // Passage automatique si tous ont répondu (sans timer ou avec timer)
   useEffect(() => {
-    if (allAnswered && activeLobby && onNextQuestion && (!currentQuestion?.timer || currentQuestion.timer === 0)) {
-      // Attendre 2 secondes puis passer automatiquement
+    if (!allAnswered || !activeLobby || !onNextQuestion || hasAutoPassedRef.current) {
+      return;
+    }
+
+    // Si pas de timer, passer immédiatement après 2 secondes
+    if (!currentQuestion?.timer || currentQuestion.timer === 0) {
+      hasAutoPassedRef.current = true;
+      console.log('Tous ont répondu (sans timer) - passage dans 2s');
       const timeout = setTimeout(() => {
         onNextQuestion(activeLobby.id);
       }, 2000);
@@ -71,10 +83,12 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
   }
 
   const handleNextQuestion = () => {
+    console.log('Bouton Question suivante cliqué');
     if (onNextQuestion) {
+      console.log('Appel de onNextQuestion avec lobbyId:', activeLobby.id);
       onNextQuestion(activeLobby.id);
     } else {
-      console.error('onNextQuestion function is not provided');
+      console.error('onNextQuestion is not defined!');
     }
   };
 
@@ -100,7 +114,6 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
                     {timeRemaining}s restantes
                   </span>
                 </div>
-                {/* Barre de progression */}
                 <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
                   <div
                     className={`h-2 rounded-full transition-all ${timeRemaining <= 5 ? 'bg-red-600' : 'bg-blue-600'}`}
@@ -113,7 +126,6 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
           <button
             onClick={handleNextQuestion}
             className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center gap-2"
-            disabled={timeRemaining === 0}
           >
             <SkipForward className="w-4 h-4" />
             Question suivante
@@ -183,7 +195,7 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
         <div className="bg-green-100 rounded-lg p-4 text-center animate-pulse">
           <p className="font-bold text-green-700 flex items-center justify-center gap-2">
             <Check className="w-5 h-5" />
-            Tous ont répondu ! Passage automatique dans 2 secondes...
+            Tous ont répondu ! Passage à la question suivante...
           </p>
         </div>
       )}
@@ -192,7 +204,7 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
         <div className="bg-green-100 rounded-lg p-4 text-center animate-pulse">
           <p className="font-bold text-green-700 flex items-center justify-center gap-2">
             <Check className="w-5 h-5" />
-            Tous ont répondu ! Passage automatique...
+            Tous ont répondu ! Passage automatique dans 2 secondes...
           </p>
         </div>
       )}
@@ -200,7 +212,7 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
       {timeRemaining === 0 && (
         <div className="bg-red-100 rounded-lg p-4 text-center">
           <p className="font-bold text-red-700">
-            ⏰ Temps écoulé ! Passage automatique à la question suivante...
+            ⏰ Temps écoulé ! Passage automatique...
           </p>
         </div>
       )}

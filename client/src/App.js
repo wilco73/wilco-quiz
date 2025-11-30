@@ -21,7 +21,8 @@ const App = () => {
   const [hasAnswered, setHasAnswered] = useState(false);
 
   // Hook personnalisé pour les données
-  const shouldPoll = view !== 'login' && !isAdmin;
+  // IMPORTANT: Activer le polling pour TOUS (admin ET participants)
+  const shouldPoll = view !== 'login';
   const {
     teams,
     setTeams,
@@ -213,8 +214,12 @@ const App = () => {
     if (hasAnswered) return;
 
     try {
-      await api.submitAnswer(currentLobby.id, currentUser.id, myAnswer);
-      setHasAnswered(true);
+      const result = await api.submitAnswer(currentLobby.id, currentUser.id, myAnswer);
+      if (result.success) {
+        setHasAnswered(true);
+      } else {
+        console.log('Réponse non acceptée:', result.message);
+      }
     } catch (error) {
       console.error('Erreur:', error);
     }
@@ -283,11 +288,20 @@ const App = () => {
 
   // Utiliser useCallback pour stabiliser la référence de la fonction
   const handleNextQuestion = useCallback(async (lobbyId) => {
+    console.log('handleNextQuestion appelé avec lobbyId:', lobbyId);
     try {
-      await api.nextQuestion(lobbyId);
-      await loadLobbies();
+      const result = await api.nextQuestion(lobbyId);
+      console.log('Résultat nextQuestion:', result);
+      
+      if (result.success) {
+        // Forcer le rechargement immédiat
+        await loadLobbies();
+        console.log('Lobbies rechargés après nextQuestion');
+      } else {
+        console.error('nextQuestion a échoué:', result);
+      }
     } catch (error) {
-      console.error('Erreur:', error);
+      console.error('Erreur handleNextQuestion:', error);
     }
   }, [loadLobbies]);
 

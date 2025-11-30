@@ -227,29 +227,67 @@ app.post('/api/submit-answer', (req, res) => {
   }
 });
 
+// app.post('/api/next-question', (req, res) => {
+//   const { lobbyId } = req.body;
+//   const db = readDB();
+//   const lobby = db.lobbies.find(l => l.id === lobbyId);
+  
+//   if (lobby && lobby.session) {
+//     const quiz = db.quizzes.find(q => q.id === lobby.quizId);
+//     if (lobby.session.currentQuestionIndex < quiz.questions.length - 1) {
+//       lobby.session.currentQuestionIndex++;
+//       lobby.session.questionStartTime = Date.now(); // Nouveau timestamp pour la nouvelle question
+//       lobby.participants.forEach(p => {
+//         p.hasAnswered = false;
+//         p.currentAnswer = '';
+//       });
+//       writeDB(db);
+//       res.json({ success: true });
+//     } else {
+//       lobby.session.status = 'finished';
+//       lobby.status = 'finished';
+//       writeDB(db);
+//       res.json({ success: true, finished: true });
+//     }
+//   } else {
+//     res.json({ success: false });
+//   }
+// });
+
 app.post('/api/next-question', (req, res) => {
   const { lobbyId } = req.body;
+  console.log('\n=== NEXT QUESTION REÇU ===');
+  console.log('lobbyId:', lobbyId);
+  
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
   
+  console.log('Lobby trouvé:', lobby ? 'OUI' : 'NON');
+  
   if (lobby && lobby.session) {
     const quiz = db.quizzes.find(q => q.id === lobby.quizId);
+    console.log('Index actuel:', lobby.session.currentQuestionIndex);
+    console.log('Total questions:', quiz?.questions.length);
+    
     if (lobby.session.currentQuestionIndex < quiz.questions.length - 1) {
       lobby.session.currentQuestionIndex++;
-      lobby.session.questionStartTime = Date.now(); // Nouveau timestamp pour la nouvelle question
+      lobby.session.questionStartTime = Date.now();
       lobby.participants.forEach(p => {
         p.hasAnswered = false;
         p.currentAnswer = '';
       });
       writeDB(db);
+      console.log('✅ Nouvel index:', lobby.session.currentQuestionIndex);
       res.json({ success: true });
     } else {
       lobby.session.status = 'finished';
       lobby.status = 'finished';
       writeDB(db);
+      console.log('✅ Quiz terminé');
       res.json({ success: true, finished: true });
     }
   } else {
+    console.log('❌ ERREUR: Lobby ou session introuvable');
     res.json({ success: false });
   }
 });
