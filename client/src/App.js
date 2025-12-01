@@ -6,6 +6,8 @@ import LoginView from './components/LoginView';
 import LobbyViewList from './components/LobbyViewList';
 import LobbyView from './components/LobbyView';
 import QuizView from './components/QuizView';
+import QuizResultsView from './components/QuizResultsView';
+import ScoreboardView from './components/ScoreboardView';
 import AdminDashboard from './components/AdminDashboard';
 import ReconnectingScreen from './components/ReconnectingScreen';
 import './App.css';
@@ -22,7 +24,6 @@ const App = () => {
   const [hasAnswered, setHasAnswered] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
 
-  // ✅ CORRECTION: Activer le polling aussi pour l'admin
   const shouldPoll = view !== 'login';
   const {
     teams,
@@ -39,12 +40,10 @@ const App = () => {
     loadLobbies
   } = useQuizData(shouldPoll);
 
-  // ✅ CORRECTION: Utiliser un ref pour éviter les boucles infinies
   const hasReconnected = useRef(false);
 
   // Restaurer la session au chargement
   useEffect(() => {
-    // Ne s'exécuter qu'une seule fois au chargement
     if (hasReconnected.current) return;
     
     const savedSession = getSession();
@@ -57,12 +56,10 @@ const App = () => {
       } else if (savedSession.currentUser) {
         setCurrentUser(savedSession.currentUser);
         
-        // Vérifier si le participant était dans un lobby
         if (savedSession.currentLobbyId && !loading && lobbies.length > 0) {
           setIsReconnecting(true);
           hasReconnected.current = true;
           
-          // Attendre un peu que tout soit chargé
           setTimeout(() => {
             reconnectToLobby(savedSession.currentLobbyId, savedSession.currentUser);
             setIsReconnecting(false);
@@ -77,41 +74,39 @@ const App = () => {
     }
   }, [loading, lobbies]);
 
-  // ✅ Synchroniser le currentLobby avec les mises à jour des lobbies
+  // Synchroniser le currentLobby avec les mises à jour
   useEffect(() => {
     if (currentLobby && lobbies.length > 0) {
       const updated = lobbies.find(l => l.id === currentLobby.id);
       if (updated) {
-        // Détecter changement de question
         const oldQuestionIndex = currentSession?.currentQuestionIndex || 0;
         const newQuestionIndex = updated.session?.currentQuestionIndex || 0;
 
         setCurrentLobby(updated);
 
-        // Démarrage de la session
         if (updated.session && !currentSession) {
           setCurrentSession(updated.session);
           if (!isAdmin) setView('quiz');
         }
 
-        // Mise à jour de la session
         if (updated.session) {
           setCurrentSession(updated.session);
 
-          // Nouvelle question : réinitialiser la réponse (participants uniquement)
           if (newQuestionIndex > oldQuestionIndex && !isAdmin) {
             setMyAnswer('');
             setHasAnswered(false);
           }
         }
 
-        // ✅ NOUVEAU: Si le lobby est terminé, rediriger le participant
-        if (updated.status === 'finished' && !isAdmin) {
-          // Optionnel: afficher un message ou rediriger après un délai
-          console.log('Quiz terminé !');
+        // ✅ NOUVEAU: Si le quiz est terminé, rediriger vers les résultats
+        if (updated.status === 'finished' && !isAdmin && view !== 'results') {
+          setView('results');
+          saveSession({ 
+            currentUser, 
+            currentLobbyId: currentLobby.id 
+          });
         }
       } else if (!isAdmin) {
-        // ✅ NOUVEAU: Le lobby a été supprimé
         console.log('Le lobby a été supprimé');
         setCurrentLobby(null);
         setCurrentSession(null);
@@ -121,12 +116,10 @@ const App = () => {
     }
   }, [lobbies, isAdmin]);
 
-  // ✅ NOUVEAU: Fonction de reconnexion à un lobby
   const reconnectToLobby = (lobbyId, user) => {
     const lobby = lobbies.find(l => l.id === lobbyId);
     
     if (!lobby) {
-      // Le lobby n'existe plus
       console.log('Lobby introuvable, redirection vers la liste');
       clearSession();
       saveSession({ currentUser: user });
@@ -134,15 +127,16 @@ const App = () => {
       return;
     }
 
-    // Vérifier si le participant est toujours dans le lobby
     const isInLobby = lobby.participants?.some(p => p.participantId === user.id);
     
     if (isInLobby) {
       setCurrentLobby(lobby);
       
-      if (lobby.session) {
+      // ✅ NOUVEAU: Gérer le cas où le quiz est terminé
+      if (lobby.status === 'finished') {
+        setView('results');
+      } else if (lobby.session) {
         setCurrentSession(lobby.session);
-        // Vérifier si le participant a déjà répondu à la question actuelle
         const participant = lobby.participants.find(p => p.participantId === user.id);
         if (participant && participant.hasAnswered) {
           setHasAnswered(true);
@@ -152,20 +146,13 @@ const App = () => {
           setMyAnswer('');
         }
         setView('quiz');
-        
-        // ✅ Afficher un message de reconnexion
-        setTimeout(() => {
-          // alert('✅ Reconnexion réussie ! Vous êtes de retour dans le quiz.');
-        }, 500);
       } else {
         setView('lobby');
       }
     } else {
-      // Le participant n'est plus dans le lobby, le rejoindre à nouveau si possible
       if (lobby.status === 'waiting') {
         handleJoinLobby(lobbyId);
       } else {
-        // Quiz déjà commencé, impossible de rejoindre
         console.log('Impossible de rejoindre, quiz déjà commencé');
         alert('⚠️ Le quiz a continué sans vous. Vous avez été déconnecté.');
         clearSession();
@@ -194,7 +181,6 @@ const App = () => {
       return;
     }
 
-    // Connexion participant
     const existingParticipant = participants.find(p => p.pseudo === pseudo);
 
     if (existingParticipant) {
@@ -253,7 +239,6 @@ const App = () => {
         const lobby = lobbies.find(l => l.id === lobbyId);
         setCurrentLobby(lobby);
         setView('lobby');
-        // ✅ NOUVEAU: Sauvegarder le lobby dans la session
         saveSession({ 
           currentUser, 
           currentLobbyId: lobbyId 
@@ -265,6 +250,17 @@ const App = () => {
   };
 
   const handleLeaveLobby = async () => {
+    // ✅ NOUVEAU: Si on est sur les résultats, juste revenir à la liste
+    if (view === 'results') {
+      setCurrentLobby(null);
+      setCurrentSession(null);
+      setMyAnswer('');
+      setHasAnswered(false);
+      setView('lobby-list');
+      saveSession({ currentUser });
+      return;
+    }
+
     try {
       await api.leaveLobby(currentLobby.id, currentUser.id);
       setCurrentLobby(null);
@@ -272,7 +268,6 @@ const App = () => {
       setMyAnswer('');
       setHasAnswered(false);
       setView('lobby-list');
-      // ✅ NOUVEAU: Nettoyer le lobby de la session
       saveSession({ currentUser });
     } catch (error) {
       console.error('Erreur:', error);
@@ -291,13 +286,21 @@ const App = () => {
     }
   };
 
+  // ✅ NOUVEAU: Gérer la navigation vers le classement
+  const handleViewScoreboard = () => {
+    setView('scoreboard');
+  };
+
+  const handleBackToResults = () => {
+    setView('results');
+  };
+
   // ==================== HANDLERS ADMIN ====================
   const handleSaveQuestions = async (newQuestions) => {
     try {
       await api.saveQuestions(newQuestions);
       setQuestions(newQuestions);
       
-      // ✅ NOUVEAU: Synchroniser les quiz avec les questions mises à jour
       const updatedQuizzes = syncQuizzesWithQuestions(quizzes, newQuestions);
       const quizzesChanged = JSON.stringify(updatedQuizzes) !== JSON.stringify(quizzes);
       
@@ -305,7 +308,6 @@ const App = () => {
         await api.saveQuizzes(updatedQuizzes);
         setQuizzes(updatedQuizzes);
         
-        // Compter combien de quiz ont été mis à jour
         const affectedQuizzes = updatedQuizzes.filter((quiz, index) => 
           JSON.stringify(quiz.questions) !== JSON.stringify(quizzes[index]?.questions)
         );
@@ -320,17 +322,12 @@ const App = () => {
     }
   };
 
-  // ✅ NOUVEAU: Fonction de synchronisation des quiz avec les questions
   const syncQuizzesWithQuestions = (quizzes, questions) => {
     return quizzes.map(quiz => {
       if (!quiz.questions || quiz.questions.length === 0) return quiz;
       
-      // Mettre à jour chaque question du quiz
       const updatedQuestions = quiz.questions.map(quizQuestion => {
-        // Trouver la question correspondante dans la banque
         const updatedQuestion = questions.find(q => q.id === quizQuestion.id);
-        
-        // Si trouvée, utiliser la version mise à jour, sinon garder l'ancienne
         return updatedQuestion ? updatedQuestion : quizQuestion;
       });
       
@@ -391,7 +388,6 @@ const App = () => {
     }
   };
 
-  // ✅ CORRECTION 1: Ajout de la fonction manquante handleNextQuestion
   const handleNextQuestion = async (lobbyId) => {
     try {
       await api.nextQuestion(lobbyId);
@@ -401,13 +397,11 @@ const App = () => {
     }
   };
 
-  // ✅ CORRECTION 2: Signature correcte avec questionIndex
   const handleValidateAnswer = async (lobbyId, participantId, questionIndex, isCorrect) => {
     try {
       await api.validateAnswer(lobbyId, participantId, questionIndex, isCorrect);
       await loadLobbies();
       
-      // Recharger les équipes pour mettre à jour les scores
       const teamsData = await api.fetchTeams();
       setTeams(teamsData);
     } catch (error) {
@@ -449,7 +443,6 @@ const App = () => {
     );
   }
 
-  // ✅ NOUVEAU: Afficher l'écran de reconnexion
   if (isReconnecting) {
     return <ReconnectingScreen message="Restauration de votre session..." />;
   }
@@ -465,7 +458,9 @@ const App = () => {
           currentUser={currentUser}
           lobbies={lobbies}
           quizzes={quizzes}
+          teams={teams}
           onJoinLobby={handleJoinLobby}
+          onViewScoreboard={handleViewScoreboard}
           onLogout={handleLogout}
         />
       )}
@@ -489,6 +484,33 @@ const App = () => {
           onSubmitAnswer={handleSubmitAnswer}
           onLeaveLobby={handleLeaveLobby}
         />
+      )}
+
+      {view === 'results' && (
+        <QuizResultsView
+          currentLobby={currentLobby}
+          quiz={quizzes.find(q => q.id === currentLobby?.quizId)}
+          currentUser={currentUser}
+          onLeaveLobby={handleLeaveLobby}
+          onViewScoreboard={handleViewScoreboard}
+        />
+      )}
+
+      {view === 'scoreboard' && (
+        <div>
+          <ScoreboardView
+            teams={teams}
+            currentUser={currentUser}
+          />
+          <div className="max-w-4xl mx-auto p-4">
+            <button
+              onClick={() => currentLobby ? handleBackToResults() : setView('lobby-list')}
+              className="w-full py-3 bg-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-400"
+            >
+              ← Retour
+            </button>
+          </div>
+        </div>
       )}
 
       {view === 'admin' && (

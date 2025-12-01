@@ -160,6 +160,19 @@ app.post('/api/join-lobby', (req, res) => {
     return res.json({ success: false, message: 'Salle non disponible' });
   }
   
+  // ✅ CORRECTION: Créer l'équipe si elle n'existe pas
+  let team = db.teams.find(t => t.name === teamName);
+  if (!team) {
+    team = { 
+      id: Date.now().toString(), 
+      name: teamName, 
+      validatedScore: 0,
+      createdAt: Date.now()
+    };
+    db.teams.push(team);
+    console.log(`✅ Nouvelle équipe créée: "${teamName}"`);
+  }
+  
   if (!lobby.participants.find(p => p.participantId === participantId)) {
     lobby.participants.push({ 
       participantId, 

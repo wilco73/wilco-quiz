@@ -1,8 +1,9 @@
 import React from 'react';
-import { LogOut, UserPlus } from 'lucide-react';
+import { LogOut, UserPlus, Trophy } from 'lucide-react';
 
-const LobbyViewList = ({ currentUser, lobbies, quizzes, onJoinLobby, onLogout }) => {
+const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, onJoinLobby, onViewScoreboard, onLogout }) => {
   const availableLobbies = lobbies.filter(l => l.status === 'waiting');
+  const userTeam = teams.find(t => t.name === currentUser.teamName);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
@@ -12,14 +13,28 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, onJoinLobby, onLogout })
             <div>
               <h2 className="text-2xl font-bold">{currentUser.pseudo}</h2>
               <p className="text-gray-600">Équipe: {currentUser.teamName}</p>
+              {userTeam && (
+                <p className="text-purple-600 font-semibold mt-1">
+                  Score actuel: {userTeam.validatedScore || 0} points
+                </p>
+              )}
             </div>
-            <button
-              onClick={onLogout}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
-            >
-              <LogOut className="w-4 h-4" />
-              Déconnexion
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={onViewScoreboard}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+              >
+                <Trophy className="w-4 h-4" />
+                Classement
+              </button>
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                <LogOut className="w-4 h-4" />
+                Déconnexion
+              </button>
+            </div>
           </div>
         </div>
 
