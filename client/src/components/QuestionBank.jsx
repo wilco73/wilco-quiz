@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff } from 'lucide-react';
 
 const QuestionBank = ({ questions, onSave }) => {
   const [localQuestions, setLocalQuestions] = useState(questions || []);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // ✅ NOUVEAU: État pour la prévisualisation
+  const [showPreview, setShowPreview] = useState(true);
 
   const [formData, setFormData] = useState({
     text: '',
@@ -14,8 +17,7 @@ const QuestionBank = ({ questions, onSave }) => {
     points: 1,
     timer: 0,
     category: '',
-    // ✅ NOUVEAU: Champs pour QCM
-    choices: ['', '', '', ''], // 4 choix par défaut
+    choices: ['', '', '', ''],
     correctChoice: 0
   });
 
@@ -35,13 +37,11 @@ const QuestionBank = ({ questions, onSave }) => {
   };
 
   const handleSave = () => {
-    // Validation
     if (!formData.text.trim()) {
       alert('Le texte de la question est requis');
       return;
     }
 
-    // ✅ NOUVEAU: Validation spécifique pour QCM
     if (formData.type === 'qcm') {
       const filledChoices = formData.choices.filter(c => c.trim());
       if (filledChoices.length < 2) {
@@ -52,10 +52,8 @@ const QuestionBank = ({ questions, onSave }) => {
         alert('Le choix correct ne peut pas être vide');
         return;
       }
-      // Pour les QCM, la réponse est le texte du choix correct
       formData.answer = formData.choices[formData.correctChoice];
     } else {
-      // Pour les autres types, vérifier qu'il y a une réponse
       if (!formData.answer.trim()) {
         alert('La réponse est requise');
         return;
@@ -81,7 +79,6 @@ const QuestionBank = ({ questions, onSave }) => {
     setEditingQuestion(question);
     setFormData({
       ...question,
-      // ✅ NOUVEAU: Charger les choix QCM ou initialiser
       choices: question.choices || ['', '', '', ''],
       correctChoice: question.correctChoice || 0
     });
@@ -95,7 +92,6 @@ const QuestionBank = ({ questions, onSave }) => {
     }
   };
 
-  // ✅ NOUVEAU: Gérer les choix QCM
   const updateChoice = (index, value) => {
     const newChoices = [...formData.choices];
     newChoices[index] = value;
@@ -134,10 +130,116 @@ const QuestionBank = ({ questions, onSave }) => {
     }
   };
 
+  // ✅ NOUVEAU: Composant de prévisualisation - Mémorisé pour éviter les rechargements
+  const MediaPreview = useMemo(() => {
+    return ({ type, url, id }) => {
+      if (!url || !showPreview) return null;
+
+      const containerClass = "mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-purple-200 dark:border-purple-600";
+      // ✅ CRITIQUE: Utiliser une key unique pour chaque média pour éviter les rechargements
+      const mediaKey = `${id || 'new'}-${url}`;
+
+      switch(type) {
+        case 'image':
+          return (
+            <div className={containerClass}>
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-2">
+                <Eye className="w-4 h-4" />
+                Aperçu de l'image
+              </p>
+              <img 
+                key={mediaKey}
+                src={url} 
+                alt="Preview" 
+                className="max-w-full max-h-64 rounded border border-gray-300 dark:border-gray-600"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  const errorMsg = document.createElement('p');
+                  errorMsg.className = 'text-red-600 text-sm';
+                  errorMsg.textContent = '❌ Impossible de charger l\'image';
+                  e.target.parentElement.appendChild(errorMsg);
+                }}
+              />
+            </div>
+          );
+        
+        case 'video':
+          return (
+            <div className={containerClass}>
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-2">
+                <Eye className="w-4 h-4" />
+                Aperçu de la vidéo
+              </p>
+              <video 
+                key={mediaKey}
+                controls 
+                preload="metadata"
+                className="max-w-full max-h-64 rounded border border-gray-300 dark:border-gray-600"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  const errorMsg = document.createElement('p');
+                  errorMsg.className = 'text-red-600 text-sm';
+                  errorMsg.textContent = '❌ Impossible de charger la vidéo';
+                  e.target.parentElement.appendChild(errorMsg);
+                }}
+              >
+                <source src={url} />
+                Votre navigateur ne supporte pas la vidéo.
+              </video>
+            </div>
+          );
+        
+        case 'audio':
+          return (
+            <div className={containerClass}>
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-2">
+                <Eye className="w-4 h-4" />
+                Aperçu de l'audio
+              </p>
+              <audio 
+                key={mediaKey}
+                controls 
+                preload="metadata"
+                className="w-full"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  const errorMsg = document.createElement('p');
+                  errorMsg.className = 'text-red-600 text-sm';
+                  errorMsg.textContent = '❌ Impossible de charger l\'audio';
+                  e.target.parentElement.appendChild(errorMsg);
+                }}
+              >
+                <source src={url} />
+                Votre navigateur ne supporte pas l'audio.
+              </audio>
+            </div>
+          );
+        
+        default:
+          return null;
+      }
+    };
+  }, [showPreview]); // ✅ Ne se recrée que si showPreview change
+
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <h2 className="text-2xl font-bold mb-4 dark:text-white">Banque de Questions</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold dark:text-white">Banque de Questions</h2>
+          
+          {/* ✅ NOUVEAU: Toggle prévisualisation */}
+          <button
+            onClick={() => setShowPreview(!showPreview)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+              showPreview 
+                ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' 
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+            }`}
+          >
+            {showPreview ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            {showPreview ? 'Masquer aperçu' : 'Afficher aperçu'}
+          </button>
+        </div>
         
         {/* Formulaire d'ajout/édition */}
         <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
@@ -173,16 +275,20 @@ const QuestionBank = ({ questions, onSave }) => {
             />
 
             {formData.type !== 'text' && formData.type !== 'qcm' && (
-              <input
-                type="text"
-                placeholder="URL du média"
-                value={formData.media}
-                onChange={(e) => setFormData({ ...formData, media: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              />
+              <>
+                <input
+                  type="text"
+                  placeholder="URL du média"
+                  value={formData.media}
+                  onChange={(e) => setFormData({ ...formData, media: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                />
+                
+                {/* ✅ NOUVEAU: Prévisualisation en temps réel */}
+                <MediaPreview type={formData.type} url={formData.media} id={editingQuestion?.id || 'new'} />
+              </>
             )}
 
-            {/* ✅ NOUVEAU: Interface QCM */}
             {formData.type === 'qcm' ? (
               <div className="space-y-3 bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
                 <p className="font-semibold text-sm dark:text-white flex items-center gap-2">
@@ -313,8 +419,14 @@ const QuestionBank = ({ questions, onSave }) => {
                     )}
                   </div>
                   <p className="font-semibold mb-1 dark:text-white">{question.text}</p>
+                  
+                  {/* ✅ NOUVEAU: Prévisualisation dans la liste */}
+                  {question.media && showPreview && (
+                    <MediaPreview type={question.type} url={question.media} id={question.id} />
+                  )}
+                  
                   {question.type === 'qcm' ? (
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                       <p className="font-semibold">Choix :</p>
                       <ul className="ml-4">
                         {question.choices?.map((choice, idx) => (
@@ -325,7 +437,7 @@ const QuestionBank = ({ questions, onSave }) => {
                       </ul>
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                       Réponse: <span className="font-bold">{question.answer}</span>
                     </p>
                   )}
