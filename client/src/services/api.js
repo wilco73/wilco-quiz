@@ -76,11 +76,12 @@ export const fetchLobbies = async () => {
   return res.json();
 };
 
-export const createLobby = async (quizId) => {
+// ✅ MODIFIÉ: Ajouter le paramètre shuffle
+export const createLobby = async (quizId, shuffle = false) => {
   const res = await fetch(`${API_URL}/create-lobby`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ quizId })
+    body: JSON.stringify({ quizId, shuffle })
   });
   return res.json();
 };
@@ -121,7 +122,6 @@ export const submitAnswer = async (lobbyId, participantId, answer) => {
   return res.json();
 };
 
-// ✅ NOUVEAU: Marquer qu'un participant a fini (temps écoulé)
 export const markTimeExpired = async (lobbyId, participantId) => {
   const res = await fetch(`${API_URL}/mark-time-expired`, {
     method: 'POST',

@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Eye, Check, Clock, SkipForward, Users, Trophy } from 'lucide-react';
+import { Eye, EyeOff, Check, Clock, SkipForward, Users, Trophy } from 'lucide-react';
 
 const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
   const activeLobby = lobbies.find(l => l.status === 'playing');
   const audioRef = useRef(null);
   const [localTimeRemaining, setLocalTimeRemaining] = useState(null);
+  const [showAnswers, setShowAnswers] = useState(false);
 
   useEffect(() => {
     if (activeLobby) {
@@ -30,6 +31,10 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
     }
   }, [activeLobby?.timeRemaining]);
 
+  useEffect(() => {
+    setShowAnswers(false);
+  }, [activeLobby?.session?.currentQuestionIndex]);
+
   if (!activeLobby) {
     return (
       <div className="space-y-6">
@@ -45,9 +50,15 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
     );
   }
 
+  // ✅ CORRECTION: Utiliser les bonnes questions (mélangées ou normales)
   const quiz = quizzes.find(q => q.id === activeLobby.quizId);
+  const questions = activeLobby.shuffled && activeLobby.shuffledQuestions 
+    ? activeLobby.shuffledQuestions 
+    : quiz?.questions || [];
+  
   const currentQuestionIndex = activeLobby.session?.currentQuestionIndex || 0;
-  const currentQuestion = quiz?.questions[currentQuestionIndex];
+  const currentQuestion = questions[currentQuestionIndex];
+  
   const allAnswered = activeLobby.participants?.every(p => p.hasAnswered);
   const answeredCount = activeLobby.participants?.filter(p => p.hasAnswered).length || 0;
   const totalParticipants = activeLobby.participants?.length || 0;
@@ -65,7 +76,7 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
             <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
               <div className="flex items-center gap-1">
                 <Trophy className="w-4 h-4" />
-                <span>Question {currentQuestionIndex + 1} / {quiz?.questions.length}</span>
+                <span>Question {currentQuestionIndex + 1} / {questions.length}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Users className="w-4 h-4" />
@@ -81,13 +92,29 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
               )}
             </div>
           </div>
-          <button
-            onClick={() => onNextQuestion(activeLobby.id)}
-            className="px-6 py-3 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600 flex items-center gap-2 font-semibold transition-all hover:scale-105"
-          >
-            <SkipForward className="w-5 h-5" />
-            Question suivante
-          </button>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowAnswers(!showAnswers)}
+              className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+                showAnswers 
+                  ? 'bg-orange-600 dark:bg-orange-700 text-white hover:bg-orange-700 dark:hover:bg-orange-600' 
+                  : 'bg-gray-600 dark:bg-gray-700 text-white hover:bg-gray-700 dark:hover:bg-gray-600'
+              }`}
+              title={showAnswers ? 'Masquer les réponses (anti-triche)' : 'Afficher les réponses'}
+            >
+              {showAnswers ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              {showAnswers ? 'Masquer' : 'Afficher'} réponses
+            </button>
+            
+            <button
+              onClick={() => onNextQuestion(activeLobby.id)}
+              className="px-6 py-2 bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 flex items-center gap-2 font-semibold transition-all hover:scale-105"
+            >
+              <SkipForward className="w-5 h-5" />
+              Question suivante
+            </button>
+          </div>
         </div>
 
         {hasTimer && localTimeRemaining !== null && (
@@ -142,11 +169,33 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
               </span>
             )}
           </div>
+          
           <div className="mt-3 pt-3 border-t border-purple-200 dark:border-purple-700">
             <p className="text-xs text-gray-600 dark:text-gray-400">Réponse attendue :</p>
-            <p className="font-bold text-green-700 dark:text-green-400">{currentQuestion?.answer}</p>
+            {showAnswers ? (
+              <p className="font-bold text-green-700 dark:text-green-400">{currentQuestion?.answer}</p>
+            ) : (
+              <div className="flex items-center gap-2 bg-gray-200 dark:bg-gray-700 rounded p-2 border border-gray-400 dark:border-gray-600">
+                <EyeOff className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                <p className="text-sm text-gray-600 dark:text-gray-400 font-semibold">
+                  Réponse masquée (cliquez sur "Afficher réponses")
+                </p>
+              </div>
+            )}
           </div>
         </div>
+
+        {!showAnswers && (
+          <div className="bg-orange-100 dark:bg-orange-900/30 border-2 border-orange-500 dark:border-orange-600 rounded-lg p-4 mb-6 text-center">
+            <div className="flex items-center justify-center gap-2 text-orange-800 dark:text-orange-300">
+              <EyeOff className="w-6 h-6" />
+              <p className="font-bold text-lg">Mode Anti-Triche Activé</p>
+            </div>
+            <p className="text-sm text-orange-700 dark:text-orange-400 mt-2">
+              Les réponses des participants sont masquées. Cliquez sur "Afficher réponses" pour les voir.
+            </p>
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {activeLobby.participants?.map((p) => (
@@ -178,12 +227,21 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
 
               {p.hasAnswered && (
                 <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                  <div className="bg-white dark:bg-gray-700 rounded p-2 border border-green-300 dark:border-green-600">
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Réponse :</p>
-                    <p className="font-bold text-green-700 dark:text-green-400 break-words text-sm">
-                      {p.currentAnswer || '(vide)'}
-                    </p>
-                  </div>
+                  {showAnswers ? (
+                    <div className="bg-white dark:bg-gray-700 rounded p-2 border border-green-300 dark:border-green-600">
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Réponse :</p>
+                      <p className="font-bold text-green-700 dark:text-green-400 break-words text-sm">
+                        {p.currentAnswer || '(vide)'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-200 dark:bg-gray-700 rounded p-2 border border-gray-400 dark:border-gray-600 text-center">
+                      <EyeOff className="w-5 h-5 mx-auto text-gray-500 dark:text-gray-400 mb-1" />
+                      <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">
+                        Réponse masquée
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -201,7 +259,9 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
             <Check className="w-8 h-8" />
           </div>
           <p className="text-white text-sm mt-2 opacity-90">
-            Cliquez sur "Question suivante" pour continuer
+            {!showAnswers && 'Affichez les réponses puis cliquez sur '}
+            {showAnswers && 'Cliquez sur '}
+            "Question suivante" pour continuer
           </p>
         </div>
       )}

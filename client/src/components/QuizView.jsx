@@ -15,10 +15,23 @@ const QuizView = ({
 }) => {
   const inputRef = useRef(null);
   const [timeRemaining, setTimeRemaining] = useState(null);
+  const hasSubmittedOnTimeout = useRef(false);
   
+  // ✅ CORRECTION: Récupérer le quiz et utiliser les bonnes questions
   const quiz = currentLobby ? quizzes.find(q => q.id === currentLobby.quizId) : null;
-  const question = quiz?.questions[currentSession?.currentQuestionIndex];
+  
+  // ✅ CRITIQUE: Utiliser shuffledQuestions si disponibles, sinon les questions normales
+  const questions = currentLobby?.shuffled && currentLobby?.shuffledQuestions 
+    ? currentLobby.shuffledQuestions 
+    : quiz?.questions || [];
+  
+  const question = questions[currentSession?.currentQuestionIndex];
   const isFinished = currentSession?.status === 'finished';
+
+  // Réinitialiser le flag à chaque nouvelle question
+  useEffect(() => {
+    hasSubmittedOnTimeout.current = false;
+  }, [currentSession?.currentQuestionIndex]);
 
   // Focus automatique sur l'input
   useEffect(() => {
@@ -27,7 +40,7 @@ const QuizView = ({
     }
   }, [currentSession?.currentQuestionIndex, hasAnswered, isFinished]);
 
-  // Gestion du timer
+  // Gestion du timer avec soumission automatique
   useEffect(() => {
     if (!question || hasAnswered || isFinished) {
       setTimeRemaining(null);
@@ -44,24 +57,31 @@ const QuizView = ({
     if (currentLobby.timeRemaining !== undefined) {
       setTimeRemaining(currentLobby.timeRemaining);
       
-      if (currentLobby.timeRemaining === 0 && !hasAnswered) {
-        const markExpired = async () => {
+      if (currentLobby.timeRemaining === 0 && !hasAnswered && !hasSubmittedOnTimeout.current) {
+        hasSubmittedOnTimeout.current = true;
+        
+        const submitCurrentAnswer = async () => {
           try {
-            await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/mark-time-expired`, {
+            const currentAnswer = myAnswer.trim();
+            
+            await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/submit-answer`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                 lobbyId: currentLobby.id, 
-                participantId: currentUser?.id 
+                participantId: currentUser?.id,
+                answer: currentAnswer
               })
             });
+            
             setHasAnswered(true);
-            setMyAnswer('');
+            console.log('⏰ Temps écoulé - Réponse soumise automatiquement:', currentAnswer || '(vide)');
           } catch (error) {
-            console.error('Erreur marquage temps écoulé:', error);
+            console.error('Erreur soumission automatique:', error);
           }
         };
-        markExpired();
+        
+        submitCurrentAnswer();
         return;
       }
     } else {
@@ -83,7 +103,7 @@ const QuizView = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [question?.id, currentSession?.currentQuestionIndex, hasAnswered, isFinished, currentLobby.timeRemaining]);
+  }, [question?.id, currentSession?.currentQuestionIndex, hasAnswered, isFinished, currentLobby.timeRemaining, myAnswer]);
 
   if (!currentSession || !currentLobby) return null;
 
@@ -120,13 +140,13 @@ const QuizView = ({
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold dark:text-white">{quiz?.title}</h3>
               <span className="text-gray-600 dark:text-gray-400">
-                Question {currentSession.currentQuestionIndex + 1}/{quiz?.questions.length}
+                Question {currentSession.currentQuestionIndex + 1}/{questions.length}
               </span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
               <div
                 className="bg-purple-600 dark:bg-purple-500 h-2 rounded-full transition-all"
-                style={{ width: `${((currentSession.currentQuestionIndex + 1) / quiz?.questions.length) * 100}%` }}
+                style={{ width: `${((currentSession.currentQuestionIndex + 1) / questions.length) * 100}%` }}
               />
             </div>
           </div>
@@ -148,7 +168,7 @@ const QuizView = ({
               </div>
               {timeRemaining <= 5 && timeRemaining > 0 && (
                 <p className="text-center text-red-600 font-bold mt-2 animate-pulse">
-                  ⏰ Dépêchez-vous !
+                  ⏰ Dépêchez-vous ! {myAnswer.trim() && '(Votre réponse sera enregistrée automatiquement)'}
                 </p>
               )}
             </div>
@@ -207,10 +227,14 @@ const QuizView = ({
             <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 dark:border-red-600 rounded-lg p-6 text-center">
               <Clock className="w-12 h-12 mx-auto text-red-600 dark:text-red-400 mb-2" />
               <p className="font-bold text-red-700 dark:text-red-400 mb-2">⏰ Temps écoulé !</p>
+              <div className="bg-white dark:bg-gray-800 rounded p-3 border border-red-300 dark:border-red-600 mb-3">
+                <p className="text-xs text-gray-600 dark:text-gray-400">Réponse soumise :</p>
+                <p className="font-bold text-red-700 dark:text-red-400">{myAnswer || '(vide)'}</p>
+              </div>
               <p className="text-sm text-gray-600 dark:text-gray-400">En attente de la question suivante...</p>
             </div>
           ) : question?.type === 'qcm' ? (
-            // ✅ NOUVEAU: Interface QCM
+            // Interface QCM
             <div className="space-y-3">
               {question.choices?.map((choice, index) => (
                 <button

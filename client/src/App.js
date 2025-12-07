@@ -390,12 +390,12 @@ const App = () => {
     }
   };
 
-  const handleCreateLobby = async (quizId) => {
+  const handleCreateLobby = async (quizId, shuffle = false) => {
     try {
-      const data = await api.createLobby(quizId);
+      const data = await api.createLobby(quizId, shuffle);
       if (data.success) {
         await loadLobbies();
-        alert('Lobby créé !');
+        alert(shuffle ? 'Lobby créé avec questions mélangées !' : 'Lobby créé !');
       }
     } catch (error) {
       console.error('Erreur:', error);

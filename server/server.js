@@ -11,8 +11,8 @@ const DB_FILE = path.join(__dirname, 'db.json');
 app.use(cors());
 app.use(express.json());
 
-// ✅ NOUVEAU: Stockage en mémoire des timers de questions
-const questionTimers = new Map(); // lobbyId -> { startTime, timer }
+// ✅ Stockage en mémoire des timers de questions
+const questionTimers = new Map(); // lobbyId -> { startTime, timer, timeoutId }
 
 // Fonction d'initialisation de la base de données
 function initDB() {
@@ -44,6 +44,33 @@ function writeDB(data) {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
   } catch (error) {
     console.error('❌ Erreur écriture DB:', error);
+  }
+}
+
+// ✅ NOUVEAU: Fonction pour forcer tous les participants à soumettre au timeout
+function forceSubmitOnTimeout(lobbyId) {
+  const db = readDB();
+  const lobby = db.lobbies.find(l => l.id === lobbyId);
+  
+  if (!lobby) return;
+  
+  // Marquer tous les participants non-répondants comme ayant répondu avec réponse vide
+  let hasChanges = false;
+  lobby.participants.forEach(p => {
+    if (!p.hasAnswered) {
+      p.hasAnswered = true;
+      p.currentAnswer = p.currentAnswer || ''; // Garder la réponse en cours si elle existe
+      const qIndex = lobby.session.currentQuestionIndex;
+      if (!p.answers) p.answers = {};
+      p.answers[qIndex] = p.currentAnswer;
+      hasChanges = true;
+      console.log(`⏰ Timer expiré - ${p.pseudo}: "${p.currentAnswer || '(vide)'}"`);
+    }
+  });
+  
+  if (hasChanges) {
+    writeDB(db);
+    console.log(`⏰ Tous les participants ont été marqués comme ayant répondu (lobby ${lobbyId})`);
   }
 }
 
@@ -116,31 +143,52 @@ app.get('/api/lobbies', (req, res) => {
   const db = readDB();
   const lobbies = db.lobbies || [];
   
-  // ✅ NOUVEAU: Ajouter le temps écoulé pour chaque lobby avec timer
+  // Ajouter le temps écoulé pour chaque lobby avec timer
   const lobbiesWithTimer = lobbies.map(lobby => {
+    let processedLobby = { ...lobby };
+    
+    // ✅ CORRECTION: Toujours inclure shuffledQuestions dans la réponse
+    // pour que tous les clients (admin et participants) aient le même ordre
+    
     if (lobby.status === 'playing' && questionTimers.has(lobby.id)) {
       const timerData = questionTimers.get(lobby.id);
       const elapsed = Math.floor((Date.now() - timerData.startTime) / 1000);
       const remaining = Math.max(0, timerData.timer - elapsed);
       
-      return {
-        ...lobby,
+      processedLobby = {
+        ...processedLobby,
         questionStartTime: timerData.startTime,
         timeRemaining: remaining
       };
     }
-    return lobby;
+    
+    return processedLobby;
   });
   
   res.json(lobbiesWithTimer);
 });
 
 app.post('/api/create-lobby', (req, res) => {
-  const { quizId } = req.body;
+  const { quizId, shuffle = false } = req.body;
   const db = readDB();
+  const quiz = db.quizzes.find(q => q.id === quizId);
+  
+  if (!quiz) {
+    return res.json({ success: false, message: 'Quiz introuvable' });
+  }
+  
+  // ✅ NOUVEAU: Mélanger les questions si demandé
+  let questions = [...quiz.questions];
+  if (shuffle) {
+    questions = shuffleArray(questions);
+    console.log(`🔀 Questions mélangées pour le lobby (${questions.length} questions)`);
+  }
+  
   const lobby = {
     id: Date.now().toString(),
     quizId,
+    shuffled: shuffle, // ✅ Marquer le lobby comme mélangé
+    shuffledQuestions: shuffle ? questions : null, // ✅ Stocker l'ordre mélangé
     status: 'waiting',
     participants: [],
     session: null,
@@ -151,6 +199,16 @@ app.post('/api/create-lobby', (req, res) => {
   res.json({ success: true, lobby });
 });
 
+// ✅ NOUVEAU: Fonction pour mélanger un tableau (Fisher-Yates)
+function shuffleArray(array) {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 app.post('/api/join-lobby', (req, res) => {
   const { lobbyId, participantId, pseudo, teamName } = req.body;
   const db = readDB();
@@ -160,7 +218,7 @@ app.post('/api/join-lobby', (req, res) => {
     return res.json({ success: false, message: 'Salle non disponible' });
   }
   
-  // ✅ CORRECTION: Créer l'équipe si elle n'existe pas
+  // Créer l'équipe si elle n'existe pas
   let team = db.teams.find(t => t.name === teamName);
   if (!team) {
     team = { 
@@ -197,8 +255,14 @@ app.post('/api/leave-lobby', (req, res) => {
     lobby.participants = lobby.participants.filter(p => p.participantId !== participantId);
     if (lobby.participants.length === 0 && lobby.status === 'waiting') {
       db.lobbies = db.lobbies.filter(l => l.id !== lobbyId);
-      // ✅ NOUVEAU: Nettoyer le timer
-      questionTimers.delete(lobbyId);
+      // Nettoyer le timer
+      if (questionTimers.has(lobbyId)) {
+        const timerData = questionTimers.get(lobbyId);
+        if (timerData.timeoutId) {
+          clearTimeout(timerData.timeoutId);
+        }
+        questionTimers.delete(lobbyId);
+      }
     }
   }
   writeDB(db);
@@ -222,14 +286,27 @@ app.post('/api/start-quiz', (req, res) => {
       p.currentAnswer = '';
     });
     
-    // ✅ NOUVEAU: Démarrer le timer pour la première question
+    // ✅ MODIFIÉ: Utiliser les questions mélangées si disponibles
     const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-    const currentQuestion = quiz.questions[0];
+    const questions = lobby.shuffled && lobby.shuffledQuestions 
+      ? lobby.shuffledQuestions 
+      : quiz.questions;
+    
+    const currentQuestion = questions[0];
+    
     if (currentQuestion.timer > 0) {
+      const startTime = Date.now();
+      const timeoutId = setTimeout(() => {
+        forceSubmitOnTimeout(lobbyId);
+      }, currentQuestion.timer * 1000);
+      
       questionTimers.set(lobbyId, {
-        startTime: Date.now(),
-        timer: currentQuestion.timer
+        startTime,
+        timer: currentQuestion.timer,
+        timeoutId
       });
+      
+      console.log(`⏱️  Timer démarré: ${currentQuestion.timer}s (lobby ${lobbyId})`);
     }
     
     writeDB(db);
@@ -245,54 +322,21 @@ app.post('/api/submit-answer', (req, res) => {
   const lobby = db.lobbies.find(l => l.id === lobbyId);
   
   if (lobby) {
-    // ✅ CORRECTION: Vérifier si le temps est écoulé
-    if (questionTimers.has(lobbyId)) {
-      const timerData = questionTimers.get(lobbyId);
-      const elapsed = Math.floor((Date.now() - timerData.startTime) / 1000);
-      
-      if (elapsed >= timerData.timer) {
-        return res.json({ 
-          success: false, 
-          message: 'Temps écoulé',
-          timeExpired: true 
-        });
-      }
-    }
-    
+    // ✅ CORRECTION: Permettre la soumission même si le temps est écoulé
+    // (la réponse en cours sera prise en compte)
     const participant = lobby.participants.find(p => p.participantId === participantId);
-    if (participant) {
+    if (participant && !participant.hasAnswered) {
       participant.hasAnswered = true;
       participant.currentAnswer = answer;
       const qIndex = lobby.session.currentQuestionIndex;
       if (!participant.answers) participant.answers = {};
       participant.answers[qIndex] = answer;
-    }
-    writeDB(db);
-    res.json({ success: true });
-  } else {
-    res.json({ success: false });
-  }
-});
-
-// ✅ NOUVEAU: Route pour marquer explicitement qu'un participant a terminé (temps écoulé)
-app.post('/api/mark-time-expired', (req, res) => {
-  const { lobbyId, participantId } = req.body;
-  const db = readDB();
-  const lobby = db.lobbies.find(l => l.id === lobbyId);
-  
-  if (lobby) {
-    const participant = lobby.participants.find(p => p.participantId === participantId);
-    if (participant && !participant.hasAnswered) {
-      participant.hasAnswered = true;
-      participant.currentAnswer = ''; // Réponse vide car temps écoulé
-      const qIndex = lobby.session.currentQuestionIndex;
-      if (!participant.answers) participant.answers = {};
-      participant.answers[qIndex] = ''; // Enregistrer réponse vide
       
-      console.log(`⏰ Temps écoulé pour ${participant.pseudo} - Question ${qIndex + 1}`);
+      writeDB(db);
+      res.json({ success: true });
+    } else {
+      res.json({ success: false, message: 'Déjà répondu' });
     }
-    writeDB(db);
-    res.json({ success: true });
   } else {
     res.json({ success: false });
   }
@@ -304,29 +348,47 @@ app.post('/api/next-question', (req, res) => {
   const lobby = db.lobbies.find(l => l.id === lobbyId);
   
   if (lobby && lobby.session) {
+    // ✅ Nettoyer l'ancien timer
+    if (questionTimers.has(lobbyId)) {
+      const timerData = questionTimers.get(lobbyId);
+      if (timerData.timeoutId) {
+        clearTimeout(timerData.timeoutId);
+      }
+      questionTimers.delete(lobbyId);
+    }
+    
+    // ✅ MODIFIÉ: Utiliser les questions mélangées si disponibles
     const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-    if (lobby.session.currentQuestionIndex < quiz.questions.length - 1) {
+    const questions = lobby.shuffled && lobby.shuffledQuestions 
+      ? lobby.shuffledQuestions 
+      : quiz.questions;
+    
+    if (lobby.session.currentQuestionIndex < questions.length - 1) {
       lobby.session.currentQuestionIndex++;
       lobby.participants.forEach(p => {
         p.hasAnswered = false;
         p.currentAnswer = '';
       });
       
-      // ✅ NOUVEAU: Démarrer le timer pour la nouvelle question
-      const currentQuestion = quiz.questions[lobby.session.currentQuestionIndex];
+      const currentQuestion = questions[lobby.session.currentQuestionIndex];
+      
       if (currentQuestion.timer > 0) {
+        const startTime = Date.now();
+        const timeoutId = setTimeout(() => {
+          forceSubmitOnTimeout(lobbyId);
+        }, currentQuestion.timer * 1000);
+        
         questionTimers.set(lobbyId, {
-          startTime: Date.now(),
-          timer: currentQuestion.timer
+          startTime,
+          timer: currentQuestion.timer,
+          timeoutId
         });
-      } else {
-        questionTimers.delete(lobbyId);
+        
+        console.log(`⏱️  Timer démarré: ${currentQuestion.timer}s (Question ${lobby.session.currentQuestionIndex + 1})`);
       }
     } else {
       lobby.session.status = 'finished';
       lobby.status = 'finished';
-      // ✅ NOUVEAU: Nettoyer le timer à la fin
-      questionTimers.delete(lobbyId);
     }
     writeDB(db);
     res.json({ success: true });
@@ -335,7 +397,6 @@ app.post('/api/next-question', (req, res) => {
   }
 });
 
-// ✅ CORRECTION: Points comptés une seule fois par équipe
 app.post('/api/validate-answer', (req, res) => {
   const { lobbyId, participantId, questionIndex, isCorrect } = req.body;
   const db = readDB();
@@ -355,7 +416,6 @@ app.post('/api/validate-answer', (req, res) => {
         const points = quiz.questions[qIndex].points || 1;
         const teamName = participant.teamName;
         
-        // ✅ NOUVEAU: Vérifier si c'est la première validation correcte de l'équipe pour cette question
         const teamParticipants = lobby.participants.filter(p => p.teamName === teamName);
         const alreadyValidated = teamParticipants.some(p => 
           p.participantId !== participantId && 
@@ -363,7 +423,6 @@ app.post('/api/validate-answer', (req, res) => {
           p.validations[qIndex] === true
         );
         
-        // ✅ NOUVEAU: N'ajouter les points que si personne de l'équipe n'a déjà validé cette question
         if (!alreadyValidated) {
           const team = db.teams.find(t => t.name === teamName);
           if (team) {
@@ -388,8 +447,16 @@ app.post('/api/delete-lobby', (req, res) => {
   const { lobbyId } = req.body;
   const db = readDB();
   db.lobbies = db.lobbies.filter(l => l.id !== lobbyId);
-  // ✅ NOUVEAU: Nettoyer le timer
-  questionTimers.delete(lobbyId);
+  
+  // Nettoyer le timer
+  if (questionTimers.has(lobbyId)) {
+    const timerData = questionTimers.get(lobbyId);
+    if (timerData.timeoutId) {
+      clearTimeout(timerData.timeoutId);
+    }
+    questionTimers.delete(lobbyId);
+  }
+  
   writeDB(db);
   res.json({ success: true });
 });
@@ -430,6 +497,7 @@ app.listen(PORT, () => {
   console.log('   POST /api/create-lobby, /api/join-lobby, /api/start-quiz, etc.');
   console.log('');
   console.log('✅ Timer côté serveur activé (anti-triche)');
+  console.log('✅ Soumission automatique au timeout');
   console.log('✅ Points par équipe (1 validation = 1 point)');
   console.log('');
   

@@ -1,13 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download } from 'lucide-react';
 
 const QuestionBank = ({ questions, onSave }) => {
   const [localQuestions, setLocalQuestions] = useState(questions || []);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // ✅ NOUVEAU: État pour la prévisualisation
   const [showPreview, setShowPreview] = useState(true);
+  const fileInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     text: '',
@@ -34,6 +33,374 @@ const QuestionBank = ({ questions, onSave }) => {
       correctChoice: 0
     });
     setEditingQuestion(null);
+  };
+
+  // ✅ AMÉLIORÉ: Exporter en CSV avec point-virgule pour Excel européen
+  const handleExportCSV = () => {
+    if (localQuestions.length === 0) {
+      alert('Aucune question à exporter');
+      return;
+    }
+
+    // En-têtes CSV
+    const headers = [
+      'Type',
+      'Catégorie',
+      'Question',
+      'Réponse',
+      'Média (URL)',
+      'Points',
+      'Timer (secondes)',
+      'Choix 1',
+      'Choix 2',
+      'Choix 3',
+      'Choix 4',
+      'Choix 5',
+      'Choix 6',
+      'Index Réponse Correcte'
+    ];
+
+    // Convertir les questions en lignes CSV
+    const rows = localQuestions.map(q => {
+      const choices = q.type === 'qcm' ? (q.choices || []) : [];
+      return [
+        q.type || 'text',
+        q.category || '',
+        `"${(q.text || '').replace(/"/g, '""')}"`, // Échapper les guillemets
+        `"${(q.answer || '').replace(/"/g, '""')}"`,
+        q.media || '',
+        q.points || 1,
+        q.timer || 0,
+        choices[0] ? `"${choices[0].replace(/"/g, '""')}"` : '',
+        choices[1] ? `"${choices[1].replace(/"/g, '""')}"` : '',
+        choices[2] ? `"${choices[2].replace(/"/g, '""')}"` : '',
+        choices[3] ? `"${choices[3].replace(/"/g, '""')}"` : '',
+        choices[4] ? `"${choices[4].replace(/"/g, '""')}"` : '',
+        choices[5] ? `"${choices[5].replace(/"/g, '""')}"` : '',
+        q.type === 'qcm' ? (q.correctChoice || 0) : ''
+      ].join(';'); // ✅ Point-virgule au lieu de virgule
+    });
+
+    // Créer le contenu CSV
+    const csvContent = [headers.join(';'), ...rows].join('\n'); // ✅ Point-virgule
+    
+    // Créer un Blob et télécharger
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' }); // UTF-8 BOM pour Excel
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `questions_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    alert(`✅ ${localQuestions.length} question(s) exportée(s) avec succès !\n\n📝 Format : Point-virgule (;) - Compatible Excel Europe`);
+  };
+
+  // ✅ AMÉLIORÉ: Détecter automatiquement le délimiteur (virgule ou point-virgule)
+  const detectDelimiter = (text) => {
+    const firstLine = text.split('\n')[0];
+    
+    // Compter les virgules et points-virgules hors guillemets
+    let commas = 0;
+    let semicolons = 0;
+    let inQuotes = false;
+    
+    for (let i = 0; i < firstLine.length; i++) {
+      const char = firstLine[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (!inQuotes) {
+        if (char === ',') commas++;
+        if (char === ';') semicolons++;
+      }
+    }
+    
+    // Retourner le délimiteur le plus fréquent
+    return semicolons > commas ? ';' : ',';
+  };
+
+  // ✅ AMÉLIORÉ: Importer depuis CSV avec détection automatique du délimiteur
+  const handleImportCSV = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        const lines = text.split('\n').filter(line => line.trim());
+        
+        if (lines.length < 2) {
+          alert('Le fichier CSV est vide ou invalide');
+          return;
+        }
+
+        // ✅ NOUVEAU: Détecter automatiquement le délimiteur
+        const delimiter = detectDelimiter(text);
+        console.log(`📊 Délimiteur détecté: "${delimiter}" (${delimiter === ';' ? 'Point-virgule' : 'Virgule'})`);
+
+        // Ignorer la ligne d'en-tête
+        const dataLines = lines.slice(1);
+        
+        const importedQuestions = [];
+        let errors = [];
+
+        dataLines.forEach((line, index) => {
+          try {
+            // Parser le CSV avec le délimiteur détecté
+            const values = parseCSVLine(line, delimiter);
+            
+            if (values.length < 7) {
+              errors.push(`Ligne ${index + 2}: Nombre de colonnes insuffisant (${values.length}/14)`);
+              return;
+            }
+
+            const [
+              type,
+              category,
+              text,
+              answer,
+              media,
+              points,
+              timer,
+              choice1,
+              choice2,
+              choice3,
+              choice4,
+              choice5,
+              choice6,
+              correctChoiceIndex
+            ] = values;
+
+            // Validation
+            if (!text || !text.trim()) {
+              errors.push(`Ligne ${index + 2}: Question vide`);
+              return;
+            }
+
+            // Créer la question
+            const question = {
+              id: `import-${Date.now()}-${index}`,
+              type: type || 'text',
+              category: category || '',
+              text: text.trim(),
+              answer: answer?.trim() || '',
+              media: media || '',
+              points: parseInt(points) || 1,
+              timer: parseInt(timer) || 0
+            };
+
+            // Si c'est un QCM, ajouter les choix
+            if (question.type === 'qcm') {
+              const choices = [choice1, choice2, choice3, choice4, choice5, choice6]
+                .filter(c => c && c.trim())
+                .map(c => c.trim());
+              
+              if (choices.length < 2) {
+                errors.push(`Ligne ${index + 2}: QCM doit avoir au moins 2 choix`);
+                return;
+              }
+
+              question.choices = choices;
+              question.correctChoice = parseInt(correctChoiceIndex) || 0;
+              
+              if (question.correctChoice >= choices.length) {
+                question.correctChoice = 0;
+              }
+              
+              // Pour les QCM, la réponse est le texte du choix correct
+              question.answer = choices[question.correctChoice];
+            }
+
+            importedQuestions.push(question);
+          } catch (err) {
+            errors.push(`Ligne ${index + 2}: ${err.message}`);
+          }
+        });
+
+        if (errors.length > 0) {
+          console.error('Erreurs d\'import:', errors);
+          const errorMessage = errors.length > 5 
+            ? `${errors.slice(0, 5).join('\n')}\n... et ${errors.length - 5} autre(s) erreur(s)`
+            : errors.join('\n');
+          
+          alert(`⚠️ Import terminé avec ${errors.length} erreur(s):\n\n${errorMessage}`);
+        }
+
+        if (importedQuestions.length > 0) {
+          const confirmMessage = `Voulez-vous importer ${importedQuestions.length} question(s) ?\n\n` +
+            `📊 Délimiteur détecté : ${delimiter === ';' ? 'Point-virgule (;)' : 'Virgule (,)'}\n\n` +
+            `Mode d'import :\n` +
+            `• OK = AJOUTER aux questions existantes\n` +
+            `• Annuler = REMPLACER toutes les questions\n\n` +
+            `Questions actuelles : ${localQuestions.length}`;
+
+          const shouldAdd = window.confirm(confirmMessage);
+          
+          let finalQuestions;
+          if (shouldAdd) {
+            // Ajouter aux questions existantes
+            finalQuestions = [...localQuestions, ...importedQuestions];
+            alert(`✅ ${importedQuestions.length} question(s) ajoutée(s) !\n\nTotal : ${finalQuestions.length} questions`);
+          } else {
+            // Remplacer toutes les questions
+            finalQuestions = importedQuestions;
+            alert(`✅ ${importedQuestions.length} question(s) importée(s) !\n\n⚠️ ${localQuestions.length} ancienne(s) question(s) supprimée(s)`);
+          }
+
+          setLocalQuestions(finalQuestions);
+          onSave(finalQuestions);
+        } else {
+          alert('❌ Aucune question valide trouvée dans le fichier');
+        }
+
+      } catch (error) {
+        console.error('Erreur import CSV:', error);
+        alert('❌ Erreur lors de l\'import du fichier CSV:\n' + error.message);
+      }
+    };
+
+    reader.readAsText(file, 'UTF-8');
+    // Réinitialiser l'input pour permettre de réimporter le même fichier
+    event.target.value = '';
+  };
+
+  // ✅ AMÉLIORÉ: Parser une ligne CSV avec délimiteur configurable
+  const parseCSVLine = (line, delimiter = ';') => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      const nextChar = line[i + 1];
+
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          // Double guillemet = guillemet échappé
+          current += '"';
+          i++; // Sauter le prochain guillemet
+        } else {
+          // Début ou fin de zone quotée
+          inQuotes = !inQuotes;
+        }
+      } else if (char === delimiter && !inQuotes) {
+        // Délimiteur hors guillemets = séparateur
+        result.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+
+    // Ajouter le dernier champ
+    result.push(current);
+
+    return result;
+  };
+
+  // ✅ AMÉLIORÉ: Télécharger le template CSV avec point-virgule
+  const handleDownloadTemplate = () => {
+    const headers = [
+      'Type',
+      'Catégorie',
+      'Question',
+      'Réponse',
+      'Média (URL)',
+      'Points',
+      'Timer (secondes)',
+      'Choix 1',
+      'Choix 2',
+      'Choix 3',
+      'Choix 4',
+      'Choix 5',
+      'Choix 6',
+      'Index Réponse Correcte'
+    ];
+
+    const examples = [
+      // Exemple question texte
+      [
+        'text',
+        'Géographie',
+        '"Quelle est la capitale de la France ?"',
+        '"Paris"',
+        '',
+        '1',
+        '30',
+        '', '', '', '', '', '',
+        ''
+      ].join(';'), // ✅ Point-virgule
+      // Exemple QCM
+      [
+        'qcm',
+        'Histoire',
+        '"En quelle année a eu lieu la Révolution française ?"',
+        '"1789"',
+        '',
+        '2',
+        '20',
+        '"1789"',
+        '"1792"',
+        '"1804"',
+        '"1815"',
+        '', '',
+        '0'
+      ].join(';'),
+      // Exemple avec image
+      [
+        'image',
+        'Art',
+        '"Qui a peint ce tableau ?"',
+        '"Leonardo da Vinci"',
+        '"https://example.com/mona-lisa.jpg"',
+        '1',
+        '0',
+        '', '', '', '', '', '',
+        ''
+      ].join(';'),
+      // Exemple avec audio
+      [
+        'audio',
+        'Musique',
+        '"Qui interprète cette chanson ?"',
+        '"The Beatles"',
+        '"https://example.com/song.mp3"',
+        '1',
+        '15',
+        '', '', '', '', '', '',
+        ''
+      ].join(';'),
+      // Exemple avec vidéo
+      [
+        'video',
+        'Cinéma',
+        '"De quel film est extraite cette scène ?"',
+        '"Star Wars"',
+        '"https://example.com/scene.mp4"',
+        '2',
+        '0',
+        '', '', '', '', '', '',
+        ''
+      ].join(';')
+    ];
+
+    const csvContent = [headers.join(';'), ...examples].join('\n'); // ✅ Point-virgule
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'template_questions.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    alert('✅ Template téléchargé !\n\n📝 Format : Point-virgule (;)\n💡 S\'ouvre directement dans Excel');
   };
 
   const handleSave = () => {
@@ -130,13 +497,11 @@ const QuestionBank = ({ questions, onSave }) => {
     }
   };
 
-  // ✅ NOUVEAU: Composant de prévisualisation - Mémorisé pour éviter les rechargements
   const MediaPreview = useMemo(() => {
     return ({ type, url, id }) => {
       if (!url || !showPreview) return null;
 
       const containerClass = "mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-purple-200 dark:border-purple-600";
-      // ✅ CRITIQUE: Utiliser une key unique pour chaque média pour éviter les rechargements
       const mediaKey = `${id || 'new'}-${url}`;
 
       switch(type) {
@@ -219,7 +584,7 @@ const QuestionBank = ({ questions, onSave }) => {
           return null;
       }
     };
-  }, [showPreview]); // ✅ Ne se recrée que si showPreview change
+  }, [showPreview]);
 
   return (
     <div className="space-y-6">
@@ -227,20 +592,56 @@ const QuestionBank = ({ questions, onSave }) => {
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold dark:text-white">Banque de Questions</h2>
           
-          {/* ✅ NOUVEAU: Toggle prévisualisation */}
-          <button
-            onClick={() => setShowPreview(!showPreview)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
-              showPreview 
-                ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' 
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-            }`}
-          >
-            {showPreview ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-            {showPreview ? 'Masquer aperçu' : 'Afficher aperçu'}
-          </button>
+          <div className="flex gap-2">
+            {/* ✅ NOUVEAU: Boutons Import/Export */}
+            <button
+              onClick={handleDownloadTemplate}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition"
+              title="Télécharger un fichier template CSV avec exemples (Point-virgule)"
+            >
+              <Download className="w-4 h-4" />
+              Template CSV
+            </button>
+            
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition"
+              title="Importer des questions depuis un fichier CSV (détection auto ; ou ,)"
+            >
+              <Upload className="w-4 h-4" />
+              Importer CSV
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleImportCSV}
+              className="hidden"
+            />
+            
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-2 px-3 py-2 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition"
+              title="Exporter toutes les questions en CSV (Point-virgule pour Excel)"
+            >
+              <Download className="w-4 h-4" />
+              Exporter CSV
+            </button>
+            
+            <button
+              onClick={() => setShowPreview(!showPreview)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+                showPreview 
+                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' 
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+              }`}
+            >
+              {showPreview ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+              {showPreview ? 'Masquer' : 'Afficher'} aperçu
+            </button>
+          </div>
         </div>
-        
+
         {/* Formulaire d'ajout/édition */}
         <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
           <h3 className="font-bold mb-3 dark:text-white">{editingQuestion ? 'Modifier' : 'Nouvelle'} Question</h3>
@@ -284,7 +685,6 @@ const QuestionBank = ({ questions, onSave }) => {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
                 
-                {/* ✅ NOUVEAU: Prévisualisation en temps réel */}
                 <MediaPreview type={formData.type} url={formData.media} id={editingQuestion?.id || 'new'} />
               </>
             )}
@@ -420,7 +820,6 @@ const QuestionBank = ({ questions, onSave }) => {
                   </div>
                   <p className="font-semibold mb-1 dark:text-white">{question.text}</p>
                   
-                  {/* ✅ NOUVEAU: Prévisualisation dans la liste */}
                   {question.media && showPreview && (
                     <MediaPreview type={question.type} url={question.media} id={question.id} />
                   )}
