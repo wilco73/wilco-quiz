@@ -98,8 +98,8 @@ const App = () => {
           }
         }
 
-        // ✅ NOUVEAU: Si le quiz est terminé, rediriger vers les résultats
-        if (updated.status === 'finished' && !isAdmin && view !== 'results') {
+        // ✅ CORRECTION: Ne rediriger vers résultats que si on n'est pas déjà sur le classement
+        if (updated.status === 'finished' && !isAdmin && view !== 'results' && view !== 'scoreboard') {
           setView('results');
           saveSession({ 
             currentUser, 
@@ -184,16 +184,38 @@ const App = () => {
     const existingParticipant = participants.find(p => p.pseudo === pseudo);
 
     if (existingParticipant) {
+      // ✅ CORRECTION: Vérifier le mot de passe
       if (existingParticipant.password !== password) {
         alert('Ce pseudo existe avec un mot de passe différent');
         return;
       }
+      
+      // ✅ NOUVEAU: Permettre le changement d'équipe
       if (existingParticipant.teamName !== teamName) {
-        alert(`Ce pseudo est dans l'équipe "${existingParticipant.teamName}"`);
-        return;
+        const confirmChange = window.confirm(
+          `Votre pseudo "${pseudo}" est actuellement dans l'équipe "${existingParticipant.teamName}".\n\n` +
+          `Voulez-vous changer pour l'équipe "${teamName}" ?`
+        );
+        
+        if (!confirmChange) {
+          return;
+        }
+        
+        // Mettre à jour l'équipe du participant
+        existingParticipant.teamName = teamName;
+        
+        // Mettre à jour dans la base
+        const updatedParticipants = participants.map(p => 
+          p.id === existingParticipant.id ? existingParticipant : p
+        );
+        await api.saveParticipants(updatedParticipants);
+        setParticipants(updatedParticipants);
+        
+        console.log(`✅ ${pseudo} a changé d'équipe: "${existingParticipant.teamName}" → "${teamName}"`);
       }
     }
 
+    // Créer ou récupérer l'équipe
     let team = teams.find(t => t.name === teamName);
     if (!team) {
       team = { id: Date.now().toString(), name: teamName, validatedScore: 0 };
@@ -202,6 +224,7 @@ const App = () => {
       setTeams(newTeams);
     }
 
+    // Créer le participant s'il n'existe pas
     let participant = existingParticipant;
     if (!participant) {
       participant = {
@@ -481,6 +504,8 @@ const App = () => {
           myAnswer={myAnswer}
           setMyAnswer={setMyAnswer}
           hasAnswered={hasAnswered}
+          setHasAnswered={setHasAnswered}
+          currentUser={currentUser}
           onSubmitAnswer={handleSubmitAnswer}
           onLeaveLobby={handleLeaveLobby}
         />

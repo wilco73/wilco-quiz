@@ -121,6 +121,16 @@ export const submitAnswer = async (lobbyId, participantId, answer) => {
   return res.json();
 };
 
+// ✅ NOUVEAU: Marquer qu'un participant a fini (temps écoulé)
+export const markTimeExpired = async (lobbyId, participantId) => {
+  const res = await fetch(`${API_URL}/mark-time-expired`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lobbyId, participantId })
+  });
+  return res.json();
+};
+
 export const nextQuestion = async (lobbyId) => {
   const res = await fetch(`${API_URL}/next-question`, {
     method: 'POST',
@@ -130,7 +140,6 @@ export const nextQuestion = async (lobbyId) => {
   return res.json();
 };
 
-// ✅ CORRECTION 3: Ajout de questionIndex dans la signature
 export const validateAnswer = async (lobbyId, participantId, questionIndex, isCorrect) => {
   const res = await fetch(`${API_URL}/validate-answer`, {
     method: 'POST',

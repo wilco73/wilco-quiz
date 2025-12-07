@@ -245,7 +245,7 @@ app.post('/api/submit-answer', (req, res) => {
   const lobby = db.lobbies.find(l => l.id === lobbyId);
   
   if (lobby) {
-    // ✅ NOUVEAU: Vérifier si le temps est écoulé
+    // ✅ CORRECTION: Vérifier si le temps est écoulé
     if (questionTimers.has(lobbyId)) {
       const timerData = questionTimers.get(lobbyId);
       const elapsed = Math.floor((Date.now() - timerData.startTime) / 1000);
@@ -266,6 +266,30 @@ app.post('/api/submit-answer', (req, res) => {
       const qIndex = lobby.session.currentQuestionIndex;
       if (!participant.answers) participant.answers = {};
       participant.answers[qIndex] = answer;
+    }
+    writeDB(db);
+    res.json({ success: true });
+  } else {
+    res.json({ success: false });
+  }
+});
+
+// ✅ NOUVEAU: Route pour marquer explicitement qu'un participant a terminé (temps écoulé)
+app.post('/api/mark-time-expired', (req, res) => {
+  const { lobbyId, participantId } = req.body;
+  const db = readDB();
+  const lobby = db.lobbies.find(l => l.id === lobbyId);
+  
+  if (lobby) {
+    const participant = lobby.participants.find(p => p.participantId === participantId);
+    if (participant && !participant.hasAnswered) {
+      participant.hasAnswered = true;
+      participant.currentAnswer = ''; // Réponse vide car temps écoulé
+      const qIndex = lobby.session.currentQuestionIndex;
+      if (!participant.answers) participant.answers = {};
+      participant.answers[qIndex] = ''; // Enregistrer réponse vide
+      
+      console.log(`⏰ Temps écoulé pour ${participant.pseudo} - Question ${qIndex + 1}`);
     }
     writeDB(db);
     res.json({ success: true });
