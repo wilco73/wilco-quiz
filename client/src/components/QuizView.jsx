@@ -23,12 +23,11 @@ const QuizView = ({
   const question = quiz?.questions[currentSession?.currentQuestionIndex];
   const isFinished = currentSession?.status === 'finished';
 
-  // ✅ NOUVEAU: Auto-sauvegarde de la réponse en temps réel
+  // Auto-sauvegarde de la réponse en temps réel
   const autoSaveAnswer = async (answer) => {
     if (hasAnswered || isFinished) return;
     
     try {
-      // Envoyer au serveur sans marquer comme "validé"
       await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/auto-save-answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -38,12 +37,13 @@ const QuizView = ({
           answer: answer
         })
       });
+      console.log(`💾 Auto-save: "${answer}"`);
     } catch (error) {
       console.error('Erreur auto-sauvegarde:', error);
     }
   };
 
-  // ✅ NOUVEAU: Déclencher l'auto-sauvegarde lors de la frappe
+  // Déclencher l'auto-sauvegarde lors de la frappe (texte uniquement)
   const handleAnswerChange = (e) => {
     const newAnswer = e.target.value;
     setMyAnswer(newAnswer);
@@ -59,6 +59,13 @@ const QuizView = ({
     }, 1000);
   };
 
+  // ✅ CORRECTION: Pour QCM, juste sélectionner sans auto-submit
+  const handleQCMChoice = (choice) => {
+    setMyAnswer(choice);
+    // Auto-save immédiate pour QCM
+    autoSaveAnswer(choice);
+  };
+
   // Volume à 50%
   useEffect(() => {
     if (videoRef.current) {
@@ -71,10 +78,10 @@ const QuizView = ({
 
   // Focus automatique sur l'input
   useEffect(() => {
-    if (inputRef.current && !hasAnswered && !isFinished) {
+    if (inputRef.current && !hasAnswered && !isFinished && question?.type !== 'qcm') {
       inputRef.current.focus();
     }
-  }, [currentSession?.currentQuestionIndex, hasAnswered, isFinished]);
+  }, [currentSession?.currentQuestionIndex, hasAnswered, isFinished, question?.type]);
 
   // Gestion du timer
   useEffect(() => {
@@ -134,7 +141,7 @@ const QuizView = ({
     return () => clearInterval(interval);
   }, [question?.id, currentSession?.currentQuestionIndex, hasAnswered, isFinished, currentLobby.timeRemaining]);
 
-  // ✅ NOUVEAU: Nettoyer le timer d'auto-sauvegarde
+  // Nettoyer le timer d'auto-sauvegarde
   useEffect(() => {
     return () => {
       if (autoSaveTimerRef.current) {
@@ -270,34 +277,52 @@ const QuizView = ({
               <p className="text-sm text-gray-600 dark:text-gray-400">En attente de la question suivante...</p>
             </div>
           ) : question?.type === 'qcm' ? (
-            // Interface QCM
+            // ✅ CORRECTION: Interface QCM sans auto-submit
             <div className="space-y-3">
               {question.choices?.map((choice, index) => (
                 <button
                   key={index}
-                  onClick={() => {
-                    setMyAnswer(choice);
-                    // Auto-sauvegarde immédiate pour QCM
-                    autoSaveAnswer(choice);
-                    // Auto-submit pour QCM
-                    setTimeout(() => {
-                      if (!hasAnswered && !isTimeExpired) {
-                        onSubmitAnswer();
-                      }
-                    }, 100);
-                  }}
+                  onClick={() => handleQCMChoice(choice)}
+                  disabled={isTimeExpired}
                   className={`w-full p-4 rounded-lg border-2 text-left font-semibold transition-all ${
-                    myAnswer === choice
-                      ? 'border-purple-600 bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-200'
+                    isTimeExpired
+                      ? 'opacity-50 cursor-not-allowed border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700'
+                      : myAnswer === choice
+                      ? 'border-purple-600 dark:border-purple-500 bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-200 scale-105 shadow-lg'
                       : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
                   }`}
                 >
-                  <span className="text-purple-600 dark:text-purple-400 mr-2">
+                  <span className="text-purple-600 dark:text-purple-400 mr-2 font-bold">
                     {String.fromCharCode(65 + index)}.
                   </span>
                   {choice}
+                  {myAnswer === choice && (
+                    <span className="ml-2 text-purple-600 dark:text-purple-400">✓</span>
+                  )}
                 </button>
               ))}
+              
+              {/* ✅ NOUVEAU: Bouton de validation pour QCM */}
+              {myAnswer && (
+                <div className="pt-4">
+                  <button
+                    onClick={onSubmitAnswer}
+                    disabled={isTimeExpired}
+                    className={`w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2 ${
+                      isTimeExpired
+                        ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
+                        : 'bg-purple-600 dark:bg-purple-700 text-white hover:bg-purple-700 dark:hover:bg-purple-600 shadow-lg'
+                    }`}
+                  >
+                    <Check className="w-5 h-5" />
+                    Valider ma réponse
+                  </button>
+                  
+                  <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+                    💾 Réponse auto-sauvegardée : {myAnswer}
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <>
@@ -312,7 +337,7 @@ const QuizView = ({
                 disabled={isTimeExpired}
               />
               
-              {/* ✅ NOUVEAU: Indicateur d'auto-sauvegarde */}
+              {/* Indicateur d'auto-sauvegarde */}
               {myAnswer && !hasAnswered && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 flex items-center gap-1">
                   💾 Réponse sauvegardée automatiquement

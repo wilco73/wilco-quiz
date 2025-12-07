@@ -180,7 +180,7 @@ app.post('/api/join-lobby', (req, res) => {
       currentAnswer: '', 
       answersByQuestionId: {},
       validationsByQuestionId: {},
-      draftAnswer: '' // ✅ NOUVEAU: Pour l'auto-sauvegarde
+      draftAnswer: ''
     });
   }
   writeDB(db);
@@ -218,7 +218,7 @@ app.post('/api/start-quiz', (req, res) => {
     lobby.participants.forEach(p => {
       p.hasAnswered = false;
       p.currentAnswer = '';
-      p.draftAnswer = ''; // ✅ NOUVEAU
+      p.draftAnswer = '';
     });
     
     const quiz = db.quizzes.find(q => q.id === lobby.quizId);
@@ -237,7 +237,6 @@ app.post('/api/start-quiz', (req, res) => {
   }
 });
 
-// ✅ NOUVEAU: Route d'auto-sauvegarde (sans validation finale)
 app.post('/api/auto-save-answer', (req, res) => {
   const { lobbyId, participantId, answer } = req.body;
   const db = readDB();
@@ -247,15 +246,11 @@ app.post('/api/auto-save-answer', (req, res) => {
     const participant = lobby.participants.find(p => p.participantId === participantId);
     
     if (participant) {
-      // Sauvegarder comme brouillon (pas encore validé)
       participant.draftAnswer = answer;
       
-      // ✅ IMPORTANT: Si le participant n'a pas encore validé, on met à jour aussi currentAnswer
-      // Comme ça l'admin voit la dernière frappe même si pas validée
       if (!participant.hasAnswered) {
         participant.currentAnswer = answer;
         
-        // On sauvegarde aussi dans answersByQuestionId pour que ça apparaisse dans la validation
         const quiz = db.quizzes.find(q => q.id === lobby.quizId);
         const questions = lobby.shuffled && lobby.shuffledQuestions 
           ? lobby.shuffledQuestions 
@@ -328,7 +323,6 @@ app.post('/api/mark-time-expired', (req, res) => {
     const participant = lobby.participants.find(p => p.participantId === participantId);
     if (participant && !participant.hasAnswered) {
       participant.hasAnswered = true;
-      // ✅ MODIFICATION: Utiliser draftAnswer s'il existe, sinon vide
       const finalAnswer = participant.draftAnswer || '';
       participant.currentAnswer = finalAnswer;
       
@@ -366,7 +360,7 @@ app.post('/api/next-question', (req, res) => {
       lobby.participants.forEach(p => {
         p.hasAnswered = false;
         p.currentAnswer = '';
-        p.draftAnswer = ''; // ✅ NOUVEAU: Reset du brouillon
+        p.draftAnswer = '';
       });
       
       const currentQuestion = questions[lobby.session.currentQuestionIndex];
@@ -390,6 +384,7 @@ app.post('/api/next-question', (req, res) => {
   }
 });
 
+// ✅ NOUVEAU: Validation avec règle stricte pour QCM
 app.post('/api/validate-answer', (req, res) => {
   const { lobbyId, participantId, questionId, isCorrect } = req.body;
   const db = readDB();
@@ -405,27 +400,68 @@ app.post('/api/validate-answer', (req, res) => {
       if (!participant.validationsByQuestionId) participant.validationsByQuestionId = {};
       participant.validationsByQuestionId[questionId] = isCorrect;
       
+      // ✅ NOUVEAU: Règle spéciale pour QCM
       if (isCorrect && question) {
         const points = question.points || 1;
         const teamName = participant.teamName;
-        
         const teamParticipants = lobby.participants.filter(p => p.teamName === teamName);
-        const alreadyValidated = teamParticipants.some(p => 
-          p.participantId !== participantId && 
-          p.validationsByQuestionId && 
-          p.validationsByQuestionId[questionId] === true
-        );
         
-        if (!alreadyValidated) {
-          const team = db.teams.find(t => t.name === teamName);
-          if (team) {
-            team.validatedScore = (team.validatedScore || 0) + points;
-            console.log(`✅ Équipe "${teamName}" gagne ${points} points (Question ID: ${questionId})`);
+        // ✅ RÈGLE QCM: Vérifier si c'est un QCM
+        if (question.type === 'qcm') {
+          // Pour QCM, tous les membres de l'équipe doivent avoir juste
+          const allTeamMembersValidated = teamParticipants.every(p => 
+            p.validationsByQuestionId?.[questionId] === true
+          );
+          
+          if (allTeamMembersValidated) {
+            // Vérifier si les points n'ont pas déjà été attribués
+            const alreadyScored = teamParticipants.some(p => 
+              p.qcmTeamScored?.[questionId] === true
+            );
+            
+            if (!alreadyScored) {
+              const team = db.teams.find(t => t.name === teamName);
+              if (team) {
+                team.validatedScore = (team.validatedScore || 0) + points;
+                
+                // Marquer que cette question a été scorée pour cette équipe
+                teamParticipants.forEach(p => {
+                  if (!p.qcmTeamScored) p.qcmTeamScored = {};
+                  p.qcmTeamScored[questionId] = true;
+                });
+                
+                console.log(`✅ QCM: Équipe "${teamName}" gagne ${points} points (TOUS ont réussi la question ${questionId})`);
+              }
+            } else {
+              console.log(`ℹ️  QCM: Équipe "${teamName}" a déjà reçu les points pour cette question`);
+            }
+          } else {
+            const validatedCount = teamParticipants.filter(p => 
+              p.validationsByQuestionId?.[questionId] === true
+            ).length;
+            const totalCount = teamParticipants.length;
+            
+            console.log(`⚠️  QCM: Équipe "${teamName}" - Seulement ${validatedCount}/${totalCount} ont réussi (pas de points)`);
           }
         } else {
-          console.log(`ℹ️  Équipe "${teamName}" a déjà validé cette question (pas de points supplémentaires)`);
+          // ✅ RÈGLE NORMALE (non-QCM): Premier de l'équipe qui réussit
+          const alreadyValidated = teamParticipants.some(p => 
+            p.participantId !== participantId && 
+            p.validationsByQuestionId?.[questionId] === true
+          );
+          
+          if (!alreadyValidated) {
+            const team = db.teams.find(t => t.name === teamName);
+            if (team) {
+              team.validatedScore = (team.validatedScore || 0) + points;
+              console.log(`✅ Normal: Équipe "${teamName}" gagne ${points} points (Question ${questionId})`);
+            }
+          } else {
+            console.log(`ℹ️  Normal: Équipe "${teamName}" a déjà validé cette question`);
+          }
         }
       }
+      
       writeDB(db);
       res.json({ success: true });
     } else {
@@ -479,11 +515,12 @@ app.listen(PORT, () => {
   console.log('   POST /api/admin-login');
   console.log('   GET  /api/teams, /api/participants, /api/quizzes, /api/questions, /api/lobbies');
   console.log('   POST /api/create-lobby, /api/join-lobby, /api/start-quiz, etc.');
-  console.log('   POST /api/auto-save-answer (NOUVEAU)');
+  console.log('   POST /api/auto-save-answer');
   console.log('');
   console.log('✅ Timer côté serveur activé (anti-triche)');
   console.log('✅ Points par équipe (1 validation = 1 point)');
   console.log('✅ Auto-sauvegarde des réponses en temps réel');
+  console.log('✅ Mode QCM strict: TOUTE l\'équipe doit réussir');
   console.log('');
   
   if (process.env.NODE_ENV === 'production') {
