@@ -15,23 +15,59 @@ const QuizView = ({
 }) => {
   const inputRef = useRef(null);
   const [timeRemaining, setTimeRemaining] = useState(null);
-  const hasSubmittedOnTimeout = useRef(false);
+  const autoSaveTimerRef = useRef(null);
+  const videoRef = useRef(null);
+  const audioRef = useRef(null);
   
-  // ✅ CORRECTION: Récupérer le quiz et utiliser les bonnes questions
   const quiz = currentLobby ? quizzes.find(q => q.id === currentLobby.quizId) : null;
-  
-  // ✅ CRITIQUE: Utiliser shuffledQuestions si disponibles, sinon les questions normales
-  const questions = currentLobby?.shuffled && currentLobby?.shuffledQuestions 
-    ? currentLobby.shuffledQuestions 
-    : quiz?.questions || [];
-  
-  const question = questions[currentSession?.currentQuestionIndex];
+  const question = quiz?.questions[currentSession?.currentQuestionIndex];
   const isFinished = currentSession?.status === 'finished';
 
-  // Réinitialiser le flag à chaque nouvelle question
+  // ✅ NOUVEAU: Auto-sauvegarde de la réponse en temps réel
+  const autoSaveAnswer = async (answer) => {
+    if (hasAnswered || isFinished) return;
+    
+    try {
+      // Envoyer au serveur sans marquer comme "validé"
+      await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/auto-save-answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lobbyId: currentLobby.id,
+          participantId: currentUser.id,
+          answer: answer
+        })
+      });
+    } catch (error) {
+      console.error('Erreur auto-sauvegarde:', error);
+    }
+  };
+
+  // ✅ NOUVEAU: Déclencher l'auto-sauvegarde lors de la frappe
+  const handleAnswerChange = (e) => {
+    const newAnswer = e.target.value;
+    setMyAnswer(newAnswer);
+    
+    // Annuler le timer précédent
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    
+    // Attendre 1 seconde après la dernière frappe avant de sauvegarder
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveAnswer(newAnswer);
+    }, 1000);
+  };
+
+  // Volume à 50%
   useEffect(() => {
-    hasSubmittedOnTimeout.current = false;
-  }, [currentSession?.currentQuestionIndex]);
+    if (videoRef.current) {
+      videoRef.current.volume = 0.5;
+    }
+    if (audioRef.current) {
+      audioRef.current.volume = 0.5;
+    }
+  }, [question?.id, currentSession?.currentQuestionIndex]);
 
   // Focus automatique sur l'input
   useEffect(() => {
@@ -40,7 +76,7 @@ const QuizView = ({
     }
   }, [currentSession?.currentQuestionIndex, hasAnswered, isFinished]);
 
-  // Gestion du timer avec soumission automatique
+  // Gestion du timer
   useEffect(() => {
     if (!question || hasAnswered || isFinished) {
       setTimeRemaining(null);
@@ -57,31 +93,24 @@ const QuizView = ({
     if (currentLobby.timeRemaining !== undefined) {
       setTimeRemaining(currentLobby.timeRemaining);
       
-      if (currentLobby.timeRemaining === 0 && !hasAnswered && !hasSubmittedOnTimeout.current) {
-        hasSubmittedOnTimeout.current = true;
-        
-        const submitCurrentAnswer = async () => {
+      if (currentLobby.timeRemaining === 0 && !hasAnswered) {
+        const markExpired = async () => {
           try {
-            const currentAnswer = myAnswer.trim();
-            
-            await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/submit-answer`, {
+            await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/mark-time-expired`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                 lobbyId: currentLobby.id, 
-                participantId: currentUser?.id,
-                answer: currentAnswer
+                participantId: currentUser?.id 
               })
             });
-            
             setHasAnswered(true);
-            console.log('⏰ Temps écoulé - Réponse soumise automatiquement:', currentAnswer || '(vide)');
+            setMyAnswer('');
           } catch (error) {
-            console.error('Erreur soumission automatique:', error);
+            console.error('Erreur marquage temps écoulé:', error);
           }
         };
-        
-        submitCurrentAnswer();
+        markExpired();
         return;
       }
     } else {
@@ -103,7 +132,16 @@ const QuizView = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [question?.id, currentSession?.currentQuestionIndex, hasAnswered, isFinished, currentLobby.timeRemaining, myAnswer]);
+  }, [question?.id, currentSession?.currentQuestionIndex, hasAnswered, isFinished, currentLobby.timeRemaining]);
+
+  // ✅ NOUVEAU: Nettoyer le timer d'auto-sauvegarde
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, []);
 
   if (!currentSession || !currentLobby) return null;
 
@@ -140,13 +178,13 @@ const QuizView = ({
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold dark:text-white">{quiz?.title}</h3>
               <span className="text-gray-600 dark:text-gray-400">
-                Question {currentSession.currentQuestionIndex + 1}/{questions.length}
+                Question {currentSession.currentQuestionIndex + 1}/{quiz?.questions.length}
               </span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
               <div
                 className="bg-purple-600 dark:bg-purple-500 h-2 rounded-full transition-all"
-                style={{ width: `${((currentSession.currentQuestionIndex + 1) / questions.length) * 100}%` }}
+                style={{ width: `${((currentSession.currentQuestionIndex + 1) / quiz?.questions.length) * 100}%` }}
               />
             </div>
           </div>
@@ -168,7 +206,7 @@ const QuizView = ({
               </div>
               {timeRemaining <= 5 && timeRemaining > 0 && (
                 <p className="text-center text-red-600 font-bold mt-2 animate-pulse">
-                  ⏰ Dépêchez-vous ! {myAnswer.trim() && '(Votre réponse sera enregistrée automatiquement)'}
+                  ⏰ Dépêchez-vous !
                 </p>
               )}
             </div>
@@ -192,6 +230,7 @@ const QuizView = ({
             
             {question?.type === 'video' && question?.media && (
               <video 
+                ref={videoRef}
                 key={`video-${currentSession?.currentQuestionIndex}-${question.id}`}
                 controls 
                 autoPlay 
@@ -203,6 +242,7 @@ const QuizView = ({
             
             {question?.type === 'audio' && question?.media && (
               <audio 
+                ref={audioRef}
                 key={`audio-${currentSession?.currentQuestionIndex}-${question.id}`}
                 controls 
                 autoPlay 
@@ -227,10 +267,6 @@ const QuizView = ({
             <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 dark:border-red-600 rounded-lg p-6 text-center">
               <Clock className="w-12 h-12 mx-auto text-red-600 dark:text-red-400 mb-2" />
               <p className="font-bold text-red-700 dark:text-red-400 mb-2">⏰ Temps écoulé !</p>
-              <div className="bg-white dark:bg-gray-800 rounded p-3 border border-red-300 dark:border-red-600 mb-3">
-                <p className="text-xs text-gray-600 dark:text-gray-400">Réponse soumise :</p>
-                <p className="font-bold text-red-700 dark:text-red-400">{myAnswer || '(vide)'}</p>
-              </div>
               <p className="text-sm text-gray-600 dark:text-gray-400">En attente de la question suivante...</p>
             </div>
           ) : question?.type === 'qcm' ? (
@@ -241,6 +277,8 @@ const QuizView = ({
                   key={index}
                   onClick={() => {
                     setMyAnswer(choice);
+                    // Auto-sauvegarde immédiate pour QCM
+                    autoSaveAnswer(choice);
                     // Auto-submit pour QCM
                     setTimeout(() => {
                       if (!hasAnswered && !isTimeExpired) {
@@ -267,12 +305,19 @@ const QuizView = ({
                 ref={inputRef}
                 type="text"
                 value={myAnswer}
-                onChange={(e) => setMyAnswer(e.target.value)}
+                onChange={handleAnswerChange}
                 placeholder="Votre réponse..."
-                className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none mb-4 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none mb-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
                 onKeyPress={(e) => e.key === 'Enter' && !hasAnswered && !isTimeExpired && onSubmitAnswer()}
                 disabled={isTimeExpired}
               />
+              
+              {/* ✅ NOUVEAU: Indicateur d'auto-sauvegarde */}
+              {myAnswer && !hasAnswered && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 flex items-center gap-1">
+                  💾 Réponse sauvegardée automatiquement
+                </p>
+              )}
 
               <button
                 onClick={onSubmitAnswer}
@@ -285,6 +330,10 @@ const QuizView = ({
               >
                 {isTimeExpired ? '⏰ Temps écoulé' : 'Valider ma réponse'}
               </button>
+              
+              <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+                💡 Votre réponse est automatiquement sauvegardée pendant que vous tapez
+              </p>
             </>
           )}
         </div>

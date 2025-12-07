@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Eye, EyeOff, Check, Clock, SkipForward, Users, Trophy } from 'lucide-react';
+import { Eye, Check, Clock, SkipForward, Users, Trophy, EyeOff, Image as ImageIcon, Video as VideoIcon, Music } from 'lucide-react';
 
 const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
   const activeLobby = lobbies.find(l => l.status === 'playing');
   const audioRef = useRef(null);
+  const adminVideoRef = useRef(null);
+  const adminAudioRef = useRef(null);
   const [localTimeRemaining, setLocalTimeRemaining] = useState(null);
   const [showAnswers, setShowAnswers] = useState(false);
 
@@ -18,6 +20,21 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
     }
   }, [activeLobby?.participants]);
 
+  // ✅ NOUVEAU: Réinitialiser showAnswers à chaque nouvelle question
+  useEffect(() => {
+    setShowAnswers(false);
+  }, [activeLobby?.session?.currentQuestionIndex]);
+
+  // ✅ NOUVEAU: Définir le volume à 50% pour les médias de l'admin
+  useEffect(() => {
+    if (adminVideoRef.current) {
+      adminVideoRef.current.volume = 0.5;
+    }
+    if (adminAudioRef.current) {
+      adminAudioRef.current.volume = 0.5;
+    }
+  }, [activeLobby?.session?.currentQuestionIndex]);
+
   useEffect(() => {
     if (!activeLobby) {
       setLocalTimeRemaining(null);
@@ -30,10 +47,6 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
       setLocalTimeRemaining(null);
     }
   }, [activeLobby?.timeRemaining]);
-
-  useEffect(() => {
-    setShowAnswers(false);
-  }, [activeLobby?.session?.currentQuestionIndex]);
 
   if (!activeLobby) {
     return (
@@ -50,15 +63,15 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
     );
   }
 
-  // ✅ CORRECTION: Utiliser les bonnes questions (mélangées ou normales)
   const quiz = quizzes.find(q => q.id === activeLobby.quizId);
+  
+  // ✅ Support du mélange aléatoire
   const questions = activeLobby.shuffled && activeLobby.shuffledQuestions 
     ? activeLobby.shuffledQuestions 
     : quiz?.questions || [];
   
   const currentQuestionIndex = activeLobby.session?.currentQuestionIndex || 0;
   const currentQuestion = questions[currentQuestionIndex];
-  
   const allAnswered = activeLobby.participants?.every(p => p.hasAnswered);
   const answeredCount = activeLobby.participants?.filter(p => p.hasAnswered).length || 0;
   const totalParticipants = activeLobby.participants?.length || 0;
@@ -92,29 +105,13 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
               )}
             </div>
           </div>
-          
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowAnswers(!showAnswers)}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
-                showAnswers 
-                  ? 'bg-orange-600 dark:bg-orange-700 text-white hover:bg-orange-700 dark:hover:bg-orange-600' 
-                  : 'bg-gray-600 dark:bg-gray-700 text-white hover:bg-gray-700 dark:hover:bg-gray-600'
-              }`}
-              title={showAnswers ? 'Masquer les réponses (anti-triche)' : 'Afficher les réponses'}
-            >
-              {showAnswers ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              {showAnswers ? 'Masquer' : 'Afficher'} réponses
-            </button>
-            
-            <button
-              onClick={() => onNextQuestion(activeLobby.id)}
-              className="px-6 py-2 bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 flex items-center gap-2 font-semibold transition-all hover:scale-105"
-            >
-              <SkipForward className="w-5 h-5" />
-              Question suivante
-            </button>
-          </div>
+          <button
+            onClick={() => onNextQuestion(activeLobby.id)}
+            className="px-6 py-3 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600 flex items-center gap-2 font-semibold transition-all hover:scale-105"
+          >
+            <SkipForward className="w-5 h-5" />
+            Question suivante
+          </button>
         </div>
 
         {hasTimer && localTimeRemaining !== null && (
@@ -150,52 +147,125 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <div className="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 dark:border-purple-600 p-4 mb-6 rounded">
-          <h4 className="font-bold text-lg mb-2 dark:text-white">📝 Question actuelle</h4>
-          <p className="text-gray-700 dark:text-gray-300">{currentQuestion?.text}</p>
-          <div className="flex gap-4 mt-3 text-sm">
-            <span className="px-3 py-1 bg-purple-200 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300 rounded-full">
-              {currentQuestion?.points || 1} points
-            </span>
-            {currentQuestion?.timer > 0 && (
-              <span className="px-3 py-1 bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 rounded-full">
-                ⏱️ {currentQuestion.timer}s
-              </span>
-            )}
-            {currentQuestion?.category && (
-              <span className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full">
-                {currentQuestion.category}
-              </span>
-            )}
+      {/* ✅ NOUVEAU: Aperçu du média pour l'admin */}
+      {(currentQuestion?.type === 'image' || currentQuestion?.type === 'video' || currentQuestion?.type === 'audio') && currentQuestion?.media && (
+        <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-300 dark:border-purple-700 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            {currentQuestion.type === 'image' && <ImageIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+            {currentQuestion.type === 'video' && <VideoIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+            {currentQuestion.type === 'audio' && <Music className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+            <h4 className="font-bold text-purple-900 dark:text-purple-300">
+              📺 Aperçu du média (vue participant)
+            </h4>
           </div>
           
-          <div className="mt-3 pt-3 border-t border-purple-200 dark:border-purple-700">
-            <p className="text-xs text-gray-600 dark:text-gray-400">Réponse attendue :</p>
-            {showAnswers ? (
-              <p className="font-bold text-green-700 dark:text-green-400">{currentQuestion?.answer}</p>
-            ) : (
-              <div className="flex items-center gap-2 bg-gray-200 dark:bg-gray-700 rounded p-2 border border-gray-400 dark:border-gray-600">
-                <EyeOff className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                <p className="text-sm text-gray-600 dark:text-gray-400 font-semibold">
-                  Réponse masquée (cliquez sur "Afficher réponses")
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-purple-200 dark:border-purple-600">
+            {currentQuestion.type === 'image' && (
+              <div className="text-center">
+                <img 
+                  src={currentQuestion.media} 
+                  alt="Question" 
+                  className="max-w-xs h-auto rounded-lg mx-auto border border-gray-300 dark:border-gray-600"
+                />
+              </div>
+            )}
+            
+            {currentQuestion.type === 'video' && (
+              <video 
+                ref={adminVideoRef}
+                key={`admin-video-${currentQuestionIndex}-${currentQuestion.id}`}
+                controls 
+                autoPlay
+                className="w-full max-w-2xl mx-auto rounded-lg"
+              >
+                <source src={currentQuestion.media} />
+                Votre navigateur ne supporte pas la vidéo.
+              </video>
+            )}
+            
+            {currentQuestion.type === 'audio' && (
+              <div className="max-w-2xl mx-auto">
+                <audio 
+                  ref={adminAudioRef}
+                  key={`admin-audio-${currentQuestionIndex}-${currentQuestion.id}`}
+                  controls 
+                  autoPlay
+                  className="w-full"
+                >
+                  <source src={currentQuestion.media} />
+                  Votre navigateur ne supporte pas l'audio.
+                </audio>
+                <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-2">
+                  🎵 Les participants entendent le même audio
                 </p>
               </div>
             )}
           </div>
         </div>
+      )}
 
-        {!showAnswers && (
-          <div className="bg-orange-100 dark:bg-orange-900/30 border-2 border-orange-500 dark:border-orange-600 rounded-lg p-4 mb-6 text-center">
-            <div className="flex items-center justify-center gap-2 text-orange-800 dark:text-orange-300">
-              <EyeOff className="w-6 h-6" />
-              <p className="font-bold text-lg">Mode Anti-Triche Activé</p>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+        <div className="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 dark:border-purple-600 p-4 mb-6 rounded">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h4 className="font-bold text-lg mb-2 dark:text-white">📝 Question actuelle</h4>
+              <p className="text-gray-700 dark:text-gray-300">{currentQuestion?.text}</p>
+              <div className="flex gap-4 mt-3 text-sm">
+                <span className="px-3 py-1 bg-purple-200 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300 rounded-full">
+                  {currentQuestion?.points || 1} points
+                </span>
+                {currentQuestion?.timer > 0 && (
+                  <span className="px-3 py-1 bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 rounded-full">
+                    ⏱️ {currentQuestion.timer}s
+                  </span>
+                )}
+                {currentQuestion?.category && (
+                  <span className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full">
+                    {currentQuestion.category}
+                  </span>
+                )}
+              </div>
             </div>
-            <p className="text-sm text-orange-700 dark:text-orange-400 mt-2">
-              Les réponses des participants sont masquées. Cliquez sur "Afficher réponses" pour les voir.
-            </p>
+            
+            {/* ✅ Mode Anti-Triche: Bouton pour afficher/masquer les réponses */}
+            <button
+              onClick={() => setShowAnswers(!showAnswers)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition ${
+                showAnswers 
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-2 border-green-500 dark:border-green-600' 
+                  : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-2 border-orange-500 dark:border-orange-600'
+              }`}
+              title={showAnswers ? 'Masquer les réponses' : 'Afficher les réponses'}
+            >
+              {showAnswers ? (
+                <>
+                  <Eye className="w-5 h-5" />
+                  Masquer réponses
+                </>
+              ) : (
+                <>
+                  <EyeOff className="w-5 h-5" />
+                  Afficher réponses
+                </>
+              )}
+            </button>
           </div>
-        )}
+          
+          {/* Réponse attendue */}
+          {showAnswers ? (
+            <div className="mt-3 pt-3 border-t border-purple-200 dark:border-purple-700">
+              <p className="text-xs text-gray-600 dark:text-gray-400">Réponse attendue :</p>
+              <p className="font-bold text-green-700 dark:text-green-400">{currentQuestion?.answer}</p>
+            </div>
+          ) : (
+            <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 rounded p-2">
+              <p className="text-xs text-orange-700 dark:text-orange-300 flex items-center gap-2">
+                <EyeOff className="w-4 h-4" />
+                <span className="font-semibold">Mode Anti-Triche :</span> Réponse masquée pour éviter que les participants voient votre écran
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {activeLobby.participants?.map((p) => (
@@ -235,9 +305,9 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
                       </p>
                     </div>
                   ) : (
-                    <div className="bg-gray-200 dark:bg-gray-700 rounded p-2 border border-gray-400 dark:border-gray-600 text-center">
-                      <EyeOff className="w-5 h-5 mx-auto text-gray-500 dark:text-gray-400 mb-1" />
-                      <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold">
+                    <div className="bg-orange-50 dark:bg-orange-900/20 rounded p-2 border border-orange-300 dark:border-orange-600">
+                      <p className="text-xs text-orange-700 dark:text-orange-400 flex items-center gap-1">
+                        <EyeOff className="w-3 h-3" />
                         Réponse masquée
                       </p>
                     </div>
@@ -259,9 +329,7 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
             <Check className="w-8 h-8" />
           </div>
           <p className="text-white text-sm mt-2 opacity-90">
-            {!showAnswers && 'Affichez les réponses puis cliquez sur '}
-            {showAnswers && 'Cliquez sur '}
-            "Question suivante" pour continuer
+            Cliquez sur "Question suivante" pour continuer
           </p>
         </div>
       )}

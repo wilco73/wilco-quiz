@@ -76,7 +76,6 @@ export const fetchLobbies = async () => {
   return res.json();
 };
 
-// ✅ MODIFIÉ: Ajouter le paramètre shuffle
 export const createLobby = async (quizId, shuffle = false) => {
   const res = await fetch(`${API_URL}/create-lobby`, {
     method: 'POST',
@@ -140,11 +139,12 @@ export const nextQuestion = async (lobbyId) => {
   return res.json();
 };
 
-export const validateAnswer = async (lobbyId, participantId, questionIndex, isCorrect) => {
+// ✅ CORRECTION: Passer questionId au lieu de questionIndex
+export const validateAnswer = async (lobbyId, participantId, questionId, isCorrect) => {
   const res = await fetch(`${API_URL}/validate-answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lobbyId, participantId, questionIndex, isCorrect })
+    body: JSON.stringify({ lobbyId, participantId, questionId, isCorrect })
   });
   return res.json();
 };
