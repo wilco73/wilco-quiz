@@ -1,12 +1,17 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const QuestionBank = ({ questions, onSave }) => {
   const [localQuestions, setLocalQuestions] = useState(questions || []);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterType, setFilterType] = useState('');
   const [showPreview, setShowPreview] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [csvDelimiter, setCsvDelimiter] = useState(',');
   const fileInputRef = useRef(null);
+  const questionsPerPage = 10;
 
   const [formData, setFormData] = useState({
     text: '',
@@ -35,14 +40,14 @@ const QuestionBank = ({ questions, onSave }) => {
     setEditingQuestion(null);
   };
 
-  // ✅ AMÉLIORÉ: Exporter en CSV avec point-virgule pour Excel européen
+  // ✅ EXPORT CSV avec choix du délimiteur
   const handleExportCSV = () => {
     if (localQuestions.length === 0) {
       alert('Aucune question à exporter');
       return;
     }
 
-    // En-têtes CSV
+    const delimiter = csvDelimiter;
     const headers = [
       'Type',
       'Catégorie',
@@ -60,13 +65,12 @@ const QuestionBank = ({ questions, onSave }) => {
       'Index Réponse Correcte'
     ];
 
-    // Convertir les questions en lignes CSV
     const rows = localQuestions.map(q => {
       const choices = q.type === 'qcm' ? (q.choices || []) : [];
       return [
         q.type || 'text',
         q.category || '',
-        `"${(q.text || '').replace(/"/g, '""')}"`, // Échapper les guillemets
+        `"${(q.text || '').replace(/"/g, '""')}"`,
         `"${(q.answer || '').replace(/"/g, '""')}"`,
         q.media || '',
         q.points || 1,
@@ -78,14 +82,11 @@ const QuestionBank = ({ questions, onSave }) => {
         choices[4] ? `"${choices[4].replace(/"/g, '""')}"` : '',
         choices[5] ? `"${choices[5].replace(/"/g, '""')}"` : '',
         q.type === 'qcm' ? (q.correctChoice || 0) : ''
-      ].join(';'); // ✅ Point-virgule au lieu de virgule
+      ].join(delimiter);
     });
 
-    // Créer le contenu CSV
-    const csvContent = [headers.join(';'), ...rows].join('\n'); // ✅ Point-virgule
-    
-    // Créer un Blob et télécharger
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' }); // UTF-8 BOM pour Excel
+    const csvContent = [headers.join(delimiter), ...rows].join('\n');
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     
@@ -96,33 +97,10 @@ const QuestionBank = ({ questions, onSave }) => {
     link.click();
     document.body.removeChild(link);
 
-    alert(`✅ ${localQuestions.length} question(s) exportée(s) avec succès !\n\n📝 Format : Point-virgule (;) - Compatible Excel Europe`);
+    alert(`${localQuestions.length} question(s) exportée(s) avec le délimiteur "${delimiter}" !`);
   };
 
-  // ✅ AMÉLIORÉ: Détecter automatiquement le délimiteur (virgule ou point-virgule)
-  const detectDelimiter = (text) => {
-    const firstLine = text.split('\n')[0];
-    
-    // Compter les virgules et points-virgules hors guillemets
-    let commas = 0;
-    let semicolons = 0;
-    let inQuotes = false;
-    
-    for (let i = 0; i < firstLine.length; i++) {
-      const char = firstLine[i];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (!inQuotes) {
-        if (char === ',') commas++;
-        if (char === ';') semicolons++;
-      }
-    }
-    
-    // Retourner le délimiteur le plus fréquent
-    return semicolons > commas ? ';' : ',';
-  };
-
-  // ✅ AMÉLIORÉ: Importer depuis CSV avec détection automatique du délimiteur
+  // ✅ IMPORT CSV avec détection automatique du délimiteur
   const handleImportCSV = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -138,23 +116,24 @@ const QuestionBank = ({ questions, onSave }) => {
           return;
         }
 
-        // ✅ NOUVEAU: Détecter automatiquement le délimiteur
-        const delimiter = detectDelimiter(text);
-        console.log(`📊 Délimiteur détecté: "${delimiter}" (${delimiter === ';' ? 'Point-virgule' : 'Virgule'})`);
-
-        // Ignorer la ligne d'en-tête
-        const dataLines = lines.slice(1);
+        // Détecter le délimiteur automatiquement
+        const firstLine = lines[0];
+        const commaCount = (firstLine.match(/,/g) || []).length;
+        const semicolonCount = (firstLine.match(/;/g) || []).length;
+        const detectedDelimiter = semicolonCount > commaCount ? ';' : ',';
         
+        console.log(`Délimiteur détecté: "${detectedDelimiter}"`);
+
+        const dataLines = lines.slice(1);
         const importedQuestions = [];
         let errors = [];
 
         dataLines.forEach((line, index) => {
           try {
-            // Parser le CSV avec le délimiteur détecté
-            const values = parseCSVLine(line, delimiter);
+            const values = parseCSVLine(line, detectedDelimiter);
             
             if (values.length < 7) {
-              errors.push(`Ligne ${index + 2}: Nombre de colonnes insuffisant (${values.length}/14)`);
+              errors.push(`Ligne ${index + 2}: Nombre de colonnes insuffisant`);
               return;
             }
 
@@ -175,13 +154,11 @@ const QuestionBank = ({ questions, onSave }) => {
               correctChoiceIndex
             ] = values;
 
-            // Validation
             if (!text || !text.trim()) {
               errors.push(`Ligne ${index + 2}: Question vide`);
               return;
             }
 
-            // Créer la question
             const question = {
               id: `import-${Date.now()}-${index}`,
               type: type || 'text',
@@ -193,7 +170,6 @@ const QuestionBank = ({ questions, onSave }) => {
               timer: parseInt(timer) || 0
             };
 
-            // Si c'est un QCM, ajouter les choix
             if (question.type === 'qcm') {
               const choices = [choice1, choice2, choice3, choice4, choice5, choice6]
                 .filter(c => c && c.trim())
@@ -211,7 +187,6 @@ const QuestionBank = ({ questions, onSave }) => {
                 question.correctChoice = 0;
               }
               
-              // Pour les QCM, la réponse est le texte du choix correct
               question.answer = choices[question.correctChoice];
             }
 
@@ -223,53 +198,45 @@ const QuestionBank = ({ questions, onSave }) => {
 
         if (errors.length > 0) {
           console.error('Erreurs d\'import:', errors);
-          const errorMessage = errors.length > 5 
-            ? `${errors.slice(0, 5).join('\n')}\n... et ${errors.length - 5} autre(s) erreur(s)`
-            : errors.join('\n');
-          
-          alert(`⚠️ Import terminé avec ${errors.length} erreur(s):\n\n${errorMessage}`);
+          alert(`Import terminé avec ${errors.length} erreur(s):\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`);
         }
 
         if (importedQuestions.length > 0) {
           const confirmMessage = `Voulez-vous importer ${importedQuestions.length} question(s) ?\n\n` +
-            `📊 Délimiteur détecté : ${delimiter === ';' ? 'Point-virgule (;)' : 'Virgule (,)'}\n\n` +
             `Mode d'import :\n` +
-            `• OK = AJOUTER aux questions existantes\n` +
-            `• Annuler = REMPLACER toutes les questions\n\n` +
-            `Questions actuelles : ${localQuestions.length}`;
+            `- AJOUTER : Ajoute les questions à la banque existante\n` +
+            `- REMPLACER : Supprime toutes les questions et importe uniquement les nouvelles\n\n` +
+            `Cliquez sur OK pour AJOUTER, Annuler pour REMPLACER`;
 
           const shouldAdd = window.confirm(confirmMessage);
           
           let finalQuestions;
           if (shouldAdd) {
-            // Ajouter aux questions existantes
             finalQuestions = [...localQuestions, ...importedQuestions];
-            alert(`✅ ${importedQuestions.length} question(s) ajoutée(s) !\n\nTotal : ${finalQuestions.length} questions`);
+            alert(`${importedQuestions.length} question(s) ajoutée(s) avec succès !`);
           } else {
-            // Remplacer toutes les questions
             finalQuestions = importedQuestions;
-            alert(`✅ ${importedQuestions.length} question(s) importée(s) !\n\n⚠️ ${localQuestions.length} ancienne(s) question(s) supprimée(s)`);
+            alert(`${importedQuestions.length} question(s) importée(s) (anciennes questions supprimées) !`);
           }
 
           setLocalQuestions(finalQuestions);
           onSave(finalQuestions);
         } else {
-          alert('❌ Aucune question valide trouvée dans le fichier');
+          alert('Aucune question valide trouvée dans le fichier');
         }
 
       } catch (error) {
         console.error('Erreur import CSV:', error);
-        alert('❌ Erreur lors de l\'import du fichier CSV:\n' + error.message);
+        alert('Erreur lors de l\'import du fichier CSV');
       }
     };
 
     reader.readAsText(file, 'UTF-8');
-    // Réinitialiser l'input pour permettre de réimporter le même fichier
     event.target.value = '';
   };
 
-  // ✅ AMÉLIORÉ: Parser une ligne CSV avec délimiteur configurable
-  const parseCSVLine = (line, delimiter = ';') => {
+  // ✅ Parser CSV avec délimiteur spécifique
+  const parseCSVLine = (line, delimiter = ',') => {
     const result = [];
     let current = '';
     let inQuotes = false;
@@ -280,15 +247,12 @@ const QuestionBank = ({ questions, onSave }) => {
 
       if (char === '"') {
         if (inQuotes && nextChar === '"') {
-          // Double guillemet = guillemet échappé
           current += '"';
-          i++; // Sauter le prochain guillemet
+          i++;
         } else {
-          // Début ou fin de zone quotée
           inQuotes = !inQuotes;
         }
       } else if (char === delimiter && !inQuotes) {
-        // Délimiteur hors guillemets = séparateur
         result.push(current);
         current = '';
       } else {
@@ -296,14 +260,13 @@ const QuestionBank = ({ questions, onSave }) => {
       }
     }
 
-    // Ajouter le dernier champ
     result.push(current);
-
     return result;
   };
 
-  // ✅ AMÉLIORÉ: Télécharger le template CSV avec point-virgule
+  // ✅ Télécharger template CSV
   const handleDownloadTemplate = () => {
+    const delimiter = csvDelimiter;
     const headers = [
       'Type',
       'Catégorie',
@@ -322,7 +285,6 @@ const QuestionBank = ({ questions, onSave }) => {
     ];
 
     const examples = [
-      // Exemple question texte
       [
         'text',
         'Géographie',
@@ -333,8 +295,7 @@ const QuestionBank = ({ questions, onSave }) => {
         '30',
         '', '', '', '', '', '',
         ''
-      ].join(';'), // ✅ Point-virgule
-      // Exemple QCM
+      ].join(delimiter),
       [
         'qcm',
         'Histoire',
@@ -349,8 +310,7 @@ const QuestionBank = ({ questions, onSave }) => {
         '"1815"',
         '', '',
         '0'
-      ].join(';'),
-      // Exemple avec image
+      ].join(delimiter),
       [
         'image',
         'Art',
@@ -361,8 +321,7 @@ const QuestionBank = ({ questions, onSave }) => {
         '0',
         '', '', '', '', '', '',
         ''
-      ].join(';'),
-      // Exemple avec audio
+      ].join(delimiter),
       [
         'audio',
         'Musique',
@@ -373,34 +332,20 @@ const QuestionBank = ({ questions, onSave }) => {
         '15',
         '', '', '', '', '', '',
         ''
-      ].join(';'),
-      // Exemple avec vidéo
-      [
-        'video',
-        'Cinéma',
-        '"De quel film est extraite cette scène ?"',
-        '"Star Wars"',
-        '"https://example.com/scene.mp4"',
-        '2',
-        '0',
-        '', '', '', '', '', '',
-        ''
-      ].join(';')
+      ].join(delimiter)
     ];
 
-    const csvContent = [headers.join(';'), ...examples].join('\n'); // ✅ Point-virgule
+    const csvContent = [headers.join(delimiter), ...examples].join('\n');
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     
     link.setAttribute('href', url);
-    link.setAttribute('download', 'template_questions.csv');
+    link.setAttribute('download', `template_questions_${delimiter === ',' ? 'comma' : 'semicolon'}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
-    alert('✅ Template téléchargé !\n\n📝 Format : Point-virgule (;)\n💡 S\'ouvre directement dans Excel');
   };
 
   const handleSave = () => {
@@ -482,10 +427,114 @@ const QuestionBank = ({ questions, onSave }) => {
     });
   };
 
-  const filteredQuestions = localQuestions.filter(q =>
-    q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    q.category?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // ✅ FILTRAGE avec catégorie et type
+  const filteredQuestions = localQuestions.filter(q => {
+    const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         q.category?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = !filterCategory || q.category === filterCategory;
+    const matchesType = !filterType || q.type === filterType;
+    return matchesSearch && matchesCategory && matchesType;
+  });
+
+  // ✅ PAGINATION
+  const totalPages = Math.ceil(filteredQuestions.length / questionsPerPage);
+  const startIndex = (currentPage - 1) * questionsPerPage;
+  const paginatedQuestions = filteredQuestions.slice(startIndex, startIndex + questionsPerPage);
+
+  // Réinitialiser à la page 1 si on filtre
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterCategory, filterType]);
+
+  // ✅ Pagination avec ellipsis
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    
+    // Toujours afficher la première page
+    pages.push(
+      <button
+        key={1}
+        onClick={() => setCurrentPage(1)}
+        className={`px-3 py-1 rounded ${
+          currentPage === 1
+            ? 'bg-purple-600 text-white'
+            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+        }`}
+      >
+        1
+      </button>
+    );
+
+    // Ellipsis après la première page si nécessaire
+    if (currentPage > 3 && totalPages > 5) {
+      pages.push(<span key="ellipsis1" className="px-2 text-gray-500">...</span>);
+    }
+
+    // Pages autour de la page actuelle
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+      if (i > 1 && i < totalPages) {
+        pages.push(
+          <button
+            key={i}
+            onClick={() => setCurrentPage(i)}
+            className={`px-3 py-1 rounded ${
+              currentPage === i
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            {i}
+          </button>
+        );
+      }
+    }
+
+    // Ellipsis avant la dernière page si nécessaire
+    if (currentPage < totalPages - 2 && totalPages > 5) {
+      pages.push(<span key="ellipsis2" className="px-2 text-gray-500">...</span>);
+    }
+
+    // Toujours afficher la dernière page
+    if (totalPages > 1) {
+      pages.push(
+        <button
+          key={totalPages}
+          onClick={() => setCurrentPage(totalPages)}
+          className={`px-3 py-1 rounded ${
+            currentPage === totalPages
+              ? 'bg-purple-600 text-white'
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+          }`}
+        >
+          {totalPages}
+        </button>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-center gap-2 mt-4">
+        <button
+          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        
+        {pages}
+        
+        <button
+          onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+          className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  };
 
   const getTypeIcon = (type) => {
     switch(type) {
@@ -586,18 +635,31 @@ const QuestionBank = ({ questions, onSave }) => {
     };
   }, [showPreview]);
 
+  // Obtenir les catégories uniques
+  const categories = [...new Set(localQuestions.map(q => q.category).filter(Boolean))];
+
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold dark:text-white">Banque de Questions</h2>
           
-          <div className="flex gap-2">
-            {/* ✅ NOUVEAU: Boutons Import/Export */}
+          <div className="flex gap-2 items-center">
+            {/* Sélecteur de délimiteur CSV */}
+            <select
+              value={csvDelimiter}
+              onChange={(e) => setCsvDelimiter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+              title="Délimiteur CSV"
+            >
+              <option value=",">Délimiteur: , (virgule)</option>
+              <option value=";">Délimiteur: ; (point-virgule)</option>
+            </select>
+
             <button
               onClick={handleDownloadTemplate}
               className="flex items-center gap-2 px-3 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition"
-              title="Télécharger un fichier template CSV avec exemples (Point-virgule)"
+              title="Télécharger un fichier template CSV avec exemples"
             >
               <Download className="w-4 h-4" />
               Template CSV
@@ -606,7 +668,7 @@ const QuestionBank = ({ questions, onSave }) => {
             <button
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2 px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition"
-              title="Importer des questions depuis un fichier CSV (détection auto ; ou ,)"
+              title="Importer des questions depuis un fichier CSV"
             >
               <Upload className="w-4 h-4" />
               Importer CSV
@@ -622,7 +684,7 @@ const QuestionBank = ({ questions, onSave }) => {
             <button
               onClick={handleExportCSV}
               className="flex items-center gap-2 px-3 py-2 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition"
-              title="Exporter toutes les questions en CSV (Point-virgule pour Excel)"
+              title="Exporter toutes les questions en CSV"
             >
               <Download className="w-4 h-4" />
               Exporter CSV
@@ -784,20 +846,48 @@ const QuestionBank = ({ questions, onSave }) => {
           </div>
         </div>
 
-        {/* Recherche */}
-        <input
-          type="text"
-          placeholder="Rechercher une question..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg mb-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-        />
-
-        {/* Liste des questions */}
-        <div className="space-y-3">
-          <p className="text-sm text-gray-600 dark:text-gray-400">{filteredQuestions.length} question(s)</p>
+        {/* Filtres et recherche */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <input
+            type="text"
+            placeholder="Rechercher une question..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          />
           
-          {filteredQuestions.map(question => (
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          >
+            <option value="">Toutes les catégories</option>
+            {categories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          >
+            <option value="">Tous les types</option>
+            <option value="text">Texte</option>
+            <option value="qcm">QCM</option>
+            <option value="image">Image</option>
+            <option value="video">Vidéo</option>
+            <option value="audio">Audio</option>
+          </select>
+        </div>
+
+        {/* Liste des questions avec pagination */}
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {filteredQuestions.length} question(s) trouvée(s) - Page {currentPage}/{totalPages}
+          </p>
+          
+          {paginatedQuestions.map(question => (
             <div key={question.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md transition bg-white dark:bg-gray-700">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -860,6 +950,9 @@ const QuestionBank = ({ questions, onSave }) => {
             </div>
           ))}
         </div>
+
+        {/* Pagination */}
+        {renderPagination()}
       </div>
     </div>
   );
