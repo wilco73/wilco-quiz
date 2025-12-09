@@ -453,6 +453,66 @@ const App = () => {
       console.error('Erreur:', error);
     }
   };
+  
+
+  // Handler pour mettre à jour un participant
+const handleUpdateParticipant = async (participantId, updates) => {
+  try {
+    const data = await api.updateParticipant(participantId, updates);
+    if (data.success) {
+      // Recharger les données
+      const [participantsData, teamsData] = await Promise.all([
+        api.fetchParticipants(),
+        api.fetchTeams()
+      ]);
+      setParticipants(participantsData);
+      setTeams(teamsData);
+    } else {
+      alert(data.message || 'Erreur lors de la mise à jour');
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('Erreur lors de la mise à jour du participant');
+  }
+};
+
+// Handler pour supprimer une équipe
+const handleDeleteTeam = async (teamName) => {
+  try {
+    const data = await api.deleteTeam(teamName);
+    if (data.success) {
+      alert(`✅ Équipe "${teamName}" supprimée\n${data.affectedCount} participant(s) retiré(s) de l'équipe`);
+      
+      // Recharger les données
+      const [participantsData, teamsData] = await Promise.all([
+        api.fetchParticipants(),
+        api.fetchTeams()
+      ]);
+      setParticipants(participantsData);
+      setTeams(teamsData);
+    } else {
+      alert(data.message || 'Erreur lors de la suppression');
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('Erreur lors de la suppression de l\'équipe');
+  }
+};
+
+// Handler pour recharger les données
+const handleRefreshData = async () => {
+  try {
+    const [participantsData, teamsData] = await Promise.all([
+      api.fetchParticipants(),
+      api.fetchTeams()
+    ]);
+    setParticipants(participantsData);
+    setTeams(teamsData);
+  } catch (error) {
+    console.error('Erreur:', error);
+  }
+};
+
 
   // ==================== RENDU ====================
   if (loading) {
@@ -482,6 +542,7 @@ const App = () => {
           lobbies={lobbies}
           quizzes={quizzes}
           teams={teams}
+          participants={participants}  // ✅ NOUVEAU - Passer participants
           onJoinLobby={handleJoinLobby}
           onViewScoreboard={handleViewScoreboard}
           onLogout={handleLogout}
@@ -542,6 +603,7 @@ const App = () => {
         <AdminDashboard
           adminUsername={adminUsername}
           teams={teams}
+          participants={participants}  // ✅ Passer participants
           quizzes={quizzes}
           questions={questions}
           lobbies={lobbies}
@@ -554,9 +616,13 @@ const App = () => {
           onValidateAnswer={handleValidateAnswer}
           onDeleteLobby={handleDeleteLobby}
           onResetScores={handleResetScores}
+          onUpdateParticipant={handleUpdateParticipant}  // ✅ NOUVEAU
+          onDeleteTeam={handleDeleteTeam}                // ✅ NOUVEAU
+          onRefreshData={handleRefreshData}              // ✅ NOUVEAU
           onLogout={handleLogout}
         />
       )}
+
     </div>
   );
 };

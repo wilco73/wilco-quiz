@@ -1,14 +1,49 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Eye, Check, Clock, SkipForward, Users, Trophy, EyeOff, Image as ImageIcon, Video as VideoIcon, Music } from 'lucide-react';
+import { Eye, Check, Clock, SkipForward, Users, Trophy, Play, Pause, EyeOff } from 'lucide-react';
 
 const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
   const activeLobby = lobbies.find(l => l.status === 'playing');
   const audioRef = useRef(null);
-  const adminVideoRef = useRef(null);
-  const adminAudioRef = useRef(null);
+  const videoRef = useRef(null);
+  const audioPlayerRef = useRef(null);
   const [localTimeRemaining, setLocalTimeRemaining] = useState(null);
-  const [showAnswers, setShowAnswers] = useState(false);
+  
+  // ✅ Mode anti-triche : MASQUÉ PAR DÉFAUT + reset à chaque question
+  const [hideAnswers, setHideAnswers] = useState(true);
+  const previousQuestionIndexRef = useRef(null);
+  
+  // Auto-avance
+  const [autoAdvance, setAutoAdvance] = useState(() => {
+    const saved = localStorage.getItem('quiz-auto-advance');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const autoAdvanceTimerRef = useRef(null);
+  const [countdown, setCountdown] = useState(0);
+  const isAutoAdvancingRef = useRef(false); // ✅ NOUVEAU: Empêcher déclenchements multiples
 
+  // ✅ Sauvegarder auto-avance uniquement
+  useEffect(() => {
+    localStorage.setItem('quiz-auto-advance', JSON.stringify(autoAdvance));
+  }, [autoAdvance]);
+
+  // ✅ RESET anti-triche à chaque nouvelle question
+  useEffect(() => {
+    if (activeLobby) {
+      const currentQuestionIndex = activeLobby.session?.currentQuestionIndex;
+      
+      if (previousQuestionIndexRef.current !== null && 
+          currentQuestionIndex !== previousQuestionIndexRef.current) {
+        // Nouvelle question détectée
+        setHideAnswers(true);
+        isAutoAdvancingRef.current = false; // ✅ Reset flag
+        console.log('🔒 Nouvelle question : mode anti-triche réactivé');
+      }
+      
+      previousQuestionIndexRef.current = currentQuestionIndex;
+    }
+  }, [activeLobby?.session?.currentQuestionIndex]);
+
+  // Son quand tous ont répondu
   useEffect(() => {
     if (activeLobby) {
       const allAnswered = activeLobby.participants?.every(p => p.hasAnswered);
@@ -20,21 +55,7 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
     }
   }, [activeLobby?.participants]);
 
-  // ✅ NOUVEAU: Réinitialiser showAnswers à chaque nouvelle question
-  useEffect(() => {
-    setShowAnswers(false);
-  }, [activeLobby?.session?.currentQuestionIndex]);
-
-  // ✅ NOUVEAU: Définir le volume à 50% pour les médias de l'admin
-  useEffect(() => {
-    if (adminVideoRef.current) {
-      adminVideoRef.current.volume = 0.5;
-    }
-    if (adminAudioRef.current) {
-      adminAudioRef.current.volume = 0.5;
-    }
-  }, [activeLobby?.session?.currentQuestionIndex]);
-
+  // Timer local
   useEffect(() => {
     if (!activeLobby) {
       setLocalTimeRemaining(null);
@@ -47,6 +68,90 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
       setLocalTimeRemaining(null);
     }
   }, [activeLobby?.timeRemaining]);
+
+  // ✅ Logique auto-avance CORRIGÉE - Ne se déclenche qu'UNE FOIS
+  useEffect(() => {
+    // Si déjà en train d'auto-avancer, ne rien faire
+    if (isAutoAdvancingRef.current) {
+      return;
+    }
+
+    // Nettoyer le timer précédent
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+
+    if (!activeLobby || !autoAdvance) {
+      setCountdown(0);
+      return;
+    }
+
+    const quiz = quizzes.find(q => q.id === activeLobby.quizId);
+    const currentQuestion = quiz?.questions[activeLobby.session?.currentQuestionIndex];
+    const allAnswered = activeLobby.participants?.every(p => p.hasAnswered);
+    const totalParticipants = activeLobby.participants?.length || 0;
+
+    let shouldAutoAdvance = false;
+    let delaySeconds = 3;
+
+    // Condition 1: Timer expiré
+    if (currentQuestion?.timer > 0 && localTimeRemaining === 0) {
+      shouldAutoAdvance = true;
+      delaySeconds = 3;
+    } 
+    // Condition 2: Tous ont répondu
+    else if (allAnswered && totalParticipants > 0) {
+      shouldAutoAdvance = true;
+      delaySeconds = 5;
+    }
+
+    if (shouldAutoAdvance && !isAutoAdvancingRef.current) {
+      // ✅ Marquer qu'on est en train d'auto-avancer
+      isAutoAdvancingRef.current = true;
+      
+      console.log(`⏰ ${allAnswered ? 'Tous ont répondu' : 'Timer expiré'}, auto-avance dans ${delaySeconds}s`);
+      
+      setCountdown(delaySeconds);
+      
+      // Countdown visuel
+      let currentCountdown = delaySeconds;
+      const countdownInterval = setInterval(() => {
+        currentCountdown--;
+        setCountdown(currentCountdown);
+        if (currentCountdown <= 0) {
+          clearInterval(countdownInterval);
+        }
+      }, 1000);
+
+      // Timer pour l'auto-avance
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        console.log('🤖 AUTO-AVANCE: Passage à la question suivante');
+        onNextQuestion(activeLobby.id);
+        setCountdown(0);
+        clearInterval(countdownInterval);
+        // Le flag sera reset par le useEffect de changement de question
+      }, delaySeconds * 1000);
+
+      return () => {
+        clearInterval(countdownInterval);
+        if (autoAdvanceTimerRef.current) {
+          clearTimeout(autoAdvanceTimerRef.current);
+          autoAdvanceTimerRef.current = null;
+        }
+      };
+    }
+  }, [activeLobby?.session?.currentQuestionIndex, localTimeRemaining, autoAdvance, quizzes, onNextQuestion]);
+
+  const cancelAutoAdvance = () => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+      setCountdown(0);
+      isAutoAdvancingRef.current = false; // ✅ Reset flag
+      console.log('🛑 Auto-avance annulée manuellement');
+    }
+  };
 
   if (!activeLobby) {
     return (
@@ -64,14 +169,8 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
   }
 
   const quiz = quizzes.find(q => q.id === activeLobby.quizId);
-  
-  // ✅ Support du mélange aléatoire
-  const questions = activeLobby.shuffled && activeLobby.shuffledQuestions 
-    ? activeLobby.shuffledQuestions 
-    : quiz?.questions || [];
-  
   const currentQuestionIndex = activeLobby.session?.currentQuestionIndex || 0;
-  const currentQuestion = questions[currentQuestionIndex];
+  const currentQuestion = quiz?.questions[currentQuestionIndex];
   const allAnswered = activeLobby.participants?.every(p => p.hasAnswered);
   const answeredCount = activeLobby.participants?.filter(p => p.hasAnswered).length || 0;
   const totalParticipants = activeLobby.participants?.length || 0;
@@ -89,7 +188,7 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
             <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
               <div className="flex items-center gap-1">
                 <Trophy className="w-4 h-4" />
-                <span>Question {currentQuestionIndex + 1} / {questions.length}</span>
+                <span>Question {currentQuestionIndex + 1} / {quiz?.questions.length}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Users className="w-4 h-4" />
@@ -105,14 +204,96 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
               )}
             </div>
           </div>
-          <button
-            onClick={() => onNextQuestion(activeLobby.id)}
-            className="px-6 py-3 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600 flex items-center gap-2 font-semibold transition-all hover:scale-105"
-          >
-            <SkipForward className="w-5 h-5" />
-            Question suivante
-          </button>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setHideAnswers(!hideAnswers)}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 font-semibold transition-all ${
+                hideAnswers
+                  ? 'bg-orange-600 text-white hover:bg-orange-700'
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+              title={hideAnswers ? 'Afficher les réponses' : 'Masquer les réponses (anti-triche)'}
+            >
+              {hideAnswers ? (
+                <>
+                  <EyeOff className="w-4 h-4" />
+                  Cachées 🔒
+                </>
+              ) : (
+                <>
+                  <Eye className="w-4 h-4" />
+                  Visibles ✅
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                setAutoAdvance(!autoAdvance);
+                if (autoAdvance) cancelAutoAdvance();
+              }}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 font-semibold transition-all ${
+                autoAdvance
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-400 dark:hover:bg-gray-500'
+              }`}
+              title={autoAdvance ? 'Désactiver auto-avance' : 'Activer auto-avance'}
+            >
+              {autoAdvance ? (
+                <>
+                  <Play className="w-4 h-4" />
+                  Auto ✅
+                </>
+              ) : (
+                <>
+                  <Pause className="w-4 h-4" />
+                  Auto ❌
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                cancelAutoAdvance();
+                onNextQuestion(activeLobby.id);
+              }}
+              className="px-6 py-3 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600 flex items-center gap-2 font-semibold transition-all hover:scale-105"
+            >
+              <SkipForward className="w-5 h-5" />
+              Question suivante
+            </button>
+          </div>
         </div>
+
+        {autoAdvance && countdown > 0 && (
+          <div className="mb-4 p-4 bg-gradient-to-r from-green-100 to-blue-100 dark:from-green-900/30 dark:to-blue-900/30 border-2 border-green-500 dark:border-green-600 rounded-lg animate-pulse">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Clock className="w-8 h-8 text-green-600 dark:text-green-400 animate-spin" />
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-green-700 dark:text-green-300">
+                    {countdown}
+                  </span>
+                </div>
+                <div>
+                  <p className="font-bold text-green-800 dark:text-green-300">
+                    🤖 Passage automatique à la question suivante...
+                  </p>
+                  <p className="text-sm text-green-700 dark:text-green-400">
+                    {allAnswered ? 'Tous les participants ont répondu' : 'Temps écoulé'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={cancelAutoAdvance}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
 
         {hasTimer && localTimeRemaining !== null && (
           <div className="mt-4">
@@ -147,122 +328,92 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
         </div>
       </div>
 
-      {/* ✅ NOUVEAU: Aperçu du média pour l'admin */}
-      {(currentQuestion?.type === 'image' || currentQuestion?.type === 'video' || currentQuestion?.type === 'audio') && currentQuestion?.media && (
-        <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-300 dark:border-purple-700 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-3">
-            {currentQuestion.type === 'image' && <ImageIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
-            {currentQuestion.type === 'video' && <VideoIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
-            {currentQuestion.type === 'audio' && <Music className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
-            <h4 className="font-bold text-purple-900 dark:text-purple-300">
-              📺 Aperçu du média (vue participant)
-            </h4>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-purple-200 dark:border-purple-600">
-            {currentQuestion.type === 'image' && (
-              <div className="text-center">
-                <img 
-                  src={currentQuestion.media} 
-                  alt="Question" 
-                  className="max-w-xs h-auto rounded-lg mx-auto border border-gray-300 dark:border-gray-600"
-                />
-              </div>
-            )}
-            
-            {currentQuestion.type === 'video' && (
-              <video 
-                ref={adminVideoRef}
-                key={`admin-video-${currentQuestionIndex}-${currentQuestion.id}`}
-                controls 
-                autoPlay
-                className="w-full max-w-2xl mx-auto rounded-lg"
-              >
-                <source src={currentQuestion.media} />
-                Votre navigateur ne supporte pas la vidéo.
-              </video>
-            )}
-            
-            {currentQuestion.type === 'audio' && (
-              <div className="max-w-2xl mx-auto">
-                <audio 
-                  ref={adminAudioRef}
-                  key={`admin-audio-${currentQuestionIndex}-${currentQuestion.id}`}
-                  controls 
-                  autoPlay
-                  className="w-full"
-                >
-                  <source src={currentQuestion.media} />
-                  Votre navigateur ne supporte pas l'audio.
-                </audio>
-                <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-2">
-                  🎵 Les participants entendent le même audio
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
         <div className="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 dark:border-purple-600 p-4 mb-6 rounded">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <h4 className="font-bold text-lg mb-2 dark:text-white">📝 Question actuelle</h4>
-              <p className="text-gray-700 dark:text-gray-300">{currentQuestion?.text}</p>
-              <div className="flex gap-4 mt-3 text-sm">
-                <span className="px-3 py-1 bg-purple-200 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300 rounded-full">
-                  {currentQuestion?.points || 1} points
-                </span>
-                {currentQuestion?.timer > 0 && (
-                  <span className="px-3 py-1 bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 rounded-full">
-                    ⏱️ {currentQuestion.timer}s
-                  </span>
-                )}
-                {currentQuestion?.category && (
-                  <span className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full">
-                    {currentQuestion.category}
-                  </span>
-                )}
-              </div>
+          <h4 className="font-bold text-lg mb-2 dark:text-white">📝 Question actuelle</h4>
+          <p className="text-gray-700 dark:text-gray-300 mb-3">{currentQuestion?.text}</p>
+          
+          {currentQuestion?.type === 'image' && currentQuestion?.media && (
+            <div className="mb-3">
+              <img 
+                src={currentQuestion.media} 
+                alt="Question" 
+                className="max-w-md h-auto rounded-lg border-2 border-purple-300 dark:border-purple-600" 
+              />
             </div>
-            
-            {/* ✅ Mode Anti-Triche: Bouton pour afficher/masquer les réponses */}
-            <button
-              onClick={() => setShowAnswers(!showAnswers)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition ${
-                showAnswers 
-                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-2 border-green-500 dark:border-green-600' 
-                  : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-2 border-orange-500 dark:border-orange-600'
-              }`}
-              title={showAnswers ? 'Masquer les réponses' : 'Afficher les réponses'}
-            >
-              {showAnswers ? (
-                <>
-                  <Eye className="w-5 h-5" />
-                  Masquer réponses
-                </>
-              ) : (
-                <>
-                  <EyeOff className="w-5 h-5" />
-                  Afficher réponses
-                </>
-              )}
-            </button>
+          )}
+          
+          {/* ✅ FIX CACHE VIDÉO: key unique par question */}
+          {currentQuestion?.type === 'video' && currentQuestion?.media && (
+            <div className="mb-3">
+              <video 
+                key={`video-${currentQuestionIndex}-${currentQuestion.id}`}
+                ref={videoRef}
+                controls 
+                autoPlay
+                className="max-w-2xl w-full rounded-lg border-2 border-purple-300 dark:border-purple-600"
+                style={{ maxHeight: '400px' }}
+                onLoadedMetadata={(e) => {
+                  e.target.volume = 0.3;
+                }}
+              >
+                <source src={currentQuestion.media} />
+              </video>
+            </div>
+          )}
+          
+          {/* ✅ FIX CACHE AUDIO: key unique par question + ref pour forcer reload */}
+          {currentQuestion?.type === 'audio' && currentQuestion?.media && (
+            <div className="mb-3">
+              <audio 
+                key={`audio-${currentQuestionIndex}-${currentQuestion.id}`}
+                ref={audioPlayerRef}
+                controls 
+                autoPlay
+                className="w-full"
+                onLoadedMetadata={(e) => {
+                  e.target.volume = 0.3;
+                }}
+              >
+                <source src={`${currentQuestion.media}?t=${currentQuestionIndex}`} />
+              </audio>
+            </div>
+          )}
+          
+          <div className="flex gap-4 mt-3 text-sm flex-wrap">
+            <span className="px-3 py-1 bg-purple-200 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300 rounded-full">
+              {currentQuestion?.points || 1} points
+            </span>
+            {currentQuestion?.timer > 0 && (
+              <span className="px-3 py-1 bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 rounded-full">
+                ⏱️ {currentQuestion.timer}s
+              </span>
+            )}
+            {currentQuestion?.category && (
+              <span className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full">
+                {currentQuestion.category}
+              </span>
+            )}
+            {currentQuestion?.type === 'qcm' && (
+              <span className="px-3 py-1 bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 rounded-full">
+                QCM
+              </span>
+            )}
           </div>
           
-          {/* Réponse attendue */}
-          {showAnswers ? (
+          {!hideAnswers && (
             <div className="mt-3 pt-3 border-t border-purple-200 dark:border-purple-700">
               <p className="text-xs text-gray-600 dark:text-gray-400">Réponse attendue :</p>
               <p className="font-bold text-green-700 dark:text-green-400">{currentQuestion?.answer}</p>
             </div>
-          ) : (
-            <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 rounded p-2">
-              <p className="text-xs text-orange-700 dark:text-orange-300 flex items-center gap-2">
+          )}
+          
+          {hideAnswers && (
+            <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
+              <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
                 <EyeOff className="w-4 h-4" />
-                <span className="font-semibold">Mode Anti-Triche :</span> Réponse masquée pour éviter que les participants voient votre écran
-              </p>
+                <p className="text-sm font-semibold">Réponse masquée (mode anti-triche) 🔒</p>
+              </div>
             </div>
           )}
         </div>
@@ -295,23 +446,23 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
                 )}
               </div>
 
-              {p.hasAnswered && (
+              {p.hasAnswered && !hideAnswers && (
                 <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                  {showAnswers ? (
-                    <div className="bg-white dark:bg-gray-700 rounded p-2 border border-green-300 dark:border-green-600">
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Réponse :</p>
-                      <p className="font-bold text-green-700 dark:text-green-400 break-words text-sm">
-                        {p.currentAnswer || '(vide)'}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="bg-orange-50 dark:bg-orange-900/20 rounded p-2 border border-orange-300 dark:border-orange-600">
-                      <p className="text-xs text-orange-700 dark:text-orange-400 flex items-center gap-1">
-                        <EyeOff className="w-3 h-3" />
-                        Réponse masquée
-                      </p>
-                    </div>
-                  )}
+                  <div className="bg-white dark:bg-gray-700 rounded p-2 border border-green-300 dark:border-green-600">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Réponse :</p>
+                    <p className="font-bold text-green-700 dark:text-green-400 break-words text-sm">
+                      {p.currentAnswer || '(vide)'}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {p.hasAnswered && hideAnswers && (
+                <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
+                  <div className="bg-orange-50 dark:bg-orange-900/20 rounded p-2 border border-orange-300 dark:border-orange-600 flex items-center justify-center gap-2">
+                    <EyeOff className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                    <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold">Masqué 🔒</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -319,7 +470,7 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
         </div>
       </div>
 
-      {allAnswered && totalParticipants > 0 && (
+      {allAnswered && totalParticipants > 0 && !countdown && (
         <div className="bg-gradient-to-r from-green-400 to-green-600 dark:from-green-600 dark:to-green-800 rounded-lg p-6 text-center animate-bounce shadow-xl">
           <div className="flex items-center justify-center gap-3 text-white">
             <Check className="w-8 h-8" />
@@ -328,9 +479,11 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
             </p>
             <Check className="w-8 h-8" />
           </div>
-          <p className="text-white text-sm mt-2 opacity-90">
-            Cliquez sur "Question suivante" pour continuer
-          </p>
+          {!autoAdvance && (
+            <p className="text-white text-sm mt-2 opacity-90">
+              Cliquez sur "Question suivante" pour continuer
+            </p>
+          )}
         </div>
       )}
 
