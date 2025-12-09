@@ -66,13 +66,13 @@ const QuizView = ({
     autoSaveAnswer(choice);
   };
 
-  // Volume à 30%
+  // Volume à 50%
   useEffect(() => {
     if (videoRef.current) {
-      videoRef.current.volume = 0.3;
+      videoRef.current.volume = 0.5;
     }
     if (audioRef.current) {
-      audioRef.current.volume = 0.3;
+      audioRef.current.volume = 0.5;
     }
   }, [question?.id, currentSession?.currentQuestionIndex]);
 

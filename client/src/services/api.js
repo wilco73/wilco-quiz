@@ -70,28 +70,6 @@ export const saveQuestions = async (questions) => {
   return res.json();
 };
 
-// ==================== GESTION PARTICIPANTS ====================
-
-// Mettre à jour un participant
-export const updateParticipant = async (participantId, updates) => {
-  const res = await fetch(`${API_URL}/update-participant`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ participantId, updates })
-  });
-  return res.json();
-};
-
-// Supprimer une équipe
-export const deleteTeam = async (teamName) => {
-  const res = await fetch(`${API_URL}/delete-team`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ teamName })
-  });
-  return res.json();
-};
-
 // ==================== LOBBIES ====================
 export const fetchLobbies = async () => {
   const res = await fetch(`${API_URL}/lobbies`);

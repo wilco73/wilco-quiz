@@ -14,39 +14,6 @@ app.use(express.json());
 // Stockage en mémoire des timers de questions
 const questionTimers = new Map();
 
-/**
- * Normalise un nom d'équipe
- */
-function normalizeTeamName(teamName) {
-  if (!teamName) return '';
-  
-  return teamName
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/[\u200B-\u200D\uFEFF]/g, '');
-}
-
-/**
- * Compare deux noms d'équipes (insensible à la casse)
- */
-function areTeamNamesEqual(name1, name2) {
-  if (!name1 || !name2) return false;
-  
-  const normalized1 = normalizeTeamName(name1).toLowerCase();
-  const normalized2 = normalizeTeamName(name2).toLowerCase();
-  
-  return normalized1 === normalized2;
-}
-
-/**
- * Trouve une équipe par nom (comparaison intelligente)
- */
-function findTeamByName(teams, teamName) {
-  if (!teamName) return null;
-  
-  return teams.find(team => areTeamNamesEqual(team.name, teamName)) || null;
-}
-
 // Fonction d'initialisation de la base de données
 function initDB() {
   if (!fs.existsSync(DB_FILE)) {
@@ -121,75 +88,6 @@ app.post('/api/participants', (req, res) => {
   res.json({ success: true });
 });
 
-// ✅ LOGIN PARTICIPANT - Normalisation
-app.post('/api/login', (req, res) => {
-  const { teamName, pseudo, password } = req.body;
-  const db = readDB();
-  
-  // Normaliser le nom d'équipe
-  const normalizedTeamName = normalizeTeamName(teamName);
-  
-  // Vérifier participant existant
-  const existingParticipant = db.participants.find(p => p.pseudo === pseudo);
-
-  if (existingParticipant) {
-    if (existingParticipant.password !== password) {
-      return res.json({ success: false, message: 'Ce pseudo existe avec un mot de passe différent' });
-    }
-    
-    // Vérifier si changement d'équipe
-    if (!areTeamNamesEqual(existingParticipant.teamName, normalizedTeamName)) {
-      // Proposer changement
-      return res.json({ 
-        success: false, 
-        needsConfirmation: true,
-        message: `Ce pseudo est déjà dans l'équipe "${existingParticipant.teamName}"`,
-        currentTeam: existingParticipant.teamName,
-        newTeam: normalizedTeamName
-      });
-    }
-  }
-
-  // ✅ AMÉLIORATION: Chercher équipe avec normalisation
-  let team = findTeamByName(db.teams, normalizedTeamName);
-  
-  if (!team) {
-    // Créer nouvelle équipe avec nom normalisé
-    team = { 
-      id: Date.now().toString(), 
-      name: normalizedTeamName,  // Utiliser le nom normalisé
-      validatedScore: 0,
-      createdAt: Date.now()
-    };
-    db.teams.push(team);
-    console.log(`✅ Nouvelle équipe créée: "${normalizedTeamName}"`);
-  } else {
-    console.log(`✅ Équipe existante trouvée: "${team.name}" (recherché: "${normalizedTeamName}")`);
-  }
-
-  // Créer ou mettre à jour participant
-  let participant = existingParticipant;
-  if (!participant) {
-    participant = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      pseudo,
-      password,
-      teamName: team.name,  // Utiliser le nom exact de l'équipe trouvée
-      teamId: team.id,
-      createdAt: Date.now()
-    };
-    db.participants.push(participant);
-    console.log(`✅ Nouveau participant créé: "${pseudo}" dans "${team.name}"`);
-  } else {
-    // Mettre à jour avec le nom exact de l'équipe
-    participant.teamName = team.name;
-    console.log(`✅ Participant mis à jour: "${pseudo}" → "${team.name}"`);
-  }
-
-  writeDB(db);
-  res.json({ success: true, participant });
-});
-
 // ==================== QUIZZES ====================
 app.get('/api/quizzes', (req, res) => res.json(readDB().quizzes || []));
 
@@ -261,36 +159,30 @@ app.post('/api/join-lobby', (req, res) => {
     return res.json({ success: false, message: 'Salle non disponible' });
   }
   
-  // ✅ AMÉLIORATION: Normaliser et trouver équipe existante
-  const normalizedTeamName = normalizeTeamName(teamName);
-  let team = findTeamByName(db.teams, normalizedTeamName);
-  
+  let team = db.teams.find(t => t.name === teamName);
   if (!team) {
     team = { 
       id: Date.now().toString(), 
-      name: normalizedTeamName,
+      name: teamName, 
       validatedScore: 0,
       createdAt: Date.now()
     };
     db.teams.push(team);
-    console.log(`✅ Nouvelle équipe créée (join-lobby): "${normalizedTeamName}"`);
-  } else {
-    console.log(`✅ Équipe existante trouvée (join-lobby): "${team.name}"`);
+    console.log(`✅ Nouvelle équipe créée: "${teamName}"`);
   }
   
   if (!lobby.participants.find(p => p.participantId === participantId)) {
     lobby.participants.push({ 
       participantId, 
       pseudo, 
-      teamName: team.name,  // Utiliser le nom exact
+      teamName, 
       hasAnswered: false, 
       currentAnswer: '', 
-      answers: {}, 
-      validations: {} 
+      answersByQuestionId: {},
+      validationsByQuestionId: {},
+      draftAnswer: ''
     });
-    console.log(`✅ Participant "${pseudo}" a rejoint le lobby avec équipe "${team.name}"`);
   }
-  
   writeDB(db);
   res.json({ success: true });
 });
@@ -587,111 +479,6 @@ app.post('/api/delete-lobby', (req, res) => {
   questionTimers.delete(lobbyId);
   writeDB(db);
   res.json({ success: true });
-});
-
-// ==================== GESTION PARTICIPANTS ET ÉQUIPES ====================
-
-// Mettre à jour un participant (changement d'équipe)
-app.post('/api/update-participant', (req, res) => {
-  const { participantId, updates } = req.body;
-  const db = readDB();
-  
-  const participant = db.participants.find(p => p.id === participantId);
-  
-  if (!participant) {
-    return res.json({ success: false, message: 'Participant introuvable' });
-  }
-
-  const oldTeam = participant.teamName;
-  
-  // ✅ AMÉLIORATION: Normaliser le nouveau nom d'équipe
-  if (updates.teamName !== undefined) {
-    const normalizedTeamName = normalizeTeamName(updates.teamName);
-    
-    if (normalizedTeamName) {
-      // Chercher équipe existante avec normalisation
-      let team = findTeamByName(db.teams, normalizedTeamName);
-      
-      if (!team) {
-        // Créer nouvelle équipe
-        team = {
-          id: Date.now().toString(),
-          name: normalizedTeamName,
-          validatedScore: 0,
-          createdAt: Date.now()
-        };
-        db.teams.push(team);
-        console.log(`✅ Nouvelle équipe créée (update-participant): "${normalizedTeamName}"`);
-      } else {
-        console.log(`✅ Équipe existante trouvée (update-participant): "${team.name}"`);
-      }
-      
-      // Utiliser le nom exact de l'équipe
-      participant.teamName = team.name;
-    } else {
-      // Nom vide = retirer de l'équipe
-      participant.teamName = '';
-    }
-  }
-  
-  // Appliquer les autres modifications
-  Object.keys(updates).forEach(key => {
-    if (key !== 'teamName') {
-      participant[key] = updates[key];
-    }
-  });
-  
-  writeDB(db);
-  
-  console.log(`✅ Participant "${participant.pseudo}" changé: "${oldTeam || 'Aucune'}" → "${participant.teamName || 'Aucune'}"`);
-  
-  res.json({ success: true, participant });
-});
-
-// ✅ DELETE TEAM - Comparaison intelligente
-app.post('/api/delete-team', (req, res) => {
-  const { teamName } = req.body;
-  const db = readDB();
-  
-  // ✅ AMÉLIORATION: Trouver équipe avec normalisation
-  const team = findTeamByName(db.teams, teamName);
-  
-  if (!team) {
-    return res.json({ success: false, message: 'Équipe introuvable' });
-  }
-
-  // Utiliser le nom exact de l'équipe trouvée
-  const exactTeamName = team.name;
-  
-  // Retirer tous les participants de cette équipe (comparaison exacte)
-  const affectedParticipants = db.participants.filter(p => p.teamName === exactTeamName);
-  affectedParticipants.forEach(p => {
-    p.teamName = '';
-    console.log(`  ℹ️  Participant "${p.pseudo}" retiré de l'équipe`);
-  });
-
-  // Supprimer l'équipe
-  db.teams = db.teams.filter(t => t.name !== exactTeamName);
-  
-  // Nettoyer les lobbies
-  db.lobbies.forEach(lobby => {
-    if (lobby.participants) {
-      lobby.participants.forEach(p => {
-        if (p.teamName === exactTeamName) {
-          p.teamName = '';
-        }
-      });
-    }
-  });
-
-  writeDB(db);
-  
-  console.log(`🗑️  Équipe "${exactTeamName}" supprimée (${affectedParticipants.length} participants retirés)`);
-  
-  res.json({ 
-    success: true, 
-    affectedCount: affectedParticipants.length 
-  });
 });
 
 // ==================== PRODUCTION: SERVIR LE CLIENT REACT ====================
