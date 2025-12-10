@@ -228,46 +228,42 @@ const QuizView = ({
             </div>
           )}
 
-          <div className="mb-6">
-            <h4 className="text-2xl font-bold mb-4 dark:text-white">
-              {question?.text}
-              {question?.points && (
-                <span className="ml-2 text-purple-600 dark:text-purple-400 text-lg">({question.points} pts)</span>
-              )}
-            </h4>
-
-            {question?.type === 'image' && question?.media && (
-              <div className="flex content-center item-center text-center mb-8">
-                <div className="text-center m-auto">
-                  <img src={question.media} alt="Question" className="max-w-md h-auto rounded-lg mb-4" />
+          {/* ✅ MODIFIÉ: Afficher média pour QCM aussi */}
+          {question?.media && (
+            <>
+              {(question?.type === 'image' || (question?.type === 'qcm' && question?.mediaType === 'image')) && (
+                <div className="flex content-center item-center text-center mb-8">
+                  <div className="text-center m-auto">
+                    <img src={question.media} alt="Question" className="max-w-md h-auto rounded-lg mb-4" />
+                  </div>
                 </div>
-              </div>
-            )}
-            
-            {question?.type === 'video' && question?.media && (
-              <video 
-                ref={videoRef}
-                key={`video-${currentSession?.currentQuestionIndex}-${question.id}`}
-                controls 
-                autoPlay 
-                className="w-full rounded-lg mb-4"
-              >
-                <source src={question.media} />
-              </video>
-            )}
-            
-            {question?.type === 'audio' && question?.media && (
-              <audio 
-                ref={audioRef}
-                key={`audio-${currentSession?.currentQuestionIndex}-${question.id}`}
-                controls 
-                autoPlay 
-                className="w-full mb-4"
-              >
-                <source src={question.media} />
-              </audio>
-            )}
-          </div>
+              )}
+              
+              {(question?.type === 'video' || (question?.type === 'qcm' && question?.mediaType === 'video')) && (
+                <video 
+                  ref={videoRef}
+                  key={`video-${currentSession?.currentQuestionIndex}-${question.id}`}
+                  controls 
+                  autoPlay 
+                  className="w-full rounded-lg mb-4"
+                >
+                  <source src={question.media} />
+                </video>
+              )}
+              
+              {(question?.type === 'audio' || (question?.type === 'qcm' && question?.mediaType === 'audio')) && (
+                <audio 
+                  ref={audioRef}
+                  key={`audio-${currentSession?.currentQuestionIndex}-${question.id}`}
+                  controls 
+                  autoPlay 
+                  className="w-full mb-4"
+                >
+                  <source src={question.media} />
+                </audio>
+              )}
+            </>
+          )}
 
           {hasAnswered ? (
             isTimeExpired ? (

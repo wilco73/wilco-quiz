@@ -20,6 +20,7 @@ const QuestionBank = ({ questions, onSave }) => {
     answer: '',
     type: 'text',
     media: '',
+    mediaType: '',
     points: 1,
     timer: 0,
     category: '',
@@ -33,6 +34,7 @@ const QuestionBank = ({ questions, onSave }) => {
       answer: '',
       type: 'text',
       media: '',
+      mediaType: '',
       points: 1,
       timer: 0,
       category: '',
@@ -739,17 +741,66 @@ const QuestionBank = ({ questions, onSave }) => {
               rows="3"
             />
 
-            {formData.type !== 'text' && formData.type !== 'qcm' && (
+            {/* ✅ NOUVEAU: Afficher sélection média pour TOUS les types sauf 'text' */}
+            {formData.type !== 'text' && (
               <>
-                <input
-                  type="text"
-                  placeholder="URL du média"
-                  value={formData.media}
-                  onChange={(e) => setFormData({ ...formData, media: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                />
+                {/* ✅ Pour QCM, permettre de choisir le type de média */}
+                {formData.type === 'qcm' && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      Type de média (optionnel)
+                    </label>
+                    <select
+                      value={formData.mediaType || 'none'}
+                      onChange={(e) => {
+                        const newMediaType = e.target.value === 'none' ? '' : e.target.value;
+                        setFormData({ 
+                          ...formData, 
+                          mediaType: newMediaType,
+                          media: newMediaType ? formData.media : '' 
+                        });
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                    >
+                      <option value="none">Aucun média</option>
+                      <option value="image">Image</option>
+                      <option value="video">Vidéo</option>
+                      <option value="audio">Audio</option>
+                    </select>
+                  </div>
+                )}
                 
-                <MediaPreview type={formData.type} url={formData.media} id={editingQuestion?.id || 'new'} />
+                {/* ✅ Pour questions non-QCM, garder l'ancien comportement */}
+                {formData.type !== 'qcm' && (
+                  <select
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  >
+                    <option value="image">Question avec Image</option>
+                    <option value="video">Question avec Vidéo</option>
+                    <option value="audio">Question avec Audio</option>
+                  </select>
+                )}
+                
+                {/* ✅ Afficher input URL si un média est sélectionné */}
+                {((formData.type === 'qcm' && formData.mediaType) || formData.type !== 'qcm') && (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="URL du média (image, vidéo ou audio)"
+                      value={formData.media}
+                      onChange={(e) => setFormData({ ...formData, media: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                    />
+                    
+                    <MediaPreview 
+                      type={formData.type === 'qcm' ? formData.mediaType : formData.type} 
+                      url={formData.media} 
+                      id={editingQuestion?.id || 'new'} 
+                    />
+                  </>
+                )}
               </>
             )}
 
