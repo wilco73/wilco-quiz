@@ -29,12 +29,12 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
     
     if (!window.confirm(confirmMessage)) return;
 
-    // Valider tous les participants qui ont répondu
+    // Valider TOUS les participants (réponse ou pas)
     lobby.participants.forEach(participant => {
-      const hasAnswer = participant.answersByQuestionId?.[question.id] !== undefined;
       const alreadyValidated = participant.validationsByQuestionId?.[question.id] !== undefined;
       
-      if (hasAnswer && !alreadyValidated) {
+      // Valider même sans réponse
+      if (!alreadyValidated) {
         onValidateAnswer(lobby.id, participant.participantId, question.id, isCorrect);
       }
     });
@@ -161,7 +161,7 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                     const answeredCount = responses.filter(r => r.answer !== undefined).length;
                     const validatedCount = responses.filter(r => r.validation === true).length;
                     const rejectedCount = responses.filter(r => r.validation === false).length;
-                    const pendingCount = answeredCount - validatedCount - rejectedCount;
+                    const pendingCount = responses.filter(r => r.validation === undefined).length;
                     
                     return (
                       <div key={question.id} className="border-2 border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
@@ -323,7 +323,7 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                                       </div>
                                       
                                       <div className="ml-3">
-                                        {validation === undefined && hasAnswer ? (
+                                        {validation === undefined ? (
                                           <div className="flex flex-col gap-1">
                                             <button
                                               onClick={() => onValidateAnswer(lobby.id, participant.participantId, question.id, true)}
@@ -334,9 +334,8 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                                             </button>
                                             <button
                                               onClick={() => onValidateAnswer(lobby.id, participant.participantId, question.id, false)}
-                                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm flex items-center gap-1 whitespace-nowrap"
+                                              className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
                                             >
-                                              <XCircle className="w-3 h-3" />
                                               Refuser
                                             </button>
                                           </div>

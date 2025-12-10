@@ -338,10 +338,36 @@ const QuizResultsView = ({ currentLobby, quiz, currentUser, onLeaveLobby, onView
                         </div>
 
                         {validation === true && (
-                          <div className="bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded p-3">
-                            <p className="text-green-700 dark:text-green-400 font-semibold text-sm">
-                              🎉 +{question.points || 1} point{question.points > 1 ? 's' : ''} pour votre équipe !
-                            </p>
+                          <div>
+                            {question.type === 'qcm' ? (
+                              // Pour les QCM : vérifier si l'équipe a vraiment gagné
+                              currentParticipant.qcmTeamScored?.[question.id] ? (
+                                <div className="bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded p-3">
+                                  <p className="text-green-700 dark:text-green-400 font-semibold text-sm">
+                                    🎉 +{question.points || 1} point{question.points > 1 ? 's' : ''} pour votre équipe !
+                                  </p>
+                                  <p className="text-green-600 dark:text-green-500 text-xs mt-1">
+                                    Toute l'équipe a eu juste ! ✅
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-600 rounded p-3">
+                                  <p className="text-orange-700 dark:text-orange-400 font-semibold text-sm">
+                                    ✅ Bonne réponse !
+                                  </p>
+                                  <p className="text-orange-600 dark:text-orange-500 text-xs mt-1">
+                                    Mais toute l'équipe doit avoir juste pour gagner les points (QCM)
+                                  </p>
+                                </div>
+                              )
+                            ) : (
+                              // Pour les questions normales
+                              <div className="bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded p-3">
+                                <p className="text-green-700 dark:text-green-400 font-semibold text-sm">
+                                  🎉 +{question.points || 1} point{question.points > 1 ? 's' : ''} pour votre équipe !
+                                </p>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

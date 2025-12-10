@@ -94,6 +94,37 @@ function shuffleArray(array) {
   return shuffled;
 }
 
+// ==================== TIMER FUNCTIONS ====================
+function startQuestionTimer(lobbyId, questionId, duration) {
+  if (questionTimers.has(lobbyId)) {
+    const oldTimer = questionTimers.get(lobbyId);
+    if (oldTimer.timeout) {
+      clearTimeout(oldTimer.timeout);
+    }
+  }
+
+  console.log(`⏱️  Timer démarré: ${duration}s pour lobby ${lobbyId}, question ${questionId}`);
+
+  const timerData = {
+    timer: duration,
+    startTime: Date.now(),
+    timeout: null
+  };
+
+  questionTimers.set(lobbyId, timerData);
+}
+
+function stopQuestionTimer(lobbyId) {
+  if (questionTimers.has(lobbyId)) {
+    const timerData = questionTimers.get(lobbyId);
+    if (timerData.timeout) {
+      clearTimeout(timerData.timeout);
+    }
+    questionTimers.delete(lobbyId);
+    console.log(`⏱️  Timer arrêté pour lobby ${lobbyId}`);
+  }
+}
+
 // ==================== CONFIG ====================
 app.get('/api/config', (req, res) => {
   const protocol = req.protocol;
@@ -285,9 +316,9 @@ app.post('/api/start-quiz', (req, res) => {
     };
     
     // Lancer le timer pour la première question
-    // if (questions[0].timer > 0) {
-    //   startQuestionTimer(lobbyId, questions[0].id, questions[0].timer);
-    // }
+    if (questions[0].timer > 0) {
+      startQuestionTimer(lobbyId, questions[0].id, questions[0].timer);
+     }
     
     writeDB(db);
     res.json({ success: true });
@@ -342,10 +373,29 @@ app.post('/api/submit-answer', (req, res) => {
       const elapsed = Math.floor((Date.now() - timerData.startTime) / 1000);
       
       if (elapsed >= timerData.timer) {
+        // Sauvegarder la réponse même si le temps est écoulé
+        const participant = lobby.participants.find(p => p.participantId === participantId);
+        if (participant && answer && answer.trim()) {
+          participant.currentAnswer = answer;
+          
+          const quiz = db.quizzes.find(q => q.id === lobby.quizId);
+          const questions = lobby.shuffled && lobby.shuffledQuestions 
+            ? lobby.shuffledQuestions 
+            : quiz.questions;
+          const currentQuestion = questions[lobby.session.currentQuestionIndex];
+          
+          if (!participant.answersByQuestionId) participant.answersByQuestionId = {};
+          participant.answersByQuestionId[currentQuestion.id] = answer;
+          
+          writeDB(db);
+          console.log(`⏱️  Réponse sauvegardée malgré timer expiré: ${participantId}`);
+        }
+        
         return res.json({ 
           success: false, 
-          message: 'Temps écoulé',
-          timeExpired: true 
+          message: 'Temps écoulé, mais votre réponse a été enregistrée',
+          timeExpired: true,
+          answerSaved: true
         });
       }
     }
