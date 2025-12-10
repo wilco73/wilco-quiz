@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { LogOut, RotateCcw, Monitor, Check, BookOpen, Trash, Trophy, FileQuestion, Play, Edit, Trash2, Users } from 'lucide-react';
+import { LogOut, RotateCcw, Monitor, Check, BookOpen, Trash, Trophy, FileQuestion, Play, Edit, Trash2, Users, Shuffle } from 'lucide-react';
+import { useToast } from './ToastProvider';
 import QuestionBank from './QuestionBank';
 import QuizEditor from './QuizEditor';
 import LobbyManager from './LobbyManager';
@@ -31,15 +32,44 @@ const AdminDashboard = ({
 }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [editingQuiz, setEditingQuiz] = useState(null);
-  
-  // ✅ NOUVEAU: Pagination pour le classement des équipes
+  const [shuffleMode, setShuffleMode] = useState({});
   const [teamsPage, setTeamsPage] = useState(1);
   const teamsPerPage = 5;
+  
+  // ✅ Utiliser Toast au lieu d'alert
+  const toast = useToast();
 
   const handleSaveQuiz = (quiz) => {
     onSaveQuiz(quiz);
     setEditingQuiz(null);
     setActiveTab('dashboard');
+    toast.success('Quiz sauvegardé !');
+  };
+
+  const handleCreateLobby = (quizId) => {
+    const shuffle = shuffleMode[quizId] || false;
+    onCreateLobby(quizId, shuffle);
+    setShuffleMode(prev => ({ ...prev, [quizId]: false }));
+    
+    if (shuffle) {
+      toast.success('Salle créée avec questions mélangées !');
+    } else {
+      toast.success('Salle créée !');
+    }
+  };
+
+  const handleDeleteQuiz = (id) => {
+    if (window.confirm('Supprimer ce quiz ?')) {
+      onDeleteQuiz(id);
+      toast.info('Quiz supprimé');
+    }
+  };
+
+  const handleResetScores = () => {
+    if (window.confirm('Réinitialiser tous les scores ?')) {
+      onResetScores();
+      toast.warning('Scores réinitialisés !');
+    }
   };
 
   const tabs = [
@@ -61,7 +91,7 @@ const AdminDashboard = ({
             <div className="flex gap-2">
               <DarkModeToggle />
               <button
-                onClick={onResetScores}
+                onClick={handleResetScores}
                 className="flex items-center gap-2 px-4 py-2 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -130,10 +160,28 @@ const AdminDashboard = ({
                       {quizzes.map(quiz => (
                         <div key={quiz.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700">
                           <h4 className="font-bold dark:text-white">{quiz.title}</h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">{quiz.questions?.length || 0} questions</p>
-                          <div className="flex gap-2 mt-2">
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{quiz.questions?.length || 0} questions</p>
+                          
+                          {/* Checkbox pour mode shuffle */}
+                          <label className="flex items-center gap-2 mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition">
+                            <input
+                              type="checkbox"
+                              checked={shuffleMode[quiz.id] || false}
+                              onChange={(e) => setShuffleMode(prev => ({ 
+                                ...prev, 
+                                [quiz.id]: e.target.checked 
+                              }))}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                            />
+                            <Shuffle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                              Ordre aléatoire des questions
+                            </span>
+                          </label>
+                          
+                          <div className="flex gap-2">
                             <button
-                              onClick={() => onCreateLobby(quiz.id)}
+                              onClick={() => handleCreateLobby(quiz.id)}
                               className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm flex items-center gap-1"
                             >
                               <Play className="w-3 h-3" />
@@ -147,7 +195,7 @@ const AdminDashboard = ({
                               Modifier
                             </button>
                             <button
-                              onClick={() => onDeleteQuiz(quiz.id)}
+                              onClick={() => handleDeleteQuiz(quiz.id)}
                               className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-1"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -189,7 +237,6 @@ const AdminDashboard = ({
                               <p className="text-center text-gray-500 dark:text-gray-400 py-8">Aucune équipe</p>
                             )}
                             
-                            {/* Pagination équipes */}
                             {totalTeamsPages > 1 && (
                               <div className="flex justify-center items-center gap-2 mt-4 pt-4 border-t dark:border-gray-600">
                                 <button
@@ -244,17 +291,25 @@ const AdminDashboard = ({
                         
                         return (
                           <div key={lobby.id} className={`border-2 rounded-lg p-4 ${statusColors[lobby.status]}`}>
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <h4 className="font-bold dark:text-white">{quiz?.title}</h4>
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="font-bold dark:text-white">{quiz?.title}</h4>
+                                  {lobby.shuffled && (
+                                    <span className="px-2 py-1 bg-blue-200 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded flex items-center gap-1">
+                                      <Shuffle className="w-3 h-3" />
+                                      Aléatoire
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                  {lobby.participants?.length || 0} participants - {statusText[lobby.status]}
+                                  {lobby.participants?.length || 0} participant(s) • {statusText[lobby.status]}
                                 </p>
                               </div>
                               {lobby.status === 'waiting' && (
                                 <button
                                   onClick={() => onStartQuiz(lobby.id)}
-                                  className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm flex items-center gap-1"
+                                  className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-1"
                                 >
                                   <Play className="w-3 h-3" />
                                   Démarrer
@@ -265,7 +320,7 @@ const AdminDashboard = ({
                         );
                       })}
                       {lobbies.filter(l => l.status !== 'finished').length === 0 && (
-                        <p className="text-center text-gray-500 dark:text-gray-400 py-8 col-span-2">Aucune salle active</p>
+                        <p className="text-center text-gray-500 dark:text-gray-400 py-8 md:col-span-2">Aucune salle active</p>
                       )}
                     </div>
                   </div>
@@ -276,8 +331,8 @@ const AdminDashboard = ({
 
           {activeTab === 'participants' && (
             <ParticipantManager
-              participants={participants}
               teams={teams}
+              participants={participants}
               onUpdateParticipant={onUpdateParticipant}
               onDeleteTeam={onDeleteTeam}
               onRefreshData={onRefreshData}
@@ -287,7 +342,6 @@ const AdminDashboard = ({
           {activeTab === 'questions' && (
             <QuestionBank
               questions={questions}
-              quizzes={quizzes}
               onSave={onSaveQuestions}
             />
           )}

@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, AlertCircle } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 import { normalizeTeamName, validateTeamName } from '../utils/helpers';
+import { useToast } from './ToastProvider';
 
 const LoginView = ({ onLogin }) => {
   const [teamName, setTeamName] = useState('');
   const [pseudo, setPseudo] = useState('');
   const [password, setPassword] = useState('');
   const [isAdminMode, setIsAdminMode] = useState(false);
+  const toast = useToast();
   
   // ✅ NOUVEAU: Feedback sur la normalisation
   const [normalizedTeamName, setNormalizedTeamName] = useState('');
@@ -44,7 +46,7 @@ const LoginView = ({ onLogin }) => {
       // ✅ AMÉLIORATION: Valider le nom d'équipe
       const validation = validateTeamName(teamName);
       if (!validation.valid) {
-        alert(validation.error);
+        toast.success(validation.error);
         return;
       }
     }

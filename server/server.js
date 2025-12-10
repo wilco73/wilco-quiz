@@ -84,6 +84,16 @@ function findTeamByName(teams, teamName) {
 
 initDB();
 
+// ==================== SHUFFLE FUNCTION ====================
+function shuffleArray(array) {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 // ==================== CONFIG ====================
 app.get('/api/config', (req, res) => {
   const protocol = req.protocol;
@@ -170,18 +180,29 @@ app.get('/api/lobbies', (req, res) => {
 });
 
 app.post('/api/create-lobby', (req, res) => {
-  const { quizId } = req.body;
+  const { quizId, shuffle } = req.body;
   const db = readDB();
+  const quiz = db.quizzes.find(q => q.id === quizId);
+  
+  if (!quiz) {
+    return res.json({ success: false, message: 'Quiz introuvable' });
+  }
+  
   const lobby = {
     id: Date.now().toString(),
     quizId,
     status: 'waiting',
     participants: [],
     session: null,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    shuffled: shuffle || false,
+    shuffledQuestions: shuffle ? shuffleArray(quiz.questions) : null
   };
+  
   db.lobbies.push(lobby);
   writeDB(db);
+  
+  console.log(`✅ Lobby créé: ${quiz.title} ${shuffle ? '(questions mélangées)' : '(ordre normal)'}`);
   res.json({ success: true, lobby });
 });
 
@@ -249,26 +270,23 @@ app.post('/api/start-quiz', (req, res) => {
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
   
-  if (lobby && lobby.status === 'waiting') {
+  if (lobby) {
+    const quiz = db.quizzes.find(q => q.id === lobby.quizId);
+    
+    // ✅ Utiliser shuffledQuestions si disponible
+    const questions = lobby.shuffled && lobby.shuffledQuestions 
+      ? lobby.shuffledQuestions 
+      : quiz.questions;
+    
     lobby.status = 'playing';
     lobby.session = {
       currentQuestionIndex: 0,
-      status: 'active',
-      startedAt: Date.now()
+      startTime: Date.now()
     };
-    lobby.participants.forEach(p => {
-      p.hasAnswered = false;
-      p.currentAnswer = '';
-      p.draftAnswer = '';
-    });
     
-    const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-    const currentQuestion = quiz.questions[0];
-    if (currentQuestion.timer > 0) {
-      questionTimers.set(lobbyId, {
-        startTime: Date.now(),
-        timer: currentQuestion.timer
-      });
+    // Lancer le timer pour la première question
+    if (questions[0].timer > 0) {
+      startQuestionTimer(lobbyId, questions[0].id, questions[0].timer);
     }
     
     writeDB(db);

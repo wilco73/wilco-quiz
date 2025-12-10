@@ -1,160 +1,86 @@
-import React, { useState } from 'react';
-import { Play, Users, Trash2, UserPlus } from 'lucide-react';
+import React from 'react';
+import { Users, LogOut, Shuffle } from 'lucide-react';
 
-const LobbyView = ({ lobbies, quizzes, onCreateLobby, onJoinLobby, onStartQuiz, onDeleteLobby }) => {
-  const [selectedQuiz, setSelectedQuiz] = useState('');
-  const [joinLobbyId, setJoinLobbyId] = useState('');
-  const [joinPseudo, setJoinPseudo] = useState('');
-  const [joinTeamName, setJoinTeamName] = useState('');
-  const [shuffleMode, setShuffleMode] = useState(false);
+const LobbyView = ({ currentLobby, quizzes, onLeaveLobby }) => {
+  if (!currentLobby) {
+    return (
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+        <p className="text-gray-600 dark:text-gray-400">Chargement...</p>
+      </div>
+    );
+  }
 
-  const handleCreateLobby = () => {
-    if (!selectedQuiz) {
-      alert('Veuillez sélectionner un quiz');
-      return;
-    }
-    // ✅ Envoyer le paramètre shuffle au serveur
-    onCreateLobby(selectedQuiz, shuffleMode);
-    setSelectedQuiz('');
-    setShuffleMode(false);
-  };
-
-  const handleJoin = () => {
-    if (!joinLobbyId || !joinPseudo || !joinTeamName) {
-      alert('Tous les champs sont requis');
-      return;
-    }
-    onJoinLobby(joinLobbyId, joinPseudo, joinTeamName);
-    setJoinLobbyId('');
-    setJoinPseudo('');
-    setJoinTeamName('');
-  };
-
-  const waitingLobbies = lobbies.filter(l => l.status === 'waiting');
+  const quiz = quizzes.find(q => q.id === currentLobby.quizId);
+  
+  // ✅ FIX: Protection contre shuffledQuestions undefined
+  const questions = currentLobby.shuffled && currentLobby.shuffledQuestions 
+    ? currentLobby.shuffledQuestions 
+    : quiz?.questions || [];
 
   return (
-    <div className="space-y-6">
-      {/* Création de salle */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <h3 className="text-2xl font-bold mb-4 dark:text-white">Créer une salle</h3>
-        <div className="space-y-4">
-          <select
-            value={selectedQuiz}
-            onChange={(e) => setSelectedQuiz(e.target.value)}
-            className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-purple-500"
-          >
-            <option value="">Sélectionner un quiz</option>
-            {quizzes.map(quiz => (
-              <option key={quiz.id} value={quiz.id}>{quiz.title}</option>
-            ))}
-          </select>
-
-          {/* ✅ Checkbox pour activer le mode aléatoire */}
-          <label className="flex items-center gap-3 p-4 bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-700 rounded-lg cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30 transition">
-            <input
-              type="checkbox"
-              checked={shuffleMode}
-              onChange={(e) => setShuffleMode(e.target.checked)}
-              className="w-5 h-5 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
-            />
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <div className="flex justify-between items-start mb-6">
             <div className="flex-1">
-              <span className="font-semibold text-purple-900 dark:text-purple-300">🔀 Ordre aléatoire des questions</span>
-              <p className="text-sm text-purple-700 dark:text-purple-400 mt-1">
-                Les questions seront mélangées pour tous les participants (l'ordre sera identique pour tout le monde)
-              </p>
+              <h2 className="text-3xl font-bold mb-2 dark:text-white">{quiz?.title}</h2>
+              <div className="flex items-center gap-3">
+                <p className="text-gray-600 dark:text-gray-400">
+                  {questions.length} question(s)
+                </p>
+                {currentLobby.shuffled && (
+                  <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-full text-sm flex items-center gap-1">
+                    <Shuffle className="w-4 h-4" />
+                    Ordre aléatoire
+                  </span>
+                )}
+              </div>
             </div>
-          </label>
+            <button
+              onClick={onLeaveLobby}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              Quitter
+            </button>
+          </div>
 
-          <button
-            onClick={handleCreateLobby}
-            className="w-full py-3 bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 font-semibold"
-          >
-            Créer la salle
-          </button>
-        </div>
-      </div>
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              <h3 className="text-xl font-bold dark:text-white">
+                Participants ({currentLobby.participants?.length || 0})
+              </h3>
+            </div>
 
-      {/* Salles en attente */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <h3 className="text-2xl font-bold mb-4 dark:text-white">Salles en attente</h3>
-        {waitingLobbies.length === 0 ? (
-          <p className="text-gray-600 dark:text-gray-400 text-center py-8">Aucune salle disponible</p>
-        ) : (
-          <div className="space-y-3">
-            {waitingLobbies.map(lobby => {
-              const quiz = quizzes.find(q => q.id === lobby.quizId);
-              return (
-                <div key={lobby.id} className="border-2 border-gray-200 dark:border-gray-600 rounded-lg p-4 flex justify-between items-center">
-                  <div>
-                    <h4 className="font-bold dark:text-white">{quiz?.title}</h4>
-                    <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      <span className="flex items-center gap-1">
-                        <Users className="w-4 h-4" />
-                        {lobby.participants?.length || 0} participant(s)
-                      </span>
-                      {lobby.shuffled && (
-                        <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded text-xs">
-                          🔀 Aléatoire
-                        </span>
-                      )}
+            {currentLobby.participants && currentLobby.participants.length > 0 ? (
+              <div className="space-y-2">
+                {currentLobby.participants.map((participant, index) => (
+                  <div 
+                    key={index} 
+                    className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                  >
+                    <div>
+                      <p className="font-semibold dark:text-white">{participant.pseudo}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Équipe: {participant.teamName}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onStartQuiz(lobby.id)}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
-                    >
-                      <Play className="w-4 h-4" />
-                      Démarrer
-                    </button>
-                    <button
-                      onClick={() => onDeleteLobby(lobby.id)}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                En attente de participants...
+              </p>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Rejoindre une salle (pour les participants) */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <h3 className="text-2xl font-bold mb-4 dark:text-white flex items-center gap-2">
-          <UserPlus className="w-6 h-6" />
-          Rejoindre une salle
-        </h3>
-        <div className="space-y-3">
-          <input
-            type="text"
-            placeholder="ID de la salle"
-            value={joinLobbyId}
-            onChange={(e) => setJoinLobbyId(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          />
-          <input
-            type="text"
-            placeholder="Votre pseudo"
-            value={joinPseudo}
-            onChange={(e) => setJoinPseudo(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          />
-          <input
-            type="text"
-            placeholder="Nom de l'équipe"
-            value={joinTeamName}
-            onChange={(e) => setJoinTeamName(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          />
-          <button
-            onClick={handleJoin}
-            className="w-full py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 font-semibold"
-          >
-            Rejoindre
-          </button>
+          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+            <p className="text-center text-blue-700 dark:text-blue-300 font-medium">
+              ⏳ En attente du démarrage du quiz par l'administrateur...
+            </p>
+          </div>
         </div>
       </div>
     </div>

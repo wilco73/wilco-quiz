@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Trash2, Edit2, UserMinus, UserPlus, AlertCircle, Search, Filter, Check, X } from 'lucide-react';
 import { normalizeTeamName, validateTeamName, findTeamByName } from '../utils/helpers';
+import { useToast } from './ToastProvider';
 
 const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDeleteTeam, onRefreshData }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTeam, setFilterTeam] = useState('');
   const [editingParticipant, setEditingParticipant] = useState(null);
   const [newTeamName, setNewTeamName] = useState('');
+  const toast = useToast();
   
   // ✅ NOUVEAU: États pour feedback normalisation
   const [normalizedPreview, setNormalizedPreview] = useState('');
@@ -69,7 +71,7 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
     const validation = validateTeamName(normalized);
     
     if (!validation.valid) {
-      alert(validation.error);
+      toast.error(validation.error);
       return;
     }
 

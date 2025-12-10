@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Save, X, Plus, Trash2, ChevronDown, ChevronUp, Shuffle, Filter } from 'lucide-react';
+import { Save, X, Plus, Trash2, ChevronDown, ChevronUp, Shuffle, Filter, Eye, EyeOff } from 'lucide-react';
+import { useToast } from './ToastProvider';
 
 const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
   const [title, setTitle] = useState(quiz?.title || '');
@@ -8,11 +9,15 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
   const [showQuestionPicker, setShowQuestionPicker] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-  
-  // ✅ NOUVEAU: États pour sélection aléatoire
+  const toast = useToast();
+
+  // États pour sélection aléatoire
   const [showRandomPicker, setShowRandomPicker] = useState(false);
   const [randomCount, setRandomCount] = useState(5);
   const [randomCategory, setRandomCategory] = useState('');
+  
+  // ✅ NOUVEAU: Affichage des réponses
+  const [showAnswers, setShowAnswers] = useState(true);
 
   const availableQuestions = questions.filter(q => 
     !selectedQuestions.find(sq => sq.id === q.id)
@@ -25,7 +30,6 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
     return matchesSearch && matchesCategory;
   });
 
-  // ✅ NOUVEAU: Obtenir toutes les catégories uniques
   const allCategories = [...new Set(questions.map(q => q.category).filter(Boolean))].sort();
 
   const addQuestion = (question) => {
@@ -44,40 +48,35 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
     setSelectedQuestions(newQuestions);
   };
 
-  // ✅ NOUVEAU: Ajouter questions aléatoires
   const addRandomQuestions = () => {
     let pool = availableQuestions;
     
-    // Filtrer par catégorie si spécifiée
     if (randomCategory) {
       pool = pool.filter(q => q.category === randomCategory);
     }
     
     if (pool.length === 0) {
-      alert('Aucune question disponible avec ces critères');
+      toast.info('Aucune question disponible avec ces critères');
       return;
     }
     
-    // Limiter au nombre disponible
     const count = Math.min(randomCount, pool.length);
-    
-    // Mélanger et prendre les N premières
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
     const randomSelected = shuffled.slice(0, count);
     
     setSelectedQuestions([...selectedQuestions, ...randomSelected]);
     setShowRandomPicker(false);
     
-    alert(`${count} question(s) ajoutée(s) aléatoirement`);
+    toast.info(`${count} question(s) ajoutée(s) aléatoirement`);
   };
 
   const handleSave = () => {
     if (!title.trim()) {
-      alert('Le titre est requis');
+      toast.warning('Le titre est requis');
       return;
     }
     if (selectedQuestions.length === 0) {
-      alert('Ajoutez au moins une question');
+      toast.warning('Ajoutez au moins une question');
       return;
     }
     onSave({
@@ -86,6 +85,16 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
       description,
       questions: selectedQuestions
     });
+  };
+
+  const getTypeIcon = (type) => {
+    switch(type) {
+      case 'image': return '🖼️';
+      case 'video': return '🎥';
+      case 'audio': return '🎵';
+      case 'qcm': return '☑️';
+      default: return '📝';
+    }
   };
 
   return (
@@ -111,9 +120,27 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
 
       {/* Questions sélectionnées */}
       <div className="mb-6">
-        <h4 className="text-xl font-bold mb-3 dark:text-white">
-          Questions du quiz ({selectedQuestions.length})
-        </h4>
+        <div className="flex justify-between items-center mb-3">
+          <h4 className="text-xl font-bold dark:text-white">
+            Questions du quiz ({selectedQuestions.length})
+          </h4>
+          
+          {/* ✅ NOUVEAU: Bouton pour afficher/masquer les réponses */}
+          {selectedQuestions.length > 0 && (
+            <button
+              onClick={() => setShowAnswers(!showAnswers)}
+              className={`flex items-center gap-2 px-3 py-1 rounded-lg transition ${
+                showAnswers 
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+              }`}
+              title={showAnswers ? 'Masquer les réponses' : 'Afficher les réponses'}
+            >
+              {showAnswers ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+              <span className="text-sm">{showAnswers ? 'Masquer' : 'Afficher'} réponses</span>
+            </button>
+          )}
+        </div>
         
         {selectedQuestions.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400 text-center py-8">Aucune question ajoutée</p>
@@ -121,8 +148,12 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
           <div className="space-y-2">
             {selectedQuestions.map((q, index) => (
               <div key={q.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-700">
-                <div className="flex items-center gap-3">
-                  <span className="font-bold text-purple-600 dark:text-purple-400 min-w-[30px]">#{index + 1}</span>
+                <div className="flex items-start gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-purple-600 dark:text-purple-400 min-w-[30px]">#{index + 1}</span>
+                    <span className="text-lg">{getTypeIcon(q.type)}</span>
+                  </div>
+                  
                   <div className="flex-1">
                     <p className="font-semibold dark:text-white">{q.text}</p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -130,7 +161,17 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
                       {q.type === 'qcm' && <span className="text-blue-600 dark:text-blue-400">QCM • </span>}
                       {q.points} pts • {q.timer > 0 ? `${q.timer}s` : 'Pas de timer'}
                     </p>
+                    
+                    {/* ✅ NOUVEAU: Afficher la réponse si activé */}
+                    {showAnswers && (
+                      <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded">
+                        <p className="text-xs text-green-700 dark:text-green-400 font-semibold">
+                          ✅ Réponse : <span className="font-bold">{q.answer}</span>
+                        </p>
+                      </div>
+                    )}
                   </div>
+                  
                   <div className="flex gap-1">
                     {index > 0 && (
                       <button
@@ -175,7 +216,6 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
           Ajouter manuellement
         </button>
         
-        {/* ✅ NOUVEAU: Bouton sélection aléatoire */}
         <button
           onClick={() => {
             setShowRandomPicker(!showRandomPicker);
@@ -188,7 +228,7 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
         </button>
       </div>
 
-      {/* ✅ NOUVEAU: Sélecteur aléatoire */}
+      {/* Sélecteur aléatoire */}
       {showRandomPicker && (
         <div className="border-2 border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-6 bg-blue-50 dark:bg-blue-900/20">
           <h4 className="font-bold mb-3 dark:text-white flex items-center gap-2">
@@ -280,20 +320,32 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
-                      {question.category && (
-                        <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded mr-2">
-                          {question.category}
-                        </span>
-                      )}
-                      {question.type === 'qcm' && (
-                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded mr-2">
-                          QCM
-                        </span>
-                      )}
-                      <p className="font-semibold dark:text-white">{question.text}</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-lg">{getTypeIcon(question.type)}</span>
+                        {question.category && (
+                          <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded">
+                            {question.category}
+                          </span>
+                        )}
+                        {question.type === 'qcm' && (
+                          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded">
+                            QCM
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-semibold dark:text-white mb-1">{question.text}</p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         {question.points} pts • {question.timer > 0 ? `${question.timer}s` : 'Pas de timer'}
                       </p>
+                      
+                      {/* ✅ NOUVEAU: Afficher réponse dans le picker aussi */}
+                      {showAnswers && (
+                        <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded">
+                          <p className="text-xs text-green-700 dark:text-green-400 font-semibold">
+                            ✅ Réponse : <span className="font-bold">{question.answer}</span>
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <Plus className="w-5 h-5 text-green-600 dark:text-green-400" />
                   </div>

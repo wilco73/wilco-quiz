@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useToast } from './ToastProvider';
 
 const QuestionBank = ({ questions, onSave }) => {
   const [localQuestions, setLocalQuestions] = useState(questions || []);
@@ -12,7 +13,8 @@ const QuestionBank = ({ questions, onSave }) => {
   const [csvDelimiter, setCsvDelimiter] = useState(',');
   const fileInputRef = useRef(null);
   const questionsPerPage = 10;
-
+  const toast = useToast();
+  
   const [formData, setFormData] = useState({
     text: '',
     answer: '',
@@ -43,7 +45,7 @@ const QuestionBank = ({ questions, onSave }) => {
   // ✅ EXPORT CSV avec choix du délimiteur
   const handleExportCSV = () => {
     if (localQuestions.length === 0) {
-      alert('Aucune question à exporter');
+      toast.warning('Aucune question à exporter');
       return;
     }
 
@@ -97,7 +99,7 @@ const QuestionBank = ({ questions, onSave }) => {
     link.click();
     document.body.removeChild(link);
 
-    alert(`${localQuestions.length} question(s) exportée(s) avec le délimiteur "${delimiter}" !`);
+    toast.success(`${localQuestions.length} question(s) exportée(s) avec le délimiteur "${delimiter}" !`);
   };
 
   // ✅ IMPORT CSV avec détection automatique du délimiteur
@@ -112,7 +114,7 @@ const QuestionBank = ({ questions, onSave }) => {
         const lines = text.split('\n').filter(line => line.trim());
         
         if (lines.length < 2) {
-          alert('Le fichier CSV est vide ou invalide');
+          toast.error('Le fichier CSV est vide ou invalide');
           return;
         }
 
@@ -198,7 +200,7 @@ const QuestionBank = ({ questions, onSave }) => {
 
         if (errors.length > 0) {
           console.error('Erreurs d\'import:', errors);
-          alert(`Import terminé avec ${errors.length} erreur(s):\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`);
+          toast.success(`Import terminé avec ${errors.length} erreur(s):\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`);
         }
 
         if (importedQuestions.length > 0) {
@@ -213,21 +215,21 @@ const QuestionBank = ({ questions, onSave }) => {
           let finalQuestions;
           if (shouldAdd) {
             finalQuestions = [...localQuestions, ...importedQuestions];
-            alert(`${importedQuestions.length} question(s) ajoutée(s) avec succès !`);
+            toast.success(`${importedQuestions.length} question(s) ajoutée(s) avec succès !`);
           } else {
             finalQuestions = importedQuestions;
-            alert(`${importedQuestions.length} question(s) importée(s) (anciennes questions supprimées) !`);
+            toast.success(`${importedQuestions.length} question(s) importée(s) (anciennes questions supprimées) !`);
           }
 
           setLocalQuestions(finalQuestions);
           onSave(finalQuestions);
         } else {
-          alert('Aucune question valide trouvée dans le fichier');
+          toast.warning('Aucune question valide trouvée dans le fichier');
         }
 
       } catch (error) {
         console.error('Erreur import CSV:', error);
-        alert('Erreur lors de l\'import du fichier CSV');
+        toast.error('Erreur lors de l\'import du fichier CSV');
       }
     };
 
@@ -350,24 +352,24 @@ const QuestionBank = ({ questions, onSave }) => {
 
   const handleSave = () => {
     if (!formData.text.trim()) {
-      alert('Le texte de la question est requis');
+      toast.warning('Le texte de la question est requis');
       return;
     }
 
     if (formData.type === 'qcm') {
       const filledChoices = formData.choices.filter(c => c.trim());
       if (filledChoices.length < 2) {
-        alert('Un QCM doit avoir au moins 2 choix');
+        toast.warning('Un QCM doit avoir au moins 2 choix');
         return;
       }
       if (!formData.choices[formData.correctChoice]?.trim()) {
-        alert('Le choix correct ne peut pas être vide');
+        toast.warning('Le choix correct ne peut pas être vide');
         return;
       }
       formData.answer = formData.choices[formData.correctChoice];
     } else {
       if (!formData.answer.trim()) {
-        alert('La réponse est requise');
+        toast.warning('La réponse est requise');
         return;
       }
     }
@@ -416,7 +418,7 @@ const QuestionBank = ({ questions, onSave }) => {
 
   const removeChoice = (index) => {
     if (formData.choices.length <= 2) {
-      alert('Un QCM doit avoir au moins 2 choix');
+      toast.warning('Un QCM doit avoir au moins 2 choix');
       return;
     }
     const newChoices = formData.choices.filter((_, i) => i !== index);

@@ -10,6 +10,7 @@ import QuizResultsView from './components/QuizResultsView';
 import ScoreboardView from './components/ScoreboardView';
 import AdminDashboard from './components/AdminDashboard';
 import ReconnectingScreen from './components/ReconnectingScreen';
+import { useToast } from './ToastProvider';
 import './App.css';
 
 const App = () => {
@@ -24,6 +25,7 @@ const App = () => {
   const [hasAnswered, setHasAnswered] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
 
+  const toast = useToast();
   const shouldPoll = view !== 'login';
   const {
     teams,
@@ -154,7 +156,7 @@ const App = () => {
         handleJoinLobby(lobbyId);
       } else {
         console.log('Impossible de rejoindre, quiz déjà commencé');
-        alert('⚠️ Le quiz a continué sans vous. Vous avez été déconnecté.');
+        toast.info('⚠️ Le quiz a continué sans vous. Vous avez été déconnecté.');
         clearSession();
         saveSession({ currentUser: user });
         setView('lobby-list');
@@ -173,10 +175,10 @@ const App = () => {
           setView('admin');
           saveSession({ isAdmin: true, adminUsername: data.username });
         } else {
-          alert(data.message || 'Identifiants incorrects');
+          toast.error(data.message || 'Identifiants incorrects');
         }
       } catch (error) {
-        alert('Erreur de connexion');
+        toast.error('Erreur de connexion');
       }
       return;
     }
@@ -186,7 +188,7 @@ const App = () => {
     if (existingParticipant) {
       // ✅ CORRECTION: Vérifier le mot de passe
       if (existingParticipant.password !== password) {
-        alert('Ce pseudo existe avec un mot de passe différent');
+        toast.erro('Ce pseudo existe avec un mot de passe différent');
         return;
       }
       
@@ -332,11 +334,11 @@ const App = () => {
         setParticipants(participantsData);
         setTeams(teamsData);
       } else {
-        alert(data.message || 'Erreur lors de la mise à jour');
+        toast.error(data.message || 'Erreur lors de la mise à jour');
       }
     } catch (error) {
       console.error('Erreur:', error);
-      alert('Erreur lors de la mise à jour du participant');
+      toast.error('Erreur lors de la mise à jour du participant');
     }
   };
 
@@ -345,7 +347,7 @@ const App = () => {
     try {
       const data = await api.deleteTeam(teamName);
       if (data.success) {
-        alert(`✅ Équipe "${teamName}" supprimée\n${data.affectedCount} participant(s) retiré(s) de l'équipe`);
+        toast.info(`✅ Équipe "${teamName}" supprimée\n${data.affectedCount} participant(s) retiré(s) de l'équipe`);
         
         // Recharger les données
         const [participantsData, teamsData] = await Promise.all([
@@ -355,11 +357,11 @@ const App = () => {
         setParticipants(participantsData);
         setTeams(teamsData);
       } else {
-        alert(data.message || 'Erreur lors de la suppression');
+        toast.error(data.message || 'Erreur lors de la suppression');
       }
     } catch (error) {
       console.error('Erreur:', error);
-      alert('Erreur lors de la suppression de l\'équipe');
+      toast.error('Erreur lors de la suppression de l\'équipe');
     }
   };
 
@@ -394,13 +396,13 @@ const App = () => {
           JSON.stringify(quiz.questions) !== JSON.stringify(quizzes[index]?.questions)
         );
         
-        alert(`✅ Questions sauvegardées !\n\n🔄 ${affectedQuizzes.length} quiz synchronisé(s) automatiquement.`);
+        toast.success(`✅ Questions sauvegardées !\n\n🔄 ${affectedQuizzes.length} quiz synchronisé(s) automatiquement.`);
       } else {
-        alert('✅ Questions sauvegardées !');
+        toast.success('✅ Questions sauvegardées !');
       }
     } catch (error) {
       console.error('Erreur:', error);
-      alert('❌ Erreur lors de la sauvegarde');
+      toast.error('❌ Erreur lors de la sauvegarde');
     }
   };
 
@@ -431,7 +433,7 @@ const App = () => {
       }
       await api.saveQuizzes(updatedQuizzes);
       setQuizzes(updatedQuizzes);
-      alert('Quiz sauvegardé !');
+      toast.success('Quiz sauvegardé !');
     } catch (error) {
       console.error('Erreur:', error);
     }
@@ -454,7 +456,7 @@ const App = () => {
       const data = await api.createLobby(quizId, shuffle);
       if (data.success) {
         await loadLobbies();
-        alert(shuffle ? 'Lobby créé avec questions mélangées !' : 'Lobby créé !');
+        toast.info(shuffle ? 'Lobby créé avec questions mélangées !' : 'Lobby créé !');
       }
     } catch (error) {
       console.error('Erreur:', error);
@@ -495,7 +497,7 @@ const App = () => {
     try {
       await api.deleteLobby(lobbyId);
       await loadLobbies();
-      alert('Lobby supprimé !');
+      toast.success('Lobby supprimé !');
     } catch (error) {
       console.error('Erreur:', error);
     }
@@ -507,7 +509,7 @@ const App = () => {
       const resetTeams = teams.map(t => ({ ...t, validatedScore: 0 }));
       await api.saveTeams(resetTeams);
       setTeams(resetTeams);
-      alert('Scores réinitialisés !');
+      toast.success('Scores réinitialisés !');
     } catch (error) {
       console.error('Erreur:', error);
     }
