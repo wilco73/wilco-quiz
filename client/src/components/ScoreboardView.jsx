@@ -1,10 +1,19 @@
-import React from 'react';
-import { Trophy, Medal, Users, TrendingUp, Star } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trophy, Medal, Users, TrendingUp, Star, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const ScoreboardView = ({ teams, currentUser }) => {
+const ScoreboardView = ({ teams, currentUser, onBack }) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const teamsPerPage = 5; // Nombre d'équipes par page
+  
   const sortedTeams = [...teams].sort((a, b) => (b.validatedScore || 0) - (a.validatedScore || 0));
   const userTeam = teams.find(t => t.name === currentUser?.teamName);
   const userRank = sortedTeams.findIndex(t => t.name === currentUser?.teamName) + 1;
+
+  // Pagination
+  const totalPages = Math.ceil(sortedTeams.length / teamsPerPage);
+  const startIndex = (currentPage - 1) * teamsPerPage;
+  const endIndex = startIndex + teamsPerPage;
+  const currentTeams = sortedTeams.slice(startIndex, endIndex);
 
   const getMedalIcon = (rank) => {
     switch(rank) {
@@ -24,11 +33,29 @@ const ScoreboardView = ({ teams, currentUser }) => {
     }
   };
 
+  const goToPage = (page) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 dark:from-gray-900 dark:to-gray-800 p-4">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
+        {/* Header avec bouton retour */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            {/* Bouton Retour */}
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition font-semibold text-gray-800 dark:text-gray-200"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Retour
+              </button>
+            )}
+            <div className="flex-1" />
+          </div>
+          
           <div className="text-center">
             <Trophy className="w-16 h-16 mx-auto text-yellow-500 dark:text-yellow-400 mb-4" />
             <h1 className="text-4xl font-bold mb-2 dark:text-white">🏆 Classement Général</h1>
@@ -100,16 +127,25 @@ const ScoreboardView = ({ teams, currentUser }) => {
           </div>
         )}
 
-        {/* Classement complet */}
+        {/* Classement complet avec pagination */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6">
-          <h3 className="text-2xl font-bold mb-4 flex items-center gap-2 dark:text-white">
-            <TrendingUp className="w-6 h-6" />
-            Classement Complet
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-2xl font-bold flex items-center gap-2 dark:text-white">
+              <TrendingUp className="w-6 h-6" />
+              Classement Complet
+            </h3>
+            
+            {/* Indicateur de page */}
+            {totalPages > 1 && (
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Page {currentPage} / {totalPages}
+              </span>
+            )}
+          </div>
           
           <div className="space-y-3">
-            {sortedTeams.map((team, index) => {
-              const rank = index + 1;
+            {currentTeams.map((team, pageIndex) => {
+              const rank = startIndex + pageIndex + 1;
               const isUserTeam = team.name === currentUser?.teamName;
               
               return (
@@ -155,6 +191,69 @@ const ScoreboardView = ({ teams, currentUser }) => {
             })}
           </div>
 
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-center gap-2">
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className={`px-3 py-2 rounded-lg flex items-center gap-1 transition ${
+                  currentPage === 1
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                    : 'bg-purple-600 dark:bg-purple-700 text-white hover:bg-purple-700 dark:hover:bg-purple-600'
+                }`}
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Précédent
+              </button>
+
+              {/* Numéros de pages */}
+              <div className="flex gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                  // Afficher seulement quelques pages autour de la page actuelle
+                  if (
+                    page === 1 ||
+                    page === totalPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => goToPage(page)}
+                        className={`w-10 h-10 rounded-lg font-semibold transition ${
+                          page === currentPage
+                            ? 'bg-purple-600 dark:bg-purple-700 text-white'
+                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  } else if (
+                    page === currentPage - 2 ||
+                    page === currentPage + 2
+                  ) {
+                    return <span key={page} className="px-2 text-gray-500">...</span>;
+                  }
+                  return null;
+                })}
+              </div>
+
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-2 rounded-lg flex items-center gap-1 transition ${
+                  currentPage === totalPages
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                    : 'bg-purple-600 dark:bg-purple-700 text-white hover:bg-purple-700 dark:hover:bg-purple-600'
+                }`}
+              >
+                Suivant
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {sortedTeams.length === 0 && (
             <div className="text-center py-12">
               <Users className="w-16 h-16 mx-auto text-gray-400 mb-4" />
@@ -185,6 +284,19 @@ const ScoreboardView = ({ teams, currentUser }) => {
             </p>
           </div>
         </div>
+
+        {/* Bouton Retour en bas aussi */}
+        {onBack && (
+          <div className="mt-6 text-center">
+            <button
+              onClick={onBack}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition font-semibold text-gray-800 dark:text-gray-200 shadow-lg"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Retour
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

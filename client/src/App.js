@@ -86,6 +86,27 @@ const App = () => {
 
         setCurrentLobby(updated);
 
+        // ✅ NOUVEAU: Synchroniser currentUser avec les données du lobby
+        if (currentUser && !isAdmin) {
+          const updatedParticipant = updated.participants?.find(p => p.participantId === currentUser.id);
+          if (updatedParticipant) {
+            const updatedUser = {
+              ...currentUser,
+              teamName: updatedParticipant.teamName,
+            };
+            
+            // Ne mettre à jour que si l'équipe a changé (éviter boucles infinies)
+            if (updatedUser.teamName !== currentUser.teamName) {
+              setCurrentUser(updatedUser);
+              saveSession({ 
+                currentUser: updatedUser, 
+                currentLobbyId: currentLobby.id 
+              });
+              console.log('🔄 Équipe mise à jour:', updatedUser.pseudo, '→', updatedUser.teamName || '(Sans équipe)');
+            }
+          }
+        }
+
         if (updated.session && !currentSession) {
           setCurrentSession(updated.session);
           if (!isAdmin) setView('quiz');
@@ -100,7 +121,7 @@ const App = () => {
           }
         }
 
-        // ✅ CORRECTION: Ne rediriger vers résultats que si on n'est pas déjà sur le classement
+        // Ne rediriger vers résultats que si on n'est pas déjà sur le classement
         if (updated.status === 'finished' && !isAdmin && view !== 'results' && view !== 'scoreboard') {
           setView('results');
           saveSession({ 
@@ -113,10 +134,9 @@ const App = () => {
         setCurrentLobby(null);
         setCurrentSession(null);
         setView('lobby-list');
-        saveSession({ currentUser });
       }
     }
-  }, [lobbies, isAdmin]);
+  }, [currentLobby, lobbies, currentSession, isAdmin, currentUser, view]);
 
   const reconnectToLobby = (lobbyId, user) => {
     const lobby = lobbies.find(l => l.id === lobbyId);
@@ -584,20 +604,11 @@ const App = () => {
       )}
 
       {view === 'scoreboard' && (
-        <div>
-          <ScoreboardView
-            teams={teams}
-            currentUser={currentUser}
-          />
-          <div className="max-w-4xl mx-auto p-4">
-            <button
-              onClick={() => currentLobby ? handleBackToResults() : setView('lobby-list')}
-              className="w-full py-3 bg-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-400"
-            >
-              ← Retour
-            </button>
-          </div>
-        </div>
+        <ScoreboardView
+          teams={teams}
+          currentUser={currentUser}
+          onBack={() => currentLobby ? handleBackToResults() : setView('lobby-list')}
+        />
       )}
 
       {view === 'admin' && (

@@ -193,265 +193,306 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
 
       {/* Liste par équipe */}
       <div className="space-y-4">
-        {Object.keys(participantsByTeam).sort().map(teamName => {
-          const team = teams.find(t => t.name === teamName);
-          const teamMembers = participantsByTeam[teamName];
+        {/* ✅ Afficher TOUTES les équipes, pas seulement celles avec participants */}
+        {teams.sort((a, b) => a.name.localeCompare(b.name)).map(team => {
+          const teamMembers = participantsByTeam[team.name] || []; // ✅ Tableau vide si pas de participants
+          const isEmpty = teamMembers.length === 0;
 
           return (
-            <div key={teamName} className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div 
+              key={team.name} 
+              className={`bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden ${
+                isEmpty ? 'opacity-60 border-2 border-orange-300 dark:border-orange-700' : ''
+              }`}
+            >
               {/* Header de l'équipe */}
-              <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 p-4 border-b border-gray-200 dark:border-gray-700">
+              <div className={`p-4 border-b border-gray-200 dark:border-gray-700 ${
+                isEmpty 
+                  ? 'bg-orange-50 dark:bg-orange-900/20' 
+                  : 'bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20'
+              }`}>
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
-                    <div className="bg-purple-100 dark:bg-purple-900/50 rounded-full p-2">
-                      <Users className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    <div className={`rounded-full p-2 ${
+                      isEmpty 
+                        ? 'bg-orange-100 dark:bg-orange-900/50' 
+                        : 'bg-purple-100 dark:bg-purple-900/50'
+                    }`}>
+                      <Users className={`w-6 h-6 ${
+                        isEmpty 
+                          ? 'text-orange-600 dark:text-orange-400' 
+                          : 'text-purple-600 dark:text-purple-400'
+                      }`} />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold dark:text-white">{teamName}</h3>
+                      <h3 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                        {team.name}
+                        {isEmpty && (
+                          <span className="px-2 py-1 bg-orange-200 dark:bg-orange-900/50 text-orange-800 dark:text-orange-300 text-xs rounded-full">
+                            Équipe vide
+                          </span>
+                        )}
+                      </h3>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         {teamMembers.length} membre{teamMembers.length > 1 ? 's' : ''} • {team?.validatedScore || 0} points
                       </p>
                     </div>
                   </div>
-                  
+            
                   <button
-                    onClick={() => handleDeleteTeam(teamName)}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 transition"
+                    onClick={() => handleDeleteTeam(team.name)}
+                    className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
+                      isEmpty
+                        ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                        : 'bg-red-600 hover:bg-red-700 text-white'
+                    }`}
                   >
                     <Trash2 className="w-4 h-4" />
-                    Supprimer l'équipe
+                    {isEmpty ? 'Supprimer (vide)' : 'Supprimer l\'équipe'}
                   </button>
                 </div>
               </div>
 
-              {/* Membres de l'équipe */}
-              <div className="p-4">
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {teamMembers.map(participant => (
-                    <div 
-                      key={participant.id}
-                      className="border-2 border-gray-200 dark:border-gray-600 rounded-lg p-3 hover:border-purple-400 dark:hover:border-purple-500 transition bg-white dark:bg-gray-700"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex-1">
-                          <p className="font-bold dark:text-white">{participant.pseudo}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            ID: {participant.id.substring(0, 8)}...
-                          </p>
-                        </div>
-                      </div>
-
-                      {editingParticipant?.id === participant.id ? (
-                        <div className="mt-2 space-y-2">
-                          <input
-                            type="text"
-                            placeholder="Nouvelle équipe"
-                            value={newTeamName}
-                            onChange={(e) => setNewTeamName(e.target.value)}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            onKeyPress={(e) => e.key === 'Enter' && !validationError && handleChangeTeam(participant)}
-                          />
-                          
-                          {/* ✅ NOUVEAU: Feedback normalisation */}
-                          {normalizedPreview && normalizedPreview !== newTeamName && (
-                            <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded text-xs">
-                              <p className="text-blue-700 dark:text-blue-300">
-                                Sera normalisé en: "<span className="font-bold">{normalizedPreview}</span>"
-                              </p>
-                            </div>
-                          )}
-                          
-                          {/* ✅ NOUVEAU: Équipe existante trouvée */}
-                          {existingTeamMatch && (
-                            <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded text-xs flex items-start gap-1">
-                              <Check className="w-3 h-3 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                              <p className="text-green-700 dark:text-green-300">
-                                Équipe existante: "<span className="font-bold">{existingTeamMatch.name}</span>" ({existingTeamMatch.validatedScore || 0} pts)
-                              </p>
-                            </div>
-                          )}
-                          
-                          {/* ✅ NOUVEAU: Erreur validation */}
-                          {validationError && (
-                            <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded text-xs flex items-start gap-1">
-                              <X className="w-3 h-3 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                              <p className="text-red-700 dark:text-red-300">{validationError}</p>
-                            </div>
-                          )}
-                          
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => handleChangeTeam(participant)}
-                              disabled={!!validationError}
-                              className={`flex-1 px-2 py-1 text-white text-xs rounded ${
-                                validationError 
-                                  ? 'bg-gray-400 cursor-not-allowed' 
-                                  : 'bg-green-600 hover:bg-green-700'
-                              }`}
-                            >
-                              ✓ OK
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingParticipant(null);
-                                setNewTeamName('');
-                              }}
-                              className="flex-1 px-2 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs rounded hover:bg-gray-400 dark:hover:bg-gray-500"
-                            >
-                              ✗ Annuler
-                            </button>
+              {/* Membres de l'équipe OU message si vide */}
+              {isEmpty ? (
+                <div className="p-8 text-center">
+                  <div className="bg-orange-100 dark:bg-orange-900/30 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3">
+                    <UserMinus className="w-8 h-8 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <p className="text-gray-600 dark:text-gray-400 font-semibold mb-2">
+                    Aucun participant dans cette équipe
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-500">
+                    Cette équipe a été créée mais n'a plus de membres
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4">
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {teamMembers.map(participant => (
+                      <div 
+                        key={participant.id}
+                        className="border-2 border-gray-200 dark:border-gray-600 rounded-lg p-3 hover:border-purple-400 dark:hover:border-purple-500 transition bg-white dark:bg-gray-700"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1">
+                            <p className="font-bold dark:text-white">{participant.pseudo}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              ID: {participant.id.substring(0, 8)}...
+                            </p>
                           </div>
                         </div>
-                      ) : (
-                        <div className="flex gap-1 mt-2">
-                          <button
-                            onClick={() => {
-                              setEditingParticipant(participant);
-                              setNewTeamName(participant.teamName);
-                            }}
-                            className="flex-1 px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 flex items-center justify-center gap-1"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                            Changer
-                          </button>
-                          <button
-                            onClick={() => handleRemoveFromTeam(participant)}
-                            className="flex-1 px-2 py-1 bg-orange-600 text-white text-xs rounded hover:bg-orange-700 flex items-center justify-center gap-1"
-                          >
-                            <UserMinus className="w-3 h-3" />
-                            Retirer
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+
+                        {editingParticipant?.id === participant.id ? (
+                          <div className="mt-2 space-y-2">
+                            <input
+                              type="text"
+                              placeholder="Nouvelle équipe"
+                              value={newTeamName}
+                              onChange={(e) => setNewTeamName(e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              onKeyPress={(e) => e.key === 'Enter' && !validationError && handleChangeTeam(participant)}
+                            />
+                      
+                            {/* Feedback normalisation */}
+                            {normalizedPreview && normalizedPreview !== newTeamName && (
+                              <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded text-xs">
+                                <p className="text-blue-700 dark:text-blue-300">
+                                  Sera normalisé en: "<span className="font-bold">{normalizedPreview}</span>"
+                                </p>
+                              </div>
+                            )}
+                      
+                            {existingTeamMatch && (
+                              <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded text-xs flex items-start gap-1">
+                                <Check className="w-3 h-3 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                                <p className="text-green-700 dark:text-green-300">
+                                  Équipe existante: "<span className="font-bold">{existingTeamMatch.name}</span>" ({existingTeamMatch.validatedScore || 0} pts)
+                                </p>
+                              </div>
+                            )}
+                      
+                            {validationError && (
+                              <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded text-xs flex items-start gap-1">
+                                <X className="w-3 h-3 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                                <p className="text-red-700 dark:text-red-300">{validationError}</p>
+                              </div>
+                            )}
+                      
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleChangeTeam(participant)}
+                                disabled={!!validationError}
+                                className={`flex-1 px-2 py-1 text-white text-xs rounded ${
+                                  validationError 
+                                    ? 'bg-gray-400 cursor-not-allowed' 
+                                    : 'bg-green-600 hover:bg-green-700'
+                                }`}
+                              >
+                                ✓ OK
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingParticipant(null);
+                                  setNewTeamName('');
+                                }}
+                                className="flex-1 px-2 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs rounded hover:bg-gray-400 dark:hover:bg-gray-500"
+                              >
+                                ✗ Annuler
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-2 flex gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingParticipant(participant);
+                                setNewTeamName(participant.teamName || '');
+                              }}
+                              className="flex-1 px-2 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 flex items-center justify-center gap-1"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                              Changer
+                            </button>
+                            <button
+                              onClick={() => handleRemoveFromTeam(participant)}
+                              className="flex-1 px-2 py-1 bg-orange-600 text-white text-xs rounded hover:bg-orange-700 flex items-center justify-center gap-1"
+                            >
+                              <UserMinus className="w-3 h-3" />
+                              Retirer
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           );
         })}
+      </div>
 
-        {/* Participants sans équipe */}
-        {(noTeamParticipants.length > 0 || filterTeam === 'NO_TEAM') && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-            <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 p-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-3">
-                <div className="bg-orange-100 dark:bg-orange-900/50 rounded-full p-2">
-                  <AlertCircle className="w-6 h-6 text-orange-600 dark:text-orange-400" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold dark:text-white">Sans Équipe</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {noTeamParticipants.length} participant{noTeamParticipants.length > 1 ? 's' : ''}
-                  </p>
-                </div>
+      {/* Participants sans équipe */}
+      {(noTeamParticipants.length > 0 || filterTeam === 'NO_TEAM') && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+          <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 p-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-3">
+              <div className="bg-orange-100 dark:bg-orange-900/50 rounded-full p-2">
+                <AlertCircle className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold dark:text-white">Sans Équipe</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {noTeamParticipants.length} participant{noTeamParticipants.length > 1 ? 's' : ''}
+                </p>
               </div>
             </div>
+          </div>
 
-            <div className="p-4">
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {noTeamParticipants.map(participant => (
-                  <div 
-                    key={participant.id}
-                    className="border-2 border-orange-200 dark:border-orange-600 rounded-lg p-3 bg-orange-50 dark:bg-orange-900/20"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1">
-                        <p className="font-bold dark:text-white">{participant.pseudo}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          ID: {participant.id.substring(0, 8)}...
-                        </p>
+          <div className="p-4">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {noTeamParticipants.map(participant => (
+                <div 
+                  key={participant.id}
+                  className="border-2 border-orange-200 dark:border-orange-600 rounded-lg p-3 bg-orange-50 dark:bg-orange-900/20"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <p className="font-bold dark:text-white">{participant.pseudo}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        ID: {participant.id.substring(0, 8)}...
+                      </p>
+                    </div>
+                  </div>
+
+                  {editingParticipant?.id === participant.id ? (
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Nom de l'équipe"
+                        value={newTeamName}
+                        onChange={(e) => setNewTeamName(e.target.value)}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        onKeyPress={(e) => e.key === 'Enter' && !validationError && handleChangeTeam(participant)}
+                      />
+                      
+                      {/* Feedback normalisation (même code que ci-dessus) */}
+                      {normalizedPreview && normalizedPreview !== newTeamName && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded text-xs">
+                          <p className="text-blue-700 dark:text-blue-300">
+                            Sera normalisé en: "<span className="font-bold">{normalizedPreview}</span>"
+                          </p>
+                        </div>
+                      )}
+                      
+                      {existingTeamMatch && (
+                        <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded text-xs flex items-start gap-1">
+                          <Check className="w-3 h-3 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-green-700 dark:text-green-300">
+                            Équipe existante: "<span className="font-bold">{existingTeamMatch.name}</span>"
+                          </p>
+                        </div>
+                      )}
+                      
+                      {validationError && (
+                        <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded text-xs flex items-start gap-1">
+                          <X className="w-3 h-3 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-red-700 dark:text-red-300">{validationError}</p>
+                        </div>
+                      )}
+                      
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleChangeTeam(participant)}
+                          disabled={!!validationError}
+                          className={`flex-1 px-2 py-1 text-white text-xs rounded ${
+                            validationError 
+                              ? 'bg-gray-400 cursor-not-allowed' 
+                              : 'bg-green-600 hover:bg-green-700'
+                          }`}
+                        >
+                          ✓ Assigner
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingParticipant(null);
+                            setNewTeamName('');
+                          }}
+                          className="flex-1 px-2 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs rounded hover:bg-gray-400 dark:hover:bg-gray-500"
+                        >
+                          ✗ Annuler
+                        </button>
                       </div>
                     </div>
-
-                    {editingParticipant?.id === participant.id ? (
-                      <div className="mt-2 space-y-2">
-                        <input
-                          type="text"
-                          placeholder="Nom de l'équipe"
-                          value={newTeamName}
-                          onChange={(e) => setNewTeamName(e.target.value)}
-                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          onKeyPress={(e) => e.key === 'Enter' && !validationError && handleChangeTeam(participant)}
-                        />
-                        
-                        {/* Feedback normalisation (même code que ci-dessus) */}
-                        {normalizedPreview && normalizedPreview !== newTeamName && (
-                          <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded text-xs">
-                            <p className="text-blue-700 dark:text-blue-300">
-                              Sera normalisé en: "<span className="font-bold">{normalizedPreview}</span>"
-                            </p>
-                          </div>
-                        )}
-                        
-                        {existingTeamMatch && (
-                          <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded text-xs flex items-start gap-1">
-                            <Check className="w-3 h-3 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                            <p className="text-green-700 dark:text-green-300">
-                              Équipe existante: "<span className="font-bold">{existingTeamMatch.name}</span>"
-                            </p>
-                          </div>
-                        )}
-                        
-                        {validationError && (
-                          <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded text-xs flex items-start gap-1">
-                            <X className="w-3 h-3 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                            <p className="text-red-700 dark:text-red-300">{validationError}</p>
-                          </div>
-                        )}
-                        
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => handleChangeTeam(participant)}
-                            disabled={!!validationError}
-                            className={`flex-1 px-2 py-1 text-white text-xs rounded ${
-                              validationError 
-                                ? 'bg-gray-400 cursor-not-allowed' 
-                                : 'bg-green-600 hover:bg-green-700'
-                            }`}
-                          >
-                            ✓ Assigner
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingParticipant(null);
-                              setNewTeamName('');
-                            }}
-                            className="flex-1 px-2 py-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs rounded hover:bg-gray-400 dark:hover:bg-gray-500"
-                          >
-                            ✗ Annuler
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setEditingParticipant(participant);
-                          setNewTeamName('');
-                        }}
-                        className="w-full px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 flex items-center justify-center gap-1 mt-2"
-                      >
-                        <UserPlus className="w-3 h-3" />
-                        Assigner à une équipe
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setEditingParticipant(participant);
+                        setNewTeamName('');
+                      }}
+                      className="w-full px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 flex items-center justify-center gap-1 mt-2"
+                    >
+                      <UserPlus className="w-3 h-3" />
+                      Assigner à une équipe
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Aucun résultat */}
-        {Object.keys(participantsByTeam).length === 0 && noTeamParticipants.length === 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-12 text-center">
-            <Users className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-            <p className="text-xl text-gray-600 dark:text-gray-400">
-              {searchTerm || filterTeam ? 'Aucun résultat trouvé' : 'Aucun participant'}
-            </p>
-          </div>
-        )}
-      </div>
+      {/* Aucun résultat */}
+      {Object.keys(participantsByTeam).length === 0 && noTeamParticipants.length === 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-12 text-center">
+          <Users className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+          <p className="text-xl text-gray-600 dark:text-gray-400">
+            {searchTerm || filterTeam ? 'Aucun résultat trouvé' : 'Aucun participant'}
+          </p>
+        </div>
+      )}
     </div>
   );
 };

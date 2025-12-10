@@ -104,7 +104,8 @@ const QuizView = ({
       if (currentLobby.timeRemaining === 0 && !hasAnswered) {
         const markExpired = async () => {
           try {
-            await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/mark-time-expired`, {
+            // La réponse auto-sauvegardée est déjà sur le serveur (draftAnswer)
+            const response = await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/mark-time-expired`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
@@ -112,8 +113,15 @@ const QuizView = ({
                 participantId: currentUser?.id 
               })
             });
-            setHasAnswered(true);
-            setMyAnswer('');
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              setHasAnswered(true);
+              // ✅ NE PAS vider myAnswer - on garde pour l'affichage
+              // Si myAnswer est vide, c'est que le participant n'avait rien tapé
+              console.log(`⏰ Timer expiré - Réponse finale: "${myAnswer}"`);
+            }
           } catch (error) {
             console.error('Erreur marquage temps écoulé:', error);
           }
@@ -262,16 +270,37 @@ const QuizView = ({
           </div>
 
           {hasAnswered ? (
-            <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-500 dark:border-green-600 rounded-lg p-6 text-center">
-              <Check className="w-12 h-12 mx-auto text-green-600 dark:text-green-400 mb-2" />
-              <p className="font-bold text-green-700 dark:text-green-400 mb-2">Réponse enregistrée !</p>
-              <div className="bg-white dark:bg-gray-800 rounded p-3 border border-green-300 dark:border-green-600 mb-3">
-                <p className="text-xs text-gray-600 dark:text-gray-400">Votre réponse :</p>
-                <p className="font-bold text-green-700 dark:text-green-400">{myAnswer || '(vide)'}</p>
+            isTimeExpired ? (
+              // Timer expiré - Affichage orange/rouge
+              <div className="bg-orange-50 dark:bg-orange-900/20 border-2 border-orange-500 dark:border-orange-600 rounded-lg p-6 text-center">
+                <Clock className="w-12 h-12 mx-auto text-orange-600 dark:text-orange-400 mb-2" />
+                <p className="font-bold text-orange-700 dark:text-orange-400 mb-2">⏰ Temps écoulé !</p>
+                {myAnswer && myAnswer.trim() ? (
+                  <div className="bg-white dark:bg-gray-800 rounded p-3 border border-orange-300 dark:border-orange-600 mb-3">
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Votre réponse a été enregistrée :</p>
+                    <p className="font-bold text-orange-700 dark:text-orange-400">{myAnswer}</p>
+                  </div>
+                ) : (
+                  <div className="bg-red-100 dark:bg-red-900/30 rounded p-3 border border-red-300 dark:border-red-600 mb-3">
+                    <p className="text-sm text-red-700 dark:text-red-400">❌ Aucune réponse enregistrée</p>
+                  </div>
+                )}
+                <p className="text-sm text-gray-600 dark:text-gray-400">⏳ Attente des autres participants...</p>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">⏳ Attente des autres participants...</p>
-            </div>
+            ) : (
+              // Réponse validée normalement - Affichage vert
+              <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-500 dark:border-green-600 rounded-lg p-6 text-center">
+                <Check className="w-12 h-12 mx-auto text-green-600 dark:text-green-400 mb-2" />
+                <p className="font-bold text-green-700 dark:text-green-400 mb-2">✅ Réponse enregistrée !</p>
+                <div className="bg-white dark:bg-gray-800 rounded p-3 border border-green-300 dark:border-green-600 mb-3">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Votre réponse :</p>
+                  <p className="font-bold text-green-700 dark:text-green-400">{myAnswer || '(vide)'}</p>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">⏳ Attente des autres participants...</p>
+              </div>
+            )
           ) : isTimeExpired ? (
+            // isTimeExpired mais pas hasAnswered - Ne devrait jamais arriver normalement
             <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 dark:border-red-600 rounded-lg p-6 text-center">
               <Clock className="w-12 h-12 mx-auto text-red-600 dark:text-red-400 mb-2" />
               <p className="font-bold text-red-700 dark:text-red-400 mb-2">⏰ Temps écoulé !</p>
