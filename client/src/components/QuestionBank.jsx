@@ -58,6 +58,7 @@ const QuestionBank = ({ questions, onSave }) => {
       'Question',
       'Réponse',
       'Média (URL)',
+      'Type Média', 
       'Points',
       'Timer (secondes)',
       'Choix 1',
@@ -77,6 +78,7 @@ const QuestionBank = ({ questions, onSave }) => {
         `"${(q.text || '').replace(/"/g, '""')}"`,
         `"${(q.answer || '').replace(/"/g, '""')}"`,
         q.media || '',
+        q.mediaType || '',
         q.points || 1,
         q.timer || 0,
         choices[0] ? `"${choices[0].replace(/"/g, '""')}"` : '',
@@ -147,6 +149,7 @@ const QuestionBank = ({ questions, onSave }) => {
               text,
               answer,
               media,
+              mediaType,
               points,
               timer,
               choice1,
@@ -170,6 +173,7 @@ const QuestionBank = ({ questions, onSave }) => {
               text: text.trim(),
               answer: answer?.trim() || '',
               media: media || '',
+              mediaType: mediaType || '',
               points: parseInt(points) || 1,
               timer: parseInt(timer) || 0
             };
@@ -277,6 +281,7 @@ const QuestionBank = ({ questions, onSave }) => {
       'Question',
       'Réponse',
       'Média (URL)',
+      'Type Média',
       'Points',
       'Timer (secondes)',
       'Choix 1',
@@ -295,6 +300,7 @@ const QuestionBank = ({ questions, onSave }) => {
         '"Quelle est la capitale de la France ?"',
         '"Paris"',
         '',
+        '',
         '1',
         '30',
         '', '', '', '', '', '',
@@ -305,6 +311,7 @@ const QuestionBank = ({ questions, onSave }) => {
         'Histoire',
         '"En quelle année a eu lieu la Révolution française ?"',
         '"1789"',
+        '',
         '',
         '2',
         '20',
@@ -321,6 +328,7 @@ const QuestionBank = ({ questions, onSave }) => {
         '"Qui a peint ce tableau ?"',
         '"Leonardo da Vinci"',
         '"https://example.com/mona-lisa.jpg"',
+        '',
         '1',
         '0',
         '', '', '', '', '', '',
@@ -332,10 +340,46 @@ const QuestionBank = ({ questions, onSave }) => {
         '"Qui interprète cette chanson ?"',
         '"The Beatles"',
         '"https://example.com/song.mp3"',
+        '',
         '1',
         '15',
         '', '', '', '', '', '',
         ''
+      ].join(delimiter)
+      // ✅ NOUVEL EXEMPLE : QCM avec média audio
+      [
+        'qcm',
+        'Musique',
+        '"Quel est cet instrument ?"',
+        '"Violon"',
+        '"https://example.com/violon.mp3"',
+        'audio',         // ✅ Type Média pour QCM !
+        '2',
+        '30',
+        '"Violon"',
+        '"Piano"',
+        '"Guitare"',
+        '"Batterie"',
+        '', '',
+        '0'
+      ].join(delimiter),
+      
+      // ✅ NOUVEL EXEMPLE : QCM avec média image
+      [
+        'qcm',
+        'Géographie',
+        '"Quelle est cette ville ?"',
+        '"Paris"',
+        '"https://example.com/tour-eiffel.jpg"',
+        'image',         // ✅ Type Média pour QCM !
+        '1',
+        '20',
+        '"Paris"',
+        '"Londres"',
+        '"Rome"',
+        '"Berlin"',
+        '', '',
+        '0'
       ].join(delimiter)
     ];
 
