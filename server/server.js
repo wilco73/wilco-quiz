@@ -285,9 +285,9 @@ app.post('/api/start-quiz', (req, res) => {
     };
     
     // Lancer le timer pour la première question
-    if (questions[0].timer > 0) {
-      startQuestionTimer(lobbyId, questions[0].id, questions[0].timer);
-    }
+    // if (questions[0].timer > 0) {
+    //   startQuestionTimer(lobbyId, questions[0].id, questions[0].timer);
+    // }
     
     writeDB(db);
     res.json({ success: true });

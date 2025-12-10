@@ -20,7 +20,8 @@ const QuizView = ({
   const audioRef = useRef(null);
   
   const quiz = currentLobby ? quizzes.find(q => q.id === currentLobby.quizId) : null;
-  const question = quiz?.questions[currentSession?.currentQuestionIndex];
+  const questions = currentLobby?.shuffled && currentLobby?.shuffledQuestions ? currentLobby.shuffledQuestions : quiz?.questions || [];
+  const question = questions[currentSession?.currentQuestionIndex];
   const isFinished = currentSession?.status === 'finished';
 
   // Auto-sauvegarde de la réponse en temps réel
@@ -185,13 +186,13 @@ const QuizView = ({
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold dark:text-white">{quiz?.title}</h3>
               <span className="text-gray-600 dark:text-gray-400">
-                Question {currentSession.currentQuestionIndex + 1}/{quiz?.questions.length}
+                Question {currentSession.currentQuestionIndex + 1}/{questions.length}
               </span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
               <div
                 className="bg-purple-600 dark:bg-purple-500 h-2 rounded-full transition-all"
-                style={{ width: `${((currentSession.currentQuestionIndex + 1) / quiz?.questions.length) * 100}%` }}
+                style={{ width: `${((currentSession.currentQuestionIndex + 1) / questions.length) * 100}%` }}
               />
             </div>
           </div>

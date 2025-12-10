@@ -11,7 +11,7 @@ export const useToast = () => {
   return context;
 };
 
-export const ToastProvider = ({ children }) => {
+const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
 
   const addToast = useCallback((message, type = 'info', duration = 3000) => {

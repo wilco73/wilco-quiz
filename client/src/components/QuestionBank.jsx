@@ -14,7 +14,7 @@ const QuestionBank = ({ questions, onSave }) => {
   const fileInputRef = useRef(null);
   const questionsPerPage = 10;
   const toast = useToast();
-  
+
   const [formData, setFormData] = useState({
     text: '',
     answer: '',

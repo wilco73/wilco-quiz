@@ -10,7 +10,7 @@ import QuizResultsView from './components/QuizResultsView';
 import ScoreboardView from './components/ScoreboardView';
 import AdminDashboard from './components/AdminDashboard';
 import ReconnectingScreen from './components/ReconnectingScreen';
-import { useToast } from './ToastProvider';
+import { useToast } from './components/ToastProvider';
 import './App.css';
 
 const App = () => {
