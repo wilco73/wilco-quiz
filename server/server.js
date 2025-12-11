@@ -187,6 +187,31 @@ app.post('/api/questions', (req, res) => {
   res.json({ success: true });
 });
 
+// ✅ NOUVEAU: Route pour import par batch (append)
+app.post('/api/questions/batch', (req, res) => {
+  try {
+    const { questions, mode } = req.body; // mode: 'append' ou 'replace'
+    const db = readDB();
+    
+    if (mode === 'replace') {
+      // Premier batch: remplacer toutes les questions
+      db.questions = questions;
+    } else {
+      // Batches suivants: ajouter
+      db.questions = [...db.questions, ...questions];
+    }
+    
+    writeDB(db);
+    res.json({ 
+      success: true, 
+      total: db.questions.length 
+    });
+  } catch (error) {
+    console.error('Erreur batch import:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== LOBBIES ====================
 app.get('/api/lobbies', (req, res) => {
   const db = readDB();

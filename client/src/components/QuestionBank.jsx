@@ -58,7 +58,7 @@ const QuestionBank = ({ questions, onSave }) => {
       'Question',
       'Réponse',
       'Média (URL)',
-      'Type Média', 
+      'Type Média',
       'Points',
       'Timer (secondes)',
       'Choix 1',
@@ -95,7 +95,7 @@ const QuestionBank = ({ questions, onSave }) => {
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    
+
     link.setAttribute('href', url);
     link.setAttribute('download', `questions_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
@@ -106,17 +106,17 @@ const QuestionBank = ({ questions, onSave }) => {
     toast.success(`${localQuestions.length} question(s) exportée(s) avec le délimiteur "${delimiter}" !`);
   };
 
-  // ✅ IMPORT CSV avec détection automatique du délimiteur
+  // ✅ IMPORT CSV avec batch pour gros fichiers
   const handleImportCSV = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const text = e.target.result;
         const lines = text.split('\n').filter(line => line.trim());
-        
+
         if (lines.length < 2) {
           toast.error('Le fichier CSV est vide ou invalide');
           return;
@@ -127,37 +127,27 @@ const QuestionBank = ({ questions, onSave }) => {
         const commaCount = (firstLine.match(/,/g) || []).length;
         const semicolonCount = (firstLine.match(/;/g) || []).length;
         const detectedDelimiter = semicolonCount > commaCount ? ';' : ',';
-        
+
         console.log(`Délimiteur détecté: "${detectedDelimiter}"`);
 
         const dataLines = lines.slice(1);
         const importedQuestions = [];
         let errors = [];
 
+        // Parse toutes les questions
         dataLines.forEach((line, index) => {
           try {
             const values = parseCSVLine(line, detectedDelimiter);
-            
+
             if (values.length < 7) {
               errors.push(`Ligne ${index + 2}: Nombre de colonnes insuffisant`);
               return;
             }
 
             const [
-              type,
-              category,
-              text,
-              answer,
-              media,
-              mediaType,
-              points,
-              timer,
-              choice1,
-              choice2,
-              choice3,
-              choice4,
-              choice5,
-              choice6,
+              type, category, text, answer, media, mediaType,
+              points, timer,
+              choice1, choice2, choice3, choice4, choice5, choice6,
               correctChoiceIndex
             ] = values;
 
@@ -171,7 +161,7 @@ const QuestionBank = ({ questions, onSave }) => {
               type: type || 'text',
               category: category || '',
               text: text.trim(),
-              answer: answer?.trim() || '',
+              answer: answer ?.trim() || '',
               media: media || '',
               mediaType: mediaType || '',
               points: parseInt(points) || 1,
@@ -182,7 +172,7 @@ const QuestionBank = ({ questions, onSave }) => {
               const choices = [choice1, choice2, choice3, choice4, choice5, choice6]
                 .filter(c => c && c.trim())
                 .map(c => c.trim());
-              
+
               if (choices.length < 2) {
                 errors.push(`Ligne ${index + 2}: QCM doit avoir au moins 2 choix`);
                 return;
@@ -190,11 +180,11 @@ const QuestionBank = ({ questions, onSave }) => {
 
               question.choices = choices;
               question.correctChoice = parseInt(correctChoiceIndex) || 0;
-              
+
               if (question.correctChoice >= choices.length) {
                 question.correctChoice = 0;
               }
-              
+
               question.answer = choices[question.correctChoice];
             }
 
@@ -206,10 +196,90 @@ const QuestionBank = ({ questions, onSave }) => {
 
         if (errors.length > 0) {
           console.error('Erreurs d\'import:', errors);
-          toast.success(`Import terminé avec ${errors.length} erreur(s):\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`);
+          toast.warning(`Import terminé avec ${errors.length} erreur(s)`);
         }
 
-        if (importedQuestions.length > 0) {
+        if (importedQuestions.length === 0) {
+          toast.warning('Aucune question valide trouvée dans le fichier');
+          return;
+        }
+
+        // ✅ NOUVEAU: Import par batch si > 100 questions
+        const BATCH_SIZE = 100;
+        const needsBatch = importedQuestions.length > BATCH_SIZE;
+
+        if (needsBatch) {
+          // Import par batch avec progression
+          const confirmMessage = `Importer ${importedQuestions.length} questions par batch ?\n\n` +
+            `Mode d'import :\n` +
+            `- AJOUTER : Ajoute les questions à la banque existante\n` +
+            `- REMPLACER : Supprime toutes les questions et importe uniquement les nouvelles\n\n` +
+            `Cliquez sur OK pour AJOUTER, Annuler pour REMPLACER`;
+
+          const shouldAdd = window.confirm(confirmMessage);
+
+          try {
+            // Désactiver le bouton d'import pendant le traitement
+            const importButton = document.querySelector('input[type="file"][accept=".csv"]');
+            if (importButton) importButton.disabled = true;
+
+            const batches = [];
+            for (let i = 0; i < importedQuestions.length; i += BATCH_SIZE) {
+              batches.push(importedQuestions.slice(i, i + BATCH_SIZE));
+            }
+
+            let totalImported = 0;
+
+            for (let i = 0; i < batches.length; i++) {
+              const batch = batches[i];
+              const isFirstBatch = i === 0;
+
+              toast.info(`Import batch ${i + 1}/${batches.length} (${batch.length} questions)...`);
+
+              const response = await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/batch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  questions: batch,
+                  mode: isFirstBatch && !shouldAdd ? 'replace' : 'append'
+                })
+              });
+
+              if (!response.ok) {
+                throw new Error(`Erreur batch ${i + 1}: ${response.statusText}`);
+              }
+
+              const result = await response.json();
+              totalImported = result.total;
+            }
+
+            // Mettre à jour le state local
+            let finalQuestions;
+            if (shouldAdd) {
+              finalQuestions = [...localQuestions, ...importedQuestions];
+            } else {
+              finalQuestions = importedQuestions;
+            }
+
+            setLocalQuestions(finalQuestions);
+            toast.success(`✅ ${importedQuestions.length} question(s) importée(s) avec succès !`);
+
+            // Rafraîchir pour obtenir les données du serveur
+            setTimeout(() => {
+              window.location.reload();
+            }, 1000);
+
+          } catch (error) {
+            console.error('Erreur import par batch:', error);
+            toast.error(`Erreur lors de l'import: ${error.message}`);
+          } finally {
+            // Réactiver le bouton
+            const importButton = document.querySelector('input[type="file"][accept=".csv"]');
+            if (importButton) importButton.disabled = false;
+          }
+
+        } else {
+          // Import classique pour petit nombre de questions
           const confirmMessage = `Voulez-vous importer ${importedQuestions.length} question(s) ?\n\n` +
             `Mode d'import :\n` +
             `- AJOUTER : Ajoute les questions à la banque existante\n` +
@@ -217,7 +287,7 @@ const QuestionBank = ({ questions, onSave }) => {
             `Cliquez sur OK pour AJOUTER, Annuler pour REMPLACER`;
 
           const shouldAdd = window.confirm(confirmMessage);
-          
+
           let finalQuestions;
           if (shouldAdd) {
             finalQuestions = [...localQuestions, ...importedQuestions];
@@ -229,8 +299,6 @@ const QuestionBank = ({ questions, onSave }) => {
 
           setLocalQuestions(finalQuestions);
           onSave(finalQuestions);
-        } else {
-          toast.warning('Aucune question valide trouvée dans le fichier');
         }
 
       } catch (error) {
@@ -363,7 +431,7 @@ const QuestionBank = ({ questions, onSave }) => {
         '', '',
         '0'
       ].join(delimiter),
-      
+
       // ✅ NOUVEL EXEMPLE : QCM avec média image
       [
         'qcm',
@@ -387,7 +455,7 @@ const QuestionBank = ({ questions, onSave }) => {
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    
+
     link.setAttribute('href', url);
     link.setAttribute('download', `template_questions_${delimiter === ',' ? 'comma' : 'semicolon'}.csv`);
     link.style.visibility = 'hidden';
@@ -408,7 +476,7 @@ const QuestionBank = ({ questions, onSave }) => {
         toast.warning('Un QCM doit avoir au moins 2 choix');
         return;
       }
-      if (!formData.choices[formData.correctChoice]?.trim()) {
+      if (!formData.choices[formData.correctChoice] ?.trim()) {
         toast.warning('Le choix correct ne peut pas être vide');
         return;
       }
@@ -429,7 +497,7 @@ const QuestionBank = ({ questions, onSave }) => {
       const newQuestion = { ...formData, id: Date.now().toString() };
       updatedQuestions = [...localQuestions, newQuestion];
     }
-    
+
     setLocalQuestions(updatedQuestions);
     onSave(updatedQuestions);
     resetForm();
@@ -468,8 +536,8 @@ const QuestionBank = ({ questions, onSave }) => {
       return;
     }
     const newChoices = formData.choices.filter((_, i) => i !== index);
-    setFormData({ 
-      ...formData, 
+    setFormData({
+      ...formData,
       choices: newChoices,
       correctChoice: formData.correctChoice >= newChoices.length ? 0 : formData.correctChoice
     });
@@ -478,7 +546,7 @@ const QuestionBank = ({ questions, onSave }) => {
   // ✅ FILTRAGE avec catégorie et type
   const filteredQuestions = localQuestions.filter(q => {
     const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         q.category?.toLowerCase().includes(searchTerm.toLowerCase());
+      q.category ?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !filterCategory || q.category === filterCategory;
     const matchesType = !filterType || q.type === filterType;
     return matchesSearch && matchesCategory && matchesType;
@@ -499,7 +567,7 @@ const QuestionBank = ({ questions, onSave }) => {
     if (totalPages <= 1) return null;
 
     const pages = [];
-    
+
     // Toujours afficher la première page
     pages.push(
       <button
@@ -509,7 +577,7 @@ const QuestionBank = ({ questions, onSave }) => {
           currentPage === 1
             ? 'bg-purple-600 text-white'
             : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-        }`}
+          }`}
       >
         1
       </button>
@@ -531,7 +599,7 @@ const QuestionBank = ({ questions, onSave }) => {
               currentPage === i
                 ? 'bg-purple-600 text-white'
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-            }`}
+              }`}
           >
             {i}
           </button>
@@ -554,7 +622,7 @@ const QuestionBank = ({ questions, onSave }) => {
             currentPage === totalPages
               ? 'bg-purple-600 text-white'
               : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-          }`}
+            }`}
         >
           {totalPages}
         </button>
@@ -570,9 +638,9 @@ const QuestionBank = ({ questions, onSave }) => {
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
-        
+
         {pages}
-        
+
         <button
           onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
           disabled={currentPage === totalPages}
@@ -585,7 +653,7 @@ const QuestionBank = ({ questions, onSave }) => {
   };
 
   const getTypeIcon = (type) => {
-    switch(type) {
+    switch (type) {
       case 'image': return <Image className="w-4 h-4" />;
       case 'video': return <Video className="w-4 h-4" />;
       case 'audio': return <Music className="w-4 h-4" />;
@@ -601,7 +669,7 @@ const QuestionBank = ({ questions, onSave }) => {
       const containerClass = "mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-purple-200 dark:border-purple-600";
       const mediaKey = `${id || 'new'}-${url}`;
 
-      switch(type) {
+      switch (type) {
         case 'image':
           return (
             <div className={containerClass}>
@@ -609,10 +677,10 @@ const QuestionBank = ({ questions, onSave }) => {
                 <Eye className="w-4 h-4" />
                 Aperçu de l'image
               </p>
-              <img 
+              <img
                 key={mediaKey}
-                src={url} 
-                alt="Preview" 
+                src={url}
+                alt="Preview"
                 className="max-w-full max-h-64 rounded border border-gray-300 dark:border-gray-600"
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -624,7 +692,7 @@ const QuestionBank = ({ questions, onSave }) => {
               />
             </div>
           );
-        
+
         case 'video':
           return (
             <div className={containerClass}>
@@ -632,9 +700,9 @@ const QuestionBank = ({ questions, onSave }) => {
                 <Eye className="w-4 h-4" />
                 Aperçu de la vidéo
               </p>
-              <video 
+              <video
                 key={mediaKey}
-                controls 
+                controls
                 preload="metadata"
                 className="max-w-full max-h-64 rounded border border-gray-300 dark:border-gray-600"
                 onError={(e) => {
@@ -650,7 +718,7 @@ const QuestionBank = ({ questions, onSave }) => {
               </video>
             </div>
           );
-        
+
         case 'audio':
           return (
             <div className={containerClass}>
@@ -658,9 +726,9 @@ const QuestionBank = ({ questions, onSave }) => {
                 <Eye className="w-4 h-4" />
                 Aperçu de l'audio
               </p>
-              <audio 
+              <audio
                 key={mediaKey}
-                controls 
+                controls
                 preload="metadata"
                 className="w-full"
                 onError={(e) => {
@@ -676,7 +744,7 @@ const QuestionBank = ({ questions, onSave }) => {
               </audio>
             </div>
           );
-        
+
         default:
           return null;
       }
@@ -691,7 +759,7 @@ const QuestionBank = ({ questions, onSave }) => {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold dark:text-white">Banque de Questions</h2>
-          
+
           <div className="flex gap-2 items-center">
             {/* Sélecteur de délimiteur CSV */}
             <select
@@ -712,9 +780,9 @@ const QuestionBank = ({ questions, onSave }) => {
               <Download className="w-4 h-4" />
               Template CSV
             </button>
-            
+
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => fileInputRef.current ?.click()}
               className="flex items-center gap-2 px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition"
               title="Importer des questions depuis un fichier CSV"
             >
@@ -728,7 +796,7 @@ const QuestionBank = ({ questions, onSave }) => {
               onChange={handleImportCSV}
               className="hidden"
             />
-            
+
             <button
               onClick={handleExportCSV}
               className="flex items-center gap-2 px-3 py-2 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition"
@@ -737,14 +805,14 @@ const QuestionBank = ({ questions, onSave }) => {
               <Download className="w-4 h-4" />
               Exporter CSV
             </button>
-            
+
             <button
               onClick={() => setShowPreview(!showPreview)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
-                showPreview 
-                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' 
+                showPreview
+                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-              }`}
+                }`}
             >
               {showPreview ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               {showPreview ? 'Masquer' : 'Afficher'} aperçu
@@ -755,7 +823,7 @@ const QuestionBank = ({ questions, onSave }) => {
         {/* Formulaire d'ajout/édition */}
         <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
           <h3 className="font-bold mb-3 dark:text-white">{editingQuestion ? 'Modifier' : 'Nouvelle'} Question</h3>
-          
+
           <div className="space-y-3">
             <select
               value={formData.type}
@@ -788,113 +856,113 @@ const QuestionBank = ({ questions, onSave }) => {
             {/* ✅ NOUVEAU: Afficher sélection média pour TOUS les types sauf 'text' */}
             {formData.type !== 'text' && (
               <>
-                {/* ✅ Pour QCM, permettre de choisir le type de média */}
+              {/* ✅ Pour QCM, permettre de choisir le type de média */ }
                 {formData.type === 'qcm' && (
                   <div className="space-y-2">
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
-                      Type de média (optionnel)
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Type de média (optionnel)
                     </label>
-                    <select
-                      value={formData.mediaType || 'none'}
-                      onChange={(e) => {
-                        const newMediaType = e.target.value === 'none' ? '' : e.target.value;
-                        setFormData({ 
-                          ...formData, 
-                          mediaType: newMediaType,
-                          media: newMediaType ? formData.media : '' 
-                        });
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                    >
-                      <option value="none">Aucun média</option>
-                      <option value="image">Image</option>
-                      <option value="video">Vidéo</option>
-                      <option value="audio">Audio</option>
-                    </select>
-                  </div>
-                )}
-                
+              <select
+                value={formData.mediaType || 'none'}
+                onChange={(e) => {
+                  const newMediaType = e.target.value === 'none' ? '' : e.target.value;
+                  setFormData({
+                    ...formData,
+                    mediaType: newMediaType,
+                    media: newMediaType ? formData.media : ''
+                  });
+                }}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value="none">Aucun média</option>
+                <option value="image">Image</option>
+                <option value="video">Vidéo</option>
+                <option value="audio">Audio</option>
+              </select>
+            </div>
+            )}
+
                 {/* ✅ Pour questions non-QCM, garder l'ancien comportement */}
-                {formData.type !== 'qcm' && (
-                  <select
-                    value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                  >
-                    <option value="image">Question avec Image</option>
-                    <option value="video">Question avec Vidéo</option>
-                    <option value="audio">Question avec Audio</option>
-                  </select>
-                )}
-                
-                {/* ✅ Afficher input URL si un média est sélectionné */}
-                {((formData.type === 'qcm' && formData.mediaType) || formData.type !== 'qcm') && (
+            {formData.type !== 'qcm' && (
+              <select
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value="image">Question avec Image</option>
+                <option value="video">Question avec Vidéo</option>
+                <option value="audio">Question avec Audio</option>
+              </select>
+            )}
+
+            {/* ✅ Afficher input URL si un média est sélectionné */}
+            {((formData.type === 'qcm' && formData.mediaType) || formData.type !== 'qcm') && (
                   <>
-                    <input
-                      type="text"
-                      placeholder="URL du média (image, vidéo ou audio)"
-                      value={formData.media}
-                      onChange={(e) => setFormData({ ...formData, media: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                    />
-                    
-                    <MediaPreview 
-                      type={formData.type === 'qcm' ? formData.mediaType : formData.type} 
-                      url={formData.media} 
-                      id={editingQuestion?.id || 'new'} 
-                    />
+              <input
+                type="text"
+                placeholder="URL du média (image, vidéo ou audio)"
+                value={formData.media}
+                onChange={(e) => setFormData({ ...formData, media: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              />
+
+              <MediaPreview
+                type={formData.type === 'qcm' ? formData.mediaType : formData.type}
+                url={formData.media}
+                id={editingQuestion ?.id || 'new'} 
+              />
                   </>
                 )}
               </>
-            )}
+          )}
 
             {formData.type === 'qcm' ? (
-              <div className="space-y-3 bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
-                <p className="font-semibold text-sm dark:text-white flex items-center gap-2">
-                  <ListChecks className="w-4 h-4" />
-                  Choix de réponses
+            <div className="space-y-3 bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
+              <p className="font-semibold text-sm dark:text-white flex items-center gap-2">
+                <ListChecks className="w-4 h-4" />
+                Choix de réponses
                 </p>
-                {formData.choices.map((choice, index) => (
-                  <div key={index} className="flex gap-2">
-                    <input
-                      type="radio"
-                      name="correctChoice"
-                      checked={formData.correctChoice === index}
-                      onChange={() => setFormData({ ...formData, correctChoice: index })}
-                      className="mt-3"
-                      title="Bonne réponse"
-                    />
-                    <input
-                      type="text"
-                      placeholder={`Choix ${index + 1}`}
-                      value={choice}
-                      onChange={(e) => updateChoice(index, e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                    />
-                    {formData.choices.length > 2 && (
-                      <button
-                        onClick={() => removeChoice(index)}
-                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {formData.choices.length < 6 && (
-                  <button
-                    onClick={addChoice}
-                    className="w-full py-2 border-2 border-dashed border-blue-300 dark:border-blue-600 rounded-lg text-blue-600 dark:text-blue-400 hover:border-blue-500 flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Ajouter un choix
+              {formData.choices.map((choice, index) => (
+                <div key={index} className="flex gap-2">
+                  <input
+                    type="radio"
+                    name="correctChoice"
+                    checked={formData.correctChoice === index}
+                    onChange={() => setFormData({ ...formData, correctChoice: index })}
+                    className="mt-3"
+                    title="Bonne réponse"
+                  />
+                  <input
+                    type="text"
+                    placeholder={`Choix ${index + 1}`}
+                    value={choice}
+                    onChange={(e) => updateChoice(index, e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  />
+                  {formData.choices.length > 2 && (
+                    <button
+                      onClick={() => removeChoice(index)}
+                      className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {formData.choices.length < 6 && (
+                <button
+                  onClick={addChoice}
+                  className="w-full py-2 border-2 border-dashed border-blue-300 dark:border-blue-600 rounded-lg text-blue-600 dark:text-blue-400 hover:border-blue-500 flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Ajouter un choix
                   </button>
-                )}
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  ℹ️ Cochez le bouton radio pour indiquer la bonne réponse
+              )}
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                ℹ️ Cochez le bouton radio pour indiquer la bonne réponse
                 </p>
-              </div>
-            ) : (
+            </div>
+          ) : (
               <input
                 type="text"
                 placeholder="Réponse correcte"
@@ -904,154 +972,154 @@ const QuestionBank = ({ questions, onSave }) => {
               />
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                type="number"
-                placeholder="Points"
-                value={formData.points}
-                onChange={(e) => setFormData({ ...formData, points: parseInt(e.target.value) || 1 })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                min="1"
-              />
-              <input
-                type="number"
-                placeholder="Timer (secondes)"
-                value={formData.timer}
-                onChange={(e) => setFormData({ ...formData, timer: parseInt(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                min="0"
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="number"
+              placeholder="Points"
+              value={formData.points}
+              onChange={(e) => setFormData({ ...formData, points: parseInt(e.target.value) || 1 })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              min="1"
+            />
+            <input
+              type="number"
+              placeholder="Timer (secondes)"
+              value={formData.timer}
+              onChange={(e) => setFormData({ ...formData, timer: parseInt(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              min="0"
+            />
+          </div>
 
-            <div className="flex gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="flex-1 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 flex items-center justify-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              {editingQuestion ? 'Mettre à jour' : 'Ajouter'}
+            </button>
+            {editingQuestion && (
               <button
-                onClick={handleSave}
-                className="flex-1 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 flex items-center justify-center gap-2"
+                onClick={resetForm}
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
               >
-                <Save className="w-4 h-4" />
-                {editingQuestion ? 'Mettre à jour' : 'Ajouter'}
+                <X className="w-4 h-4" />
               </button>
-              {editingQuestion && (
-                <button
-                  onClick={resetForm}
-                  className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
+      </div>
 
-        {/* Filtres et recherche */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-          <input
-            type="text"
-            placeholder="Rechercher une question..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          />
-          
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          >
-            <option value="">Toutes les catégories</option>
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-          
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          >
-            <option value="">Tous les types</option>
-            <option value="text">Texte</option>
-            <option value="qcm">QCM</option>
-            <option value="image">Image</option>
-            <option value="video">Vidéo</option>
-            <option value="audio">Audio</option>
-          </select>
-        </div>
+      {/* Filtres et recherche */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <input
+          type="text"
+          placeholder="Rechercher une question..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+        />
 
-        {/* Liste des questions avec pagination */}
-        <div className="space-y-3">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {filteredQuestions.length} question(s) trouvée(s) - Page {currentPage}/{totalPages}
-          </p>
-          
-          {paginatedQuestions.map(question => (
-            <div key={question.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md transition bg-white dark:bg-gray-700">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    {getTypeIcon(question.type)}
-                    {question.category && (
-                      <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded">
-                        {question.category}
-                      </span>
-                    )}
-                    {question.type === 'qcm' && (
-                      <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded">
-                        QCM
-                      </span>
-                    )}
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{question.points} pts</span>
-                    {question.timer > 0 && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{question.timer}s</span>
-                    )}
-                  </div>
-                  <p className="font-semibold mb-1 dark:text-white">{question.text}</p>
-                  
-                  {question.media && showPreview && (
-                    <MediaPreview type={question.type} url={question.media} id={question.id} />
+        <select
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+        >
+          <option value="">Toutes les catégories</option>
+          {categories.map(cat => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+        >
+          <option value="">Tous les types</option>
+          <option value="text">Texte</option>
+          <option value="qcm">QCM</option>
+          <option value="image">Image</option>
+          <option value="video">Vidéo</option>
+          <option value="audio">Audio</option>
+        </select>
+      </div>
+
+      {/* Liste des questions avec pagination */}
+      <div className="space-y-3">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {filteredQuestions.length} question(s) trouvée(s) - Page {currentPage}/{totalPages}
+        </p>
+
+        {paginatedQuestions.map(question => (
+          <div key={question.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md transition bg-white dark:bg-gray-700">
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  {getTypeIcon(question.type)}
+                  {question.category && (
+                    <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded">
+                      {question.category}
+                    </span>
                   )}
-                  
-                  {question.type === 'qcm' ? (
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                      <p className="font-semibold">Choix :</p>
-                      <ul className="ml-4">
-                        {question.choices?.map((choice, idx) => (
-                          <li key={idx} className={idx === question.correctChoice ? 'text-green-600 dark:text-green-400 font-bold' : ''}>
-                            {idx === question.correctChoice ? '✓ ' : '• '}{choice}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : (
+                  {question.type === 'qcm' && (
+                    <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded">
+                      QCM
+                      </span>
+                  )}
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{question.points} pts</span>
+                  {question.timer > 0 && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{question.timer}s</span>
+                  )}
+                </div>
+                <p className="font-semibold mb-1 dark:text-white">{question.text}</p>
+
+                {question.media && showPreview && (
+                  <MediaPreview type={question.type} url={question.media} id={question.id} />
+                )}
+
+                {question.type === 'qcm' ? (
+                  <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    <p className="font-semibold">Choix :</p>
+                    <ul className="ml-4">
+                      {question.choices ?.map((choice, idx) => (
+                        <li key={idx} className={idx === question.correctChoice ? 'text-green-600 dark:text-green-400 font-bold' : ''}>
+                          {idx === question.correctChoice ? '✓ ' : '• '}{choice}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                       Réponse: <span className="font-bold">{question.answer}</span>
                     </p>
                   )}
-                </div>
-                
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEdit(question)}
-                    className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(question.id)}
-                    className="p-2 bg-red-500 text-white rounded hover:bg-red-600"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleEdit(question)}
+                  className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(question.id)}
+                  className="p-2 bg-red-500 text-white rounded hover:bg-red-600"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* Pagination */}
-        {renderPagination()}
+          </div>
+        ))}
       </div>
+
+      {/* Pagination */}
+      {renderPagination()}
     </div>
+    </div >
   );
 };
 
