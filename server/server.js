@@ -9,7 +9,8 @@ const DB_FILE = path.join(__dirname, 'db.json');
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Stockage en mémoire des timers de questions
 const questionTimers = new Map();
@@ -54,7 +55,7 @@ function writeDB(data) {
  */
 function normalizeTeamName(teamName) {
   if (!teamName) return '';
-  
+
   return teamName
     .trim()
     .replace(/\s+/g, ' ')
@@ -66,10 +67,10 @@ function normalizeTeamName(teamName) {
  */
 function areTeamNamesEqual(name1, name2) {
   if (!name1 || !name2) return false;
-  
+
   const normalized1 = normalizeTeamName(name1).toLowerCase();
   const normalized2 = normalizeTeamName(name2).toLowerCase();
-  
+
   return normalized1 === normalized2;
 }
 
@@ -78,7 +79,7 @@ function areTeamNamesEqual(name1, name2) {
  */
 function findTeamByName(teams, teamName) {
   if (!teamName) return null;
-  
+
   return teams.find(team => areTeamNamesEqual(team.name, teamName)) || null;
 }
 
@@ -187,12 +188,182 @@ app.post('/api/questions', (req, res) => {
   res.json({ success: true });
 });
 
+// ==================== QUESTIONS - OPÉRATIONS INDIVIDUELLES ====================
+
+// ✅ Ajouter UNE question
+app.post('/api/questions/add', (req, res) => {
+  try {
+    const newQuestion = req.body;
+
+    // Valider que la question a les champs requis
+    if (!newQuestion.text || !newQuestion.type) {
+      return res.status(400).json({
+        success: false,
+        error: 'Champs requis manquants'
+      });
+    }
+
+    const db = readDB();
+
+    // Générer un ID si pas fourni
+    if (!newQuestion.id) {
+      newQuestion.id = `q${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    // Vérifier que l'ID n'existe pas déjà
+    const existingIndex = db.questions.findIndex(q => q.id === newQuestion.id);
+    if (existingIndex !== -1) {
+      return res.status(409).json({
+        success: false,
+        error: 'Une question avec cet ID existe déjà'
+      });
+    }
+
+    db.questions.push(newQuestion);
+    writeDB(db);
+
+    res.json({
+      success: true,
+      question: newQuestion,
+      total: db.questions.length
+    });
+  } catch (error) {
+    console.error('Erreur ajout question:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ✅ Mettre à jour UNE question
+app.put('/api/questions/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const updatedQuestion = req.body;
+
+    const db = readDB();
+    const questionIndex = db.questions.findIndex(q => q.id === id);
+
+    if (questionIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'Question non trouvée'
+      });
+    }
+
+    // Préserver l'ID original
+    updatedQuestion.id = id;
+    db.questions[questionIndex] = updatedQuestion;
+
+    writeDB(db);
+
+    res.json({
+      success: true,
+      question: updatedQuestion
+    });
+  } catch (error) {
+    console.error('Erreur mise à jour question:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ✅ Supprimer UNE question
+app.delete('/api/questions/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = readDB();
+
+    const initialLength = db.questions.length;
+    db.questions = db.questions.filter(q => q.id !== id);
+
+    if (db.questions.length === initialLength) {
+      return res.status(404).json({
+        success: false,
+        error: 'Question non trouvée'
+      });
+    }
+
+    writeDB(db);
+
+    res.json({
+      success: true,
+      deletedId: id,
+      total: db.questions.length
+    });
+  } catch (error) {
+    console.error('Erreur suppression question:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ✅ Import/Merge intelligent (pour CSV)
+app.post('/api/questions/merge', (req, res) => {
+  try {
+    const { questions, mode } = req.body; // mode: 'update', 'add', ou 'replace'
+    const db = readDB();
+
+    let added = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    if (mode === 'replace') {
+      // Mode remplacer tout (comportement actuel)
+      db.questions = questions;
+      added = questions.length;
+    } else if (mode === 'add') {
+      // Mode ajouter uniquement (ne touche pas aux existantes)
+      questions.forEach(newQ => {
+        const exists = db.questions.some(q => q.id === newQ.id);
+        if (!exists) {
+          db.questions.push(newQ);
+          added++;
+        } else {
+          skipped++;
+        }
+      });
+    } else if (mode === 'update') {
+      // Mode merge intelligent (ton idée !)
+      questions.forEach(newQ => {
+        const existingIndex = db.questions.findIndex(q => q.id === newQ.id);
+
+        if (existingIndex !== -1) {
+          // Question existe → Mettre à jour
+          db.questions[existingIndex] = newQ;
+          updated++;
+        } else {
+          // Question n'existe pas → Ajouter
+          db.questions.push(newQ);
+          added++;
+        }
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Mode invalide (use: update, add, or replace)'
+      });
+    }
+
+    writeDB(db);
+
+    res.json({
+      success: true,
+      stats: {
+        added,
+        updated,
+        skipped,
+        total: db.questions.length
+      }
+    });
+  } catch (error) {
+    console.error('Erreur merge questions:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ✅ NOUVEAU: Route pour import par batch (append)
 app.post('/api/questions/batch', (req, res) => {
   try {
     const { questions, mode } = req.body; // mode: 'append' ou 'replace'
     const db = readDB();
-    
+
     if (mode === 'replace') {
       // Premier batch: remplacer toutes les questions
       db.questions = questions;
@@ -200,11 +371,11 @@ app.post('/api/questions/batch', (req, res) => {
       // Batches suivants: ajouter
       db.questions = [...db.questions, ...questions];
     }
-    
+
     writeDB(db);
-    res.json({ 
-      success: true, 
-      total: db.questions.length 
+    res.json({
+      success: true,
+      total: db.questions.length
     });
   } catch (error) {
     console.error('Erreur batch import:', error);
@@ -216,13 +387,13 @@ app.post('/api/questions/batch', (req, res) => {
 app.get('/api/lobbies', (req, res) => {
   const db = readDB();
   const lobbies = db.lobbies || [];
-  
+
   const lobbiesWithTimer = lobbies.map(lobby => {
     if (lobby.status === 'playing' && questionTimers.has(lobby.id)) {
       const timerData = questionTimers.get(lobby.id);
       const elapsed = Math.floor((Date.now() - timerData.startTime) / 1000);
       const remaining = Math.max(0, timerData.timer - elapsed);
-      
+
       return {
         ...lobby,
         questionStartTime: timerData.startTime,
@@ -231,7 +402,7 @@ app.get('/api/lobbies', (req, res) => {
     }
     return lobby;
   });
-  
+
   res.json(lobbiesWithTimer);
 });
 
@@ -239,11 +410,11 @@ app.post('/api/create-lobby', (req, res) => {
   const { quizId, shuffle } = req.body;
   const db = readDB();
   const quiz = db.quizzes.find(q => q.id === quizId);
-  
+
   if (!quiz) {
     return res.json({ success: false, message: 'Quiz introuvable' });
   }
-  
+
   const lobby = {
     id: Date.now().toString(),
     quizId,
@@ -254,10 +425,10 @@ app.post('/api/create-lobby', (req, res) => {
     shuffled: shuffle || false,
     shuffledQuestions: shuffle ? shuffleArray(quiz.questions) : null
   };
-  
+
   db.lobbies.push(lobby);
   writeDB(db);
-  
+
   console.log(`✅ Lobby créé: ${quiz.title} ${shuffle ? '(questions mélangées)' : '(ordre normal)'}`);
   res.json({ success: true, lobby });
 });
@@ -266,18 +437,18 @@ app.post('/api/join-lobby', (req, res) => {
   const { lobbyId, participantId, pseudo, teamName } = req.body;
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
-  
+
   if (!lobby || lobby.status !== 'waiting') {
     return res.json({ success: false, message: 'Salle non disponible' });
   }
-  
+
   // ✅ AMÉLIORATION: Normaliser et trouver équipe existante
   const normalizedTeamName = normalizeTeamName(teamName);
   let team = findTeamByName(db.teams, normalizedTeamName);
-  
+
   if (!team) {
-    team = { 
-      id: Date.now().toString(), 
+    team = {
+      id: Date.now().toString(),
       name: normalizedTeamName,
       validatedScore: 0,
       createdAt: Date.now()
@@ -287,20 +458,20 @@ app.post('/api/join-lobby', (req, res) => {
   } else {
     console.log(`✅ Équipe existante trouvée (join-lobby): "${team.name}"`);
   }
-  
+
   if (!lobby.participants.find(p => p.participantId === participantId)) {
-    lobby.participants.push({ 
-      participantId, 
-      pseudo, 
+    lobby.participants.push({
+      participantId,
+      pseudo,
       teamName: team.name,  // Utiliser le nom exact
-      hasAnswered: false, 
-      currentAnswer: '', 
-      answers: {}, 
-      validations: {} 
+      hasAnswered: false,
+      currentAnswer: '',
+      answers: {},
+      validations: {}
     });
     console.log(`✅ Participant "${pseudo}" a rejoint le lobby avec équipe "${team.name}"`);
   }
-  
+
   writeDB(db);
   res.json({ success: true });
 });
@@ -309,7 +480,7 @@ app.post('/api/leave-lobby', (req, res) => {
   const { lobbyId, participantId } = req.body;
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
-  
+
   if (lobby) {
     lobby.participants = lobby.participants.filter(p => p.participantId !== participantId);
     if (lobby.participants.length === 0 && lobby.status === 'waiting') {
@@ -325,26 +496,26 @@ app.post('/api/start-quiz', (req, res) => {
   const { lobbyId } = req.body;
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
-  
+
   if (lobby) {
     const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-    
+
     // ✅ Utiliser shuffledQuestions si disponible
-    const questions = lobby.shuffled && lobby.shuffledQuestions 
-      ? lobby.shuffledQuestions 
+    const questions = lobby.shuffled && lobby.shuffledQuestions
+      ? lobby.shuffledQuestions
       : quiz.questions;
-    
+
     lobby.status = 'playing';
     lobby.session = {
       currentQuestionIndex: 0,
       startTime: Date.now()
     };
-    
+
     // Lancer le timer pour la première question
     if (questions[0].timer > 0) {
       startQuestionTimer(lobbyId, questions[0].id, questions[0].timer);
-     }
-    
+    }
+
     writeDB(db);
     res.json({ success: true });
   } else {
@@ -356,26 +527,26 @@ app.post('/api/auto-save-answer', (req, res) => {
   const { lobbyId, participantId, answer } = req.body;
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
-  
+
   if (lobby && lobby.status === 'playing') {
     const participant = lobby.participants.find(p => p.participantId === participantId);
-    
+
     if (participant) {
       participant.draftAnswer = answer;
-      
+
       if (!participant.hasAnswered) {
         participant.currentAnswer = answer;
-        
+
         const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-        const questions = lobby.shuffled && lobby.shuffledQuestions 
-          ? lobby.shuffledQuestions 
+        const questions = lobby.shuffled && lobby.shuffledQuestions
+          ? lobby.shuffledQuestions
           : quiz.questions;
         const currentQuestion = questions[lobby.session.currentQuestionIndex];
-        
+
         if (!participant.answersByQuestionId) participant.answersByQuestionId = {};
         participant.answersByQuestionId[currentQuestion.id] = answer;
       }
-      
+
       writeDB(db);
       console.log(`💾 Auto-save: ${participant.pseudo} → "${answer}"`);
       res.json({ success: true });
@@ -391,54 +562,54 @@ app.post('/api/submit-answer', (req, res) => {
   const { lobbyId, participantId, answer } = req.body;
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
-  
+
   if (lobby) {
     if (questionTimers.has(lobbyId)) {
       const timerData = questionTimers.get(lobbyId);
       const elapsed = Math.floor((Date.now() - timerData.startTime) / 1000);
-      
+
       if (elapsed >= timerData.timer) {
         // Sauvegarder la réponse même si le temps est écoulé
         const participant = lobby.participants.find(p => p.participantId === participantId);
         if (participant && answer && answer.trim()) {
           participant.currentAnswer = answer;
-          
+
           const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-          const questions = lobby.shuffled && lobby.shuffledQuestions 
-            ? lobby.shuffledQuestions 
+          const questions = lobby.shuffled && lobby.shuffledQuestions
+            ? lobby.shuffledQuestions
             : quiz.questions;
           const currentQuestion = questions[lobby.session.currentQuestionIndex];
-          
+
           if (!participant.answersByQuestionId) participant.answersByQuestionId = {};
           participant.answersByQuestionId[currentQuestion.id] = answer;
-          
+
           writeDB(db);
           console.log(`⏱️  Réponse sauvegardée malgré timer expiré: ${participantId}`);
         }
-        
-        return res.json({ 
-          success: false, 
+
+        return res.json({
+          success: false,
           message: 'Temps écoulé, mais votre réponse a été enregistrée',
           timeExpired: true,
           answerSaved: true
         });
       }
     }
-    
+
     const participant = lobby.participants.find(p => p.participantId === participantId);
     if (participant) {
       participant.hasAnswered = true;
       participant.currentAnswer = answer;
-      
+
       const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-      const questions = lobby.shuffled && lobby.shuffledQuestions 
-        ? lobby.shuffledQuestions 
+      const questions = lobby.shuffled && lobby.shuffledQuestions
+        ? lobby.shuffledQuestions
         : quiz.questions;
       const currentQuestion = questions[lobby.session.currentQuestionIndex];
-      
+
       if (!participant.answersByQuestionId) participant.answersByQuestionId = {};
       participant.answersByQuestionId[currentQuestion.id] = answer;
-      
+
       console.log(`✅ Submit: ${participant.pseudo} → "${answer}" (validé)`);
     }
     writeDB(db);
@@ -452,23 +623,23 @@ app.post('/api/mark-time-expired', (req, res) => {
   const { lobbyId, participantId } = req.body;
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
-  
+
   if (lobby) {
     const participant = lobby.participants.find(p => p.participantId === participantId);
     if (participant && !participant.hasAnswered) {
       participant.hasAnswered = true;
       const finalAnswer = participant.draftAnswer || '';
       participant.currentAnswer = finalAnswer;
-      
+
       const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-      const questions = lobby.shuffled && lobby.shuffledQuestions 
-        ? lobby.shuffledQuestions 
+      const questions = lobby.shuffled && lobby.shuffledQuestions
+        ? lobby.shuffledQuestions
         : quiz.questions;
       const currentQuestion = questions[lobby.session.currentQuestionIndex];
-      
+
       if (!participant.answersByQuestionId) participant.answersByQuestionId = {};
       participant.answersByQuestionId[currentQuestion.id] = finalAnswer;
-      
+
       console.log(`⏰ Temps écoulé pour ${participant.pseudo} - Réponse auto-sauvegardée: "${finalAnswer}"`);
     }
     writeDB(db);
@@ -482,13 +653,13 @@ app.post('/api/next-question', (req, res) => {
   const { lobbyId } = req.body;
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
-  
+
   if (lobby && lobby.session) {
     const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-    const questions = lobby.shuffled && lobby.shuffledQuestions 
-      ? lobby.shuffledQuestions 
+    const questions = lobby.shuffled && lobby.shuffledQuestions
+      ? lobby.shuffledQuestions
       : quiz.questions;
-      
+
     if (lobby.session.currentQuestionIndex < questions.length - 1) {
       lobby.session.currentQuestionIndex++;
       lobby.participants.forEach(p => {
@@ -496,7 +667,7 @@ app.post('/api/next-question', (req, res) => {
         p.currentAnswer = '';
         p.draftAnswer = '';
       });
-      
+
       const currentQuestion = questions[lobby.session.currentQuestionIndex];
       if (currentQuestion.timer > 0) {
         questionTimers.set(lobbyId, {
@@ -523,67 +694,67 @@ app.post('/api/validate-answer', (req, res) => {
   const { lobbyId, participantId, questionId, isCorrect } = req.body;
   const db = readDB();
   const lobby = db.lobbies.find(l => l.id === lobbyId);
-  
+
   if (lobby) {
     const participant = lobby.participants.find(p => p.participantId === participantId);
     const quiz = db.quizzes.find(q => q.id === lobby.quizId);
-    
+
     if (participant && quiz) {
       const question = quiz.questions.find(q => q.id === questionId);
-      
+
       if (!participant.validationsByQuestionId) participant.validationsByQuestionId = {};
       participant.validationsByQuestionId[questionId] = isCorrect;
-      
+
       // ✅ NOUVEAU: Règle spéciale pour QCM
       if (isCorrect && question) {
         const points = question.points || 1;
         const teamName = participant.teamName;
         const teamParticipants = lobby.participants.filter(p => p.teamName === teamName);
-        
+
         // ✅ RÈGLE QCM: Vérifier si c'est un QCM
         if (question.type === 'qcm') {
           // Pour QCM, tous les membres de l'équipe doivent avoir juste
-          const allTeamMembersValidated = teamParticipants.every(p => 
-            p.validationsByQuestionId?.[questionId] === true
+          const allTeamMembersValidated = teamParticipants.every(p =>
+            p.validationsByQuestionId ?.[questionId] === true
           );
-          
+
           if (allTeamMembersValidated) {
             // Vérifier si les points n'ont pas déjà été attribués
-            const alreadyScored = teamParticipants.some(p => 
-              p.qcmTeamScored?.[questionId] === true
+            const alreadyScored = teamParticipants.some(p =>
+              p.qcmTeamScored ?.[questionId] === true
             );
-            
+
             if (!alreadyScored) {
               const team = db.teams.find(t => t.name === teamName);
               if (team) {
                 team.validatedScore = (team.validatedScore || 0) + points;
-                
+
                 // Marquer que cette question a été scorée pour cette équipe
                 teamParticipants.forEach(p => {
                   if (!p.qcmTeamScored) p.qcmTeamScored = {};
                   p.qcmTeamScored[questionId] = true;
                 });
-                
+
                 console.log(`✅ QCM: Équipe "${teamName}" gagne ${points} points (TOUS ont réussi la question ${questionId})`);
               }
             } else {
               console.log(`ℹ️  QCM: Équipe "${teamName}" a déjà reçu les points pour cette question`);
             }
           } else {
-            const validatedCount = teamParticipants.filter(p => 
-              p.validationsByQuestionId?.[questionId] === true
+            const validatedCount = teamParticipants.filter(p =>
+              p.validationsByQuestionId ?.[questionId] === true
             ).length;
             const totalCount = teamParticipants.length;
-            
+
             console.log(`⚠️  QCM: Équipe "${teamName}" - Seulement ${validatedCount}/${totalCount} ont réussi (pas de points)`);
           }
         } else {
           // ✅ RÈGLE NORMALE (non-QCM): Premier de l'équipe qui réussit
-          const alreadyValidated = teamParticipants.some(p => 
-            p.participantId !== participantId && 
-            p.validationsByQuestionId?.[questionId] === true
+          const alreadyValidated = teamParticipants.some(p =>
+            p.participantId !== participantId &&
+              p.validationsByQuestionId ?.[questionId] === true
           );
-          
+
           if (!alreadyValidated) {
             const team = db.teams.find(t => t.name === teamName);
             if (team) {
@@ -595,7 +766,7 @@ app.post('/api/validate-answer', (req, res) => {
           }
         }
       }
-      
+
       writeDB(db);
       res.json({ success: true });
     } else {
@@ -621,23 +792,23 @@ app.post('/api/delete-lobby', (req, res) => {
 app.post('/api/update-participant', (req, res) => {
   const { participantId, updates } = req.body;
   const db = readDB();
-  
+
   const participant = db.participants.find(p => p.id === participantId);
-  
+
   if (!participant) {
     return res.json({ success: false, message: 'Participant introuvable' });
   }
 
   const oldTeam = participant.teamName;
-  
+
   // ✅ AMÉLIORATION: Normaliser le nouveau nom d'équipe
   if (updates.teamName !== undefined) {
     const normalizedTeamName = normalizeTeamName(updates.teamName);
-    
+
     if (normalizedTeamName) {
       // Chercher équipe existante avec normalisation
       let team = findTeamByName(db.teams, normalizedTeamName);
-      
+
       if (!team) {
         // Créer nouvelle équipe
         team = {
@@ -651,7 +822,7 @@ app.post('/api/update-participant', (req, res) => {
       } else {
         console.log(`✅ Équipe existante trouvée (update-participant): "${team.name}"`);
       }
-      
+
       // Utiliser le nom exact de l'équipe
       participant.teamName = team.name;
     } else {
@@ -659,18 +830,18 @@ app.post('/api/update-participant', (req, res) => {
       participant.teamName = '';
     }
   }
-  
+
   // Appliquer les autres modifications
   Object.keys(updates).forEach(key => {
     if (key !== 'teamName') {
       participant[key] = updates[key];
     }
   });
-  
+
   writeDB(db);
-  
+
   console.log(`✅ Participant "${participant.pseudo}" changé: "${oldTeam || 'Aucune'}" → "${participant.teamName || 'Aucune'}"`);
-  
+
   res.json({ success: true, participant });
 });
 
@@ -678,17 +849,17 @@ app.post('/api/update-participant', (req, res) => {
 app.post('/api/delete-team', (req, res) => {
   const { teamName } = req.body;
   const db = readDB();
-  
+
   // ✅ AMÉLIORATION: Trouver équipe avec normalisation
   const team = findTeamByName(db.teams, teamName);
-  
+
   if (!team) {
     return res.json({ success: false, message: 'Équipe introuvable' });
   }
 
   // Utiliser le nom exact de l'équipe trouvée
   const exactTeamName = team.name;
-  
+
   // Retirer tous les participants de cette équipe (comparaison exacte)
   const affectedParticipants = db.participants.filter(p => p.teamName === exactTeamName);
   affectedParticipants.forEach(p => {
@@ -698,7 +869,7 @@ app.post('/api/delete-team', (req, res) => {
 
   // Supprimer l'équipe
   db.teams = db.teams.filter(t => t.name !== exactTeamName);
-  
+
   // Nettoyer les lobbies
   db.lobbies.forEach(lobby => {
     if (lobby.participants) {
@@ -711,22 +882,22 @@ app.post('/api/delete-team', (req, res) => {
   });
 
   writeDB(db);
-  
+
   console.log(`🗑️  Équipe "${exactTeamName}" supprimée (${affectedParticipants.length} participants retirés)`);
-  
-  res.json({ 
-    success: true, 
-    affectedCount: affectedParticipants.length 
+
+  res.json({
+    success: true,
+    affectedCount: affectedParticipants.length
   });
 });
 
 app.post('/api/login', (req, res) => {
   const { teamName, pseudo, password } = req.body;
   const db = readDB();
-  
+
   // Normaliser le nom d'équipe
   const normalizedTeamName = normalizeTeamName(teamName);
-  
+
   // Vérifier participant existant
   const existingParticipant = db.participants.find(p => p.pseudo === pseudo);
 
@@ -734,12 +905,12 @@ app.post('/api/login', (req, res) => {
     if (existingParticipant.password !== password) {
       return res.json({ success: false, message: 'Ce pseudo existe avec un mot de passe différent' });
     }
-    
+
     // Vérifier si changement d'équipe
     if (!areTeamNamesEqual(existingParticipant.teamName, normalizedTeamName)) {
       // Proposer changement
-      return res.json({ 
-        success: false, 
+      return res.json({
+        success: false,
         needsConfirmation: true,
         message: `Ce pseudo est déjà dans l'équipe "${existingParticipant.teamName}"`,
         currentTeam: existingParticipant.teamName,
@@ -750,11 +921,11 @@ app.post('/api/login', (req, res) => {
 
   // ✅ AMÉLIORATION: Chercher équipe avec normalisation
   let team = findTeamByName(db.teams, normalizedTeamName);
-  
+
   if (!team) {
     // Créer nouvelle équipe avec nom normalisé
-    team = { 
-      id: Date.now().toString(), 
+    team = {
+      id: Date.now().toString(),
       name: normalizedTeamName,  // Utiliser le nom normalisé
       validatedScore: 0,
       createdAt: Date.now()
@@ -791,14 +962,14 @@ app.post('/api/login', (req, res) => {
 // ==================== PRODUCTION: SERVIR LE CLIENT REACT ====================
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = path.join(__dirname, '../client/build');
-  
+
   if (fs.existsSync(clientBuildPath)) {
     app.use(express.static(clientBuildPath));
-    
+
     app.get('*', (req, res) => {
       res.sendFile(path.join(clientBuildPath, 'index.html'));
     });
-    
+
     console.log('📦 Client React servi depuis', clientBuildPath);
   } else {
     console.warn('⚠️  Dossier build du client introuvable. Exécutez "npm run build" dans le dossier client.');
@@ -829,13 +1000,13 @@ app.listen(PORT, () => {
   console.log('✅ Auto-sauvegarde des réponses en temps réel');
   console.log('✅ Mode QCM strict: TOUTE l\'équipe doit réussir');
   console.log('');
-  
+
   if (process.env.NODE_ENV === 'production') {
     console.log('🚀 Mode PRODUCTION - Client React intégré');
   } else {
     console.log('🔧 Mode DEVELOPMENT - Client React sur port séparé (ex: 3000)');
   }
-  
+
   console.log('');
   console.log('Appuyez sur Ctrl+C pour arrêter le serveur');
   console.log('');

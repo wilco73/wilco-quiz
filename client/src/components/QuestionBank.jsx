@@ -53,6 +53,7 @@ const QuestionBank = ({ questions, onSave }) => {
 
     const delimiter = csvDelimiter;
     const headers = [
+      'ID',
       'Type',
       'Catégorie',
       'Question',
@@ -73,6 +74,7 @@ const QuestionBank = ({ questions, onSave }) => {
     const rows = localQuestions.map(q => {
       const choices = q.type === 'qcm' ? (q.choices || []) : [];
       return [
+        q.id || '',
         q.type || 'text',
         q.category || '',
         `"${(q.text || '').replace(/"/g, '""')}"`,
@@ -106,7 +108,7 @@ const QuestionBank = ({ questions, onSave }) => {
     toast.success(`${localQuestions.length} question(s) exportée(s) avec le délimiteur "${delimiter}" !`);
   };
 
-  // ✅ IMPORT CSV avec batch pour gros fichiers
+  // ✅ IMPORT CSV avec merge intelligent + batch hybride
   const handleImportCSV = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -134,7 +136,7 @@ const QuestionBank = ({ questions, onSave }) => {
         const importedQuestions = [];
         let errors = [];
 
-        // Parse toutes les questions
+        // ========== ÉTAPE 1 : PARSER TOUTES LES QUESTIONS ==========
         dataLines.forEach((line, index) => {
           try {
             const values = parseCSVLine(line, detectedDelimiter);
@@ -145,7 +147,7 @@ const QuestionBank = ({ questions, onSave }) => {
             }
 
             const [
-              type, category, text, answer, media, mediaType,
+              id, type, category, text, answer, media, mediaType,
               points, timer,
               choice1, choice2, choice3, choice4, choice5, choice6,
               correctChoiceIndex
@@ -157,7 +159,7 @@ const QuestionBank = ({ questions, onSave }) => {
             }
 
             const question = {
-              id: `import-${Date.now()}-${index}`,
+              id: id && id.trim() ? id.trim() : `import-${Date.now()}-${index}`,
               type: type || 'text',
               category: category || '',
               text: text.trim(),
@@ -194,6 +196,7 @@ const QuestionBank = ({ questions, onSave }) => {
           }
         });
 
+        // Afficher les erreurs de parsing s'il y en a
         if (errors.length > 0) {
           console.error('Erreurs d\'import:', errors);
           toast.warning(`Import terminé avec ${errors.length} erreur(s)`);
@@ -204,101 +207,175 @@ const QuestionBank = ({ questions, onSave }) => {
           return;
         }
 
-        // ✅ NOUVEAU: Import par batch si > 100 questions
-        const BATCH_SIZE = 100;
+        // ========== ÉTAPE 2 : CHOISIR LE MODE D'IMPORT ==========
+        const confirmMessage =
+          `Importer ${importedQuestions.length} question(s) ?\n\n` +
+          `Choisissez le mode d'import :\n\n` +
+          `1. FUSIONNER (recommandé)\n` +
+          `   → Met à jour les questions existantes (même ID)\n` +
+          `   → Ajoute les nouvelles questions\n` +
+          `   → Conserve les autres questions\n\n` +
+          `2. AJOUTER\n` +
+          `   → Ajoute uniquement les nouvelles\n` +
+          `   → Ignore les doublons (même ID)\n\n` +
+          `3. REMPLACER\n` +
+          `   → Supprime TOUT et importe uniquement le CSV\n\n` +
+          `Cliquez :\n` +
+          `- OK pour FUSIONNER\n` +
+          `- Annuler pour choisir`;
+
+        const primaryChoice = window.confirm(confirmMessage);
+
+        let mode;
+        if (primaryChoice) {
+          // Choix 1 : FUSIONNER
+          mode = 'update';
+        } else {
+          // Demander entre AJOUTER ou REMPLACER
+          const secondChoice = window.confirm(
+            'Choisissez :\n\n' +
+            '- OK pour AJOUTER (ignore doublons)\n' +
+            '- Annuler pour REMPLACER (supprime tout)'
+          );
+          mode = secondChoice ? 'add' : 'replace';
+        }
+
+        // ========== ÉTAPE 3 : DÉCIDER BATCH OU PAS ==========
+        const BATCH_SIZE = 200; // Seuil pour batch
         const needsBatch = importedQuestions.length > BATCH_SIZE;
 
-        if (needsBatch) {
-          // Import par batch avec progression
-          const confirmMessage = `Importer ${importedQuestions.length} questions par batch ?\n\n` +
-            `Mode d'import :\n` +
-            `- AJOUTER : Ajoute les questions à la banque existante\n` +
-            `- REMPLACER : Supprime toutes les questions et importe uniquement les nouvelles\n\n` +
-            `Cliquez sur OK pour AJOUTER, Annuler pour REMPLACER`;
+        try {
+          if (needsBatch) {
+            // ========== GROS CSV : IMPORT PAR BATCH ==========
+            console.log(`📦 Import par batch: ${importedQuestions.length} questions`);
 
-          const shouldAdd = window.confirm(confirmMessage);
-
-          try {
             // Désactiver le bouton d'import pendant le traitement
             const importButton = document.querySelector('input[type="file"][accept=".csv"]');
             if (importButton) importButton.disabled = true;
 
+            // Découper en batches
             const batches = [];
             for (let i = 0; i < importedQuestions.length; i += BATCH_SIZE) {
               batches.push(importedQuestions.slice(i, i + BATCH_SIZE));
             }
 
-            let totalImported = 0;
+            let totalAdded = 0;
+            let totalUpdated = 0;
 
+            // Envoyer chaque batch
             for (let i = 0; i < batches.length; i++) {
               const batch = batches[i];
               const isFirstBatch = i === 0;
 
-              toast.info(`Import batch ${i + 1}/${batches.length} (${batch.length} questions)...`);
+              toast.info(`📦 Import batch ${i + 1}/${batches.length} (${batch.length} questions)...`);
 
-              const response = await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/batch`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  questions: batch,
-                  mode: isFirstBatch && !shouldAdd ? 'replace' : 'append'
-                })
-              });
+              const response = await fetch(
+                `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/merge`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    questions: batch,
+                    // Premier batch : mode choisi, batches suivants : toujours 'add'
+                    mode: isFirstBatch ? mode : 'add'
+                  })
+                }
+              );
 
               if (!response.ok) {
                 throw new Error(`Erreur batch ${i + 1}: ${response.statusText}`);
               }
 
               const result = await response.json();
-              totalImported = result.total;
+              totalAdded += result.stats.added || 0;
+              totalUpdated += result.stats.updated || 0;
             }
 
-            // Mettre à jour le state local
-            let finalQuestions;
-            if (shouldAdd) {
-              finalQuestions = [...localQuestions, ...importedQuestions];
+            // Message de succès détaillé
+            let successMessage;
+            if (mode === 'update') {
+              successMessage =
+                `✅ Import terminé !\n\n` +
+                `• ${totalAdded} ajoutée(s)\n` +
+                `• ${totalUpdated} mise(s) à jour\n` +
+                `• Total : ${totalAdded + totalUpdated} questions importées`;
+            } else if (mode === 'add') {
+              successMessage =
+                `✅ ${totalAdded} question(s) ajoutée(s)\n` +
+                `• ${importedQuestions.length - totalAdded} ignorée(s) (doublons)`;
             } else {
-              finalQuestions = importedQuestions;
+              successMessage =
+                `✅ ${importedQuestions.length} question(s) importée(s)\n` +
+                `• Anciennes questions supprimées`;
             }
 
-            setLocalQuestions(finalQuestions);
-            toast.success(`✅ ${importedQuestions.length} question(s) importée(s) avec succès !`);
+            toast.success(successMessage);
 
             // Rafraîchir pour obtenir les données du serveur
             setTimeout(() => {
               window.location.reload();
-            }, 1000);
+            }, 1500);
 
-          } catch (error) {
-            console.error('Erreur import par batch:', error);
-            toast.error(`Erreur lors de l'import: ${error.message}`);
-          } finally {
             // Réactiver le bouton
-            const importButton = document.querySelector('input[type="file"][accept=".csv"]');
             if (importButton) importButton.disabled = false;
-          }
 
-        } else {
-          // Import classique pour petit nombre de questions
-          const confirmMessage = `Voulez-vous importer ${importedQuestions.length} question(s) ?\n\n` +
-            `Mode d'import :\n` +
-            `- AJOUTER : Ajoute les questions à la banque existante\n` +
-            `- REMPLACER : Supprime toutes les questions et importe uniquement les nouvelles\n\n` +
-            `Cliquez sur OK pour AJOUTER, Annuler pour REMPLACER`;
-
-          const shouldAdd = window.confirm(confirmMessage);
-
-          let finalQuestions;
-          if (shouldAdd) {
-            finalQuestions = [...localQuestions, ...importedQuestions];
-            toast.success(`${importedQuestions.length} question(s) ajoutée(s) avec succès !`);
           } else {
-            finalQuestions = importedQuestions;
-            toast.success(`${importedQuestions.length} question(s) importée(s) (anciennes questions supprimées) !`);
+            // ========== PETIT CSV : IMPORT DIRECT ==========
+            console.log(`⚡ Import direct: ${importedQuestions.length} questions`);
+
+            const response = await fetch(
+              `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/merge`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  questions: importedQuestions,
+                  mode: mode
+                })
+              }
+            );
+
+            if (!response.ok) {
+              throw new Error(`Erreur lors de l'import: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+
+            // Message de succès détaillé
+            let successMessage;
+            if (mode === 'update') {
+              successMessage =
+                `✅ Import terminé !\n\n` +
+                `• ${result.stats.added} ajoutée(s)\n` +
+                `• ${result.stats.updated} mise(s) à jour\n` +
+                `• Total : ${result.stats.total} questions`;
+            } else if (mode === 'add') {
+              successMessage =
+                `✅ ${result.stats.added} question(s) ajoutée(s)\n` +
+                `• ${importedQuestions.length - result.stats.added} ignorée(s) (doublons)\n` +
+                `• Total : ${result.stats.total} questions`;
+            } else {
+              successMessage =
+                `✅ ${importedQuestions.length} question(s) importée(s)\n` +
+                `• Anciennes questions supprimées\n` +
+                `• Total : ${result.stats.total} questions`;
+            }
+
+            toast.success(successMessage);
+
+            // Rafraîchir pour obtenir les données du serveur
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
           }
 
-          setLocalQuestions(finalQuestions);
-          onSave(finalQuestions);
+        } catch (error) {
+          console.error('Erreur import CSV:', error);
+          toast.error(`Erreur lors de l'import: ${error.message}`);
+
+          // Réactiver le bouton en cas d'erreur
+          const importButton = document.querySelector('input[type="file"][accept=".csv"]');
+          if (importButton) importButton.disabled = false;
         }
 
       } catch (error) {
@@ -308,7 +385,7 @@ const QuestionBank = ({ questions, onSave }) => {
     };
 
     reader.readAsText(file, 'UTF-8');
-    event.target.value = '';
+    event.target.value = ''; // Reset input pour permettre de réimporter le même fichier
   };
 
   // ✅ Parser CSV avec délimiteur spécifique
@@ -344,6 +421,7 @@ const QuestionBank = ({ questions, onSave }) => {
   const handleDownloadTemplate = () => {
     const delimiter = csvDelimiter;
     const headers = [
+      'ID',
       'Type',
       'Catégorie',
       'Question',
@@ -363,6 +441,7 @@ const QuestionBank = ({ questions, onSave }) => {
 
     const examples = [
       [
+        '',
         'text',
         'Géographie',
         '"Quelle est la capitale de la France ?"',
@@ -375,6 +454,7 @@ const QuestionBank = ({ questions, onSave }) => {
         ''
       ].join(delimiter),
       [
+        '',
         'qcm',
         'Histoire',
         '"En quelle année a eu lieu la Révolution française ?"',
@@ -391,6 +471,7 @@ const QuestionBank = ({ questions, onSave }) => {
         '0'
       ].join(delimiter),
       [
+        '',
         'image',
         'Art',
         '"Qui a peint ce tableau ?"',
@@ -403,6 +484,7 @@ const QuestionBank = ({ questions, onSave }) => {
         ''
       ].join(delimiter),
       [
+        '',
         'audio',
         'Musique',
         '"Qui interprète cette chanson ?"',
@@ -416,6 +498,7 @@ const QuestionBank = ({ questions, onSave }) => {
       ].join(delimiter)
       // ✅ NOUVEL EXEMPLE : QCM avec média audio
       [
+        '',
         'qcm',
         'Musique',
         '"Quel est cet instrument ?"',
@@ -434,6 +517,7 @@ const QuestionBank = ({ questions, onSave }) => {
 
       // ✅ NOUVEL EXEMPLE : QCM avec média image
       [
+        '',
         'qcm',
         'Géographie',
         '"Quelle est cette ville ?"',
@@ -464,7 +548,7 @@ const QuestionBank = ({ questions, onSave }) => {
     document.body.removeChild(link);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.text.trim()) {
       toast.warning('Le texte de la question est requis');
       return;
@@ -488,19 +572,62 @@ const QuestionBank = ({ questions, onSave }) => {
       }
     }
 
-    let updatedQuestions;
-    if (editingQuestion) {
-      updatedQuestions = localQuestions.map(q =>
-        q.id === editingQuestion.id ? { ...formData, id: q.id } : q
-      );
-    } else {
-      const newQuestion = { ...formData, id: Date.now().toString() };
-      updatedQuestions = [...localQuestions, newQuestion];
-    }
+    try {
+      if (editingQuestion) {
+        // ✅ Mettre à jour UNE question existante
+        const updatedQuestion = { ...formData, id: editingQuestion.id };
 
-    setLocalQuestions(updatedQuestions);
-    onSave(updatedQuestions);
-    resetForm();
+        const response = await fetch(
+          `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/${editingQuestion.id}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedQuestion)
+          }
+        );
+
+        if (!response.ok) throw new Error('Erreur lors de la mise à jour');
+
+        const result = await response.json();
+
+        // Mettre à jour le state local
+        const updatedQuestions = localQuestions.map(q =>
+          q.id === editingQuestion.id ? result.question : q
+        );
+        setLocalQuestions(updatedQuestions);
+        toast.success('Question mise à jour !');
+
+      } else {
+        // ✅ Ajouter UNE nouvelle question
+        const newQuestion = {
+          ...formData,
+          id: `q${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        };
+
+        const response = await fetch(
+          `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/add`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newQuestion)
+          }
+        );
+
+        if (!response.ok) throw new Error('Erreur lors de l\'ajout');
+
+        const result = await response.json();
+
+        // Mettre à jour le state local
+        setLocalQuestions([...localQuestions, result.question]);
+        toast.success('Question ajoutée !');
+      }
+
+      resetForm();
+
+    } catch (error) {
+      console.error('Erreur sauvegarde:', error);
+      toast.error(`Erreur : ${error.message}`);
+    }
   };
 
   const handleEdit = (question) => {
@@ -512,11 +639,28 @@ const QuestionBank = ({ questions, onSave }) => {
     });
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Supprimer cette question ?')) {
+  const handleDelete = async (id) => {
+    if (!window.confirm('Supprimer cette question ?')) return;
+
+    try {
+      const response = await fetch(
+        `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/${id}`,
+        { method: 'DELETE' }
+      );
+
+      if (!response.ok) throw new Error('Erreur lors de la suppression');
+
+      const result = await response.json();
+
+      // Mettre à jour le state local
       const updatedQuestions = localQuestions.filter(q => q.id !== id);
       setLocalQuestions(updatedQuestions);
-      onSave(updatedQuestions);
+
+      toast.success(`Question supprimée ! (${result.total} restantes)`);
+
+    } catch (error) {
+      console.error('Erreur suppression:', error);
+      toast.error(`Erreur : ${error.message}`);
     }
   };
 
