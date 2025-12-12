@@ -1220,7 +1220,11 @@ const QuestionBank = ({ questions, onSave }) => {
                 <p className="font-semibold mb-1 dark:text-white">{question.text}</p>
 
                 {question.media && showPreview && (
-                  <MediaPreview type={question.type} url={question.media} id={question.id} />
+                  <MediaPreview
+                    type={question.type === 'qcm' ? (question.mediaType || '') : question.type}
+                    url={question.media}
+                    id={question.id}
+                  />
                 )}
 
                 {question.type === 'qcm' ? (
