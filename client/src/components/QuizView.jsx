@@ -1,33 +1,33 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Clock } from 'lucide-react';
 
-const QuizView = ({ 
-  currentLobby, 
-  currentSession, 
-  quizzes, 
-  myAnswer, 
-  setMyAnswer, 
+const QuizView = ({
+  currentLobby,
+  currentSession,
+  quizzes,
+  myAnswer,
+  setMyAnswer,
   hasAnswered,
   setHasAnswered,
   currentUser,
-  onSubmitAnswer, 
-  onLeaveLobby 
+  onSubmitAnswer,
+  onLeaveLobby
 }) => {
   const inputRef = useRef(null);
   const [timeRemaining, setTimeRemaining] = useState(null);
   const autoSaveTimerRef = useRef(null);
   const videoRef = useRef(null);
   const audioRef = useRef(null);
-  
+
   const quiz = currentLobby ? quizzes.find(q => q.id === currentLobby.quizId) : null;
-  const questions = currentLobby?.shuffled && currentLobby?.shuffledQuestions ? currentLobby.shuffledQuestions : quiz?.questions || [];
-  const question = questions[currentSession?.currentQuestionIndex];
-  const isFinished = currentSession?.status === 'finished';
+  const questions = currentLobby ?.shuffled && currentLobby ?.shuffledQuestions ? currentLobby.shuffledQuestions : quiz ?.questions || [];
+  const question = questions[currentSession ?.currentQuestionIndex];
+  const isFinished = currentSession ?.status === 'finished';
 
   // Auto-sauvegarde de la réponse en temps réel
   const autoSaveAnswer = async (answer) => {
     if (hasAnswered || isFinished) return;
-    
+
     try {
       await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/auto-save-answer`, {
         method: 'POST',
@@ -48,12 +48,12 @@ const QuizView = ({
   const handleAnswerChange = (e) => {
     const newAnswer = e.target.value;
     setMyAnswer(newAnswer);
-    
+
     // Annuler le timer précédent
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
     }
-    
+
     // Attendre 1 seconde après la dernière frappe avant de sauvegarder
     autoSaveTimerRef.current = setTimeout(() => {
       autoSaveAnswer(newAnswer);
@@ -67,22 +67,22 @@ const QuizView = ({
     autoSaveAnswer(choice);
   };
 
-  // Volume à 50%
+  // Volume à 30%
   useEffect(() => {
     if (videoRef.current) {
-      videoRef.current.volume = 0.5;
+      videoRef.current.volume = 0.3;
     }
     if (audioRef.current) {
-      audioRef.current.volume = 0.5;
+      audioRef.current.volume = 0.3;
     }
-  }, [question?.id, currentSession?.currentQuestionIndex]);
+  }, [question ?.id, currentSession ?.currentQuestionIndex]);
 
   // Focus automatique sur l'input
   useEffect(() => {
-    if (inputRef.current && !hasAnswered && !isFinished && question?.type !== 'qcm') {
+    if (inputRef.current && !hasAnswered && !isFinished && question ?.type !== 'qcm') {
       inputRef.current.focus();
     }
-  }, [currentSession?.currentQuestionIndex, hasAnswered, isFinished, question?.type]);
+  }, [currentSession ?.currentQuestionIndex, hasAnswered, isFinished, question ?.type]);
 
   // Gestion du timer
   useEffect(() => {
@@ -92,7 +92,7 @@ const QuizView = ({
     }
 
     const timer = question.timer || 0;
-    
+
     if (timer <= 0) {
       setTimeRemaining(null);
       return;
@@ -100,7 +100,7 @@ const QuizView = ({
 
     if (currentLobby.timeRemaining !== undefined) {
       setTimeRemaining(currentLobby.timeRemaining);
-      
+
       if (currentLobby.timeRemaining === 0 && !hasAnswered) {
         const markExpired = async () => {
           try {
@@ -108,14 +108,14 @@ const QuizView = ({
             const response = await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/mark-time-expired`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                lobbyId: currentLobby.id, 
-                participantId: currentUser?.id 
+              body: JSON.stringify({
+                lobbyId: currentLobby.id,
+                participantId: currentUser ?.id 
               })
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
               setHasAnswered(true);
               // ✅ NE PAS vider myAnswer - on garde pour l'affichage
@@ -130,7 +130,7 @@ const QuizView = ({
         return;
       }
     } else {
-      const questionStartTime = currentSession?.questionStartTime || currentLobby.questionStartTime || Date.now();
+      const questionStartTime = currentSession ?.questionStartTime || currentLobby.questionStartTime || Date.now();
       const elapsed = Math.floor((Date.now() - questionStartTime) / 1000);
       const remaining = Math.max(0, timer - elapsed);
       setTimeRemaining(remaining);
@@ -140,7 +140,7 @@ const QuizView = ({
       if (currentLobby.timeRemaining !== undefined) {
         setTimeRemaining(currentLobby.timeRemaining);
       } else {
-        const questionStartTime = currentSession?.questionStartTime || currentLobby.questionStartTime || Date.now();
+        const questionStartTime = currentSession ?.questionStartTime || currentLobby.questionStartTime || Date.now();
         const newElapsed = Math.floor((Date.now() - questionStartTime) / 1000);
         const newRemaining = Math.max(0, timer - newElapsed);
         setTimeRemaining(newRemaining);
@@ -148,7 +148,7 @@ const QuizView = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [question?.id, currentSession?.currentQuestionIndex, hasAnswered, isFinished, currentLobby.timeRemaining]);
+  }, [question ?.id, currentSession ?.currentQuestionIndex, hasAnswered, isFinished, currentLobby.timeRemaining]);
 
   // Nettoyer le timer d'auto-sauvegarde
   useEffect(() => {
@@ -184,7 +184,7 @@ const QuizView = ({
     );
   }
 
-  const isTimeExpired = timeRemaining === 0 && question?.timer > 0;
+  const isTimeExpired = timeRemaining === 0 && question ?.timer > 0;
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
@@ -192,7 +192,7 @@ const QuizView = ({
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
           <div className="mb-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold dark:text-white">{quiz?.title}</h3>
+              <h3 className="text-xl font-bold dark:text-white">{quiz ?.title}</h3>
               <span className="text-gray-600 dark:text-gray-400">
                 Question {currentSession.currentQuestionIndex + 1}/{questions.length}
               </span>
@@ -228,62 +228,76 @@ const QuizView = ({
             </div>
           )}
 
+          {/* ✅ TEXTE DE LA QUESTION */}
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-4">
+              {question ?.text}
+            </h2>
+            {question ?.category && (
+              <div className="text-center">
+                <span className="inline-block px-3 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-full text-sm">
+                  {question.category}
+                </span>
+              </div>
+            )}
+          </div>
+
           {/* ✅ MODIFIÉ: Afficher média pour QCM aussi */}
-          {question?.media && (
+          {question ?.media && (
             <>
-              {(question?.type === 'image' || (question?.type === 'qcm' && question?.mediaType === 'image')) && (
-                <div className="flex content-center item-center text-center mb-8">
-                  <div className="text-center m-auto">
-                    <img src={question.media} alt="Question" className="max-w-md h-auto rounded-lg mb-4" />
-                  </div>
+            {(question ?.type === 'image' || (question ?.type === 'qcm' && question ?.mediaType === 'image')) && (
+              <div className="flex content-center item-center text-center mb-8">
+                <div className="text-center m-auto">
+                  <img src={question.media} alt="Question" className="max-w-md h-auto rounded-lg mb-4" />
                 </div>
-              )}
+              </div>
+            )}
               
-              {(question?.type === 'video' || (question?.type === 'qcm' && question?.mediaType === 'video')) && (
-                <video 
-                  ref={videoRef}
-                  key={`video-${currentSession?.currentQuestionIndex}-${question.id}`}
-                  controls 
-                  autoPlay 
-                  className="w-full rounded-lg mb-4"
-                >
-                  <source src={question.media} />
-                </video>
-              )}
-              
-              {(question?.type === 'audio' || (question?.type === 'qcm' && question?.mediaType === 'audio')) && (
-                <audio 
-                  ref={audioRef}
-                  key={`audio-${currentSession?.currentQuestionIndex}-${question.id}`}
-                  controls 
-                  autoPlay 
-                  className="w-full mb-4"
-                >
-                  <source src={question.media} />
-                </audio>
-              )}
-            </>
+          {(question ?.type === 'video' || (question ?.type === 'qcm' && question ?.mediaType === 'video')) && (
+            <video
+              ref={videoRef}
+              key={`video-${currentSession ?.currentQuestionIndex}-${question.id}`}
+              controls
+              autoPlay
+              className="w-full rounded-lg mb-4"
+            >
+              <source src={question.media} />
+            </video>
           )}
 
+          {(question ?.type === 'audio' || (question ?.type === 'qcm' && question ?.mediaType === 'audio')) && (
+            <audio
+              ref={audioRef}
+              key={`audio-${currentSession ?.currentQuestionIndex}-${question.id}`}
+              controls
+              autoPlay
+              className="w-full mb-4"
+            >
+              <source src={question.media} />
+            </audio>
+          )}
+            </>
+        )}
+
           {hasAnswered ? (
-            isTimeExpired ? (
-              // Timer expiré - Affichage orange/rouge
-              <div className="bg-orange-50 dark:bg-orange-900/20 border-2 border-orange-500 dark:border-orange-600 rounded-lg p-6 text-center">
-                <Clock className="w-12 h-12 mx-auto text-orange-600 dark:text-orange-400 mb-2" />
-                <p className="font-bold text-orange-700 dark:text-orange-400 mb-2">⏰ Temps écoulé !</p>
-                {myAnswer && myAnswer.trim() ? (
-                  <div className="bg-white dark:bg-gray-800 rounded p-3 border border-orange-300 dark:border-orange-600 mb-3">
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Votre réponse a été enregistrée :</p>
-                    <p className="font-bold text-orange-700 dark:text-orange-400">{myAnswer}</p>
-                  </div>
-                ) : (
+          isTimeExpired ? (
+            // Timer expiré - Affichage orange/rouge
+            <div className="bg-orange-50 dark:bg-orange-900/20 border-2 border-orange-500 dark:border-orange-600 rounded-lg p-6 text-center">
+              <Clock className="w-12 h-12 mx-auto text-orange-600 dark:text-orange-400 mb-2" />
+              <p className="font-bold text-orange-700 dark:text-orange-400 mb-2">⏰ Temps écoulé !</p>
+              {myAnswer && myAnswer.trim() ? (
+                <div className="bg-white dark:bg-gray-800 rounded p-3 border border-orange-300 dark:border-orange-600 mb-3">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Votre réponse a été enregistrée :</p>
+                  <p className="font-bold text-orange-700 dark:text-orange-400">{myAnswer}</p>
+                </div>
+              ) : (
                   <div className="bg-red-100 dark:bg-red-900/30 rounded p-3 border border-red-300 dark:border-red-600 mb-3">
                     <p className="text-sm text-red-700 dark:text-red-400">❌ Aucune réponse enregistrée</p>
                   </div>
                 )}
-                <p className="text-sm text-gray-600 dark:text-gray-400">⏳ Attente des autres participants...</p>
-              </div>
-            ) : (
+              <p className="text-sm text-gray-600 dark:text-gray-400">⏳ Attente des autres participants...</p>
+            </div>
+          ) : (
               // Réponse validée normalement - Affichage vert
               <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-500 dark:border-green-600 rounded-lg p-6 text-center">
                 <Check className="w-12 h-12 mx-auto text-green-600 dark:text-green-400 mb-2" />
@@ -295,101 +309,101 @@ const QuizView = ({
                 <p className="text-sm text-gray-600 dark:text-gray-400">⏳ Attente des autres participants...</p>
               </div>
             )
-          ) : isTimeExpired ? (
-            // isTimeExpired mais pas hasAnswered - Ne devrait jamais arriver normalement
-            <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 dark:border-red-600 rounded-lg p-6 text-center">
-              <Clock className="w-12 h-12 mx-auto text-red-600 dark:text-red-400 mb-2" />
-              <p className="font-bold text-red-700 dark:text-red-400 mb-2">⏰ Temps écoulé !</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">En attente de la question suivante...</p>
-            </div>
-          ) : question?.type === 'qcm' ? (
-            // ✅ CORRECTION: Interface QCM sans auto-submit
-            <div className="space-y-3">
-              {question.choices?.map((choice, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleQCMChoice(choice)}
-                  disabled={isTimeExpired}
-                  className={`w-full p-4 rounded-lg border-2 text-left font-semibold transition-all ${
-                    isTimeExpired
-                      ? 'opacity-50 cursor-not-allowed border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700'
-                      : myAnswer === choice
+        ) : isTimeExpired ? (
+          // isTimeExpired mais pas hasAnswered - Ne devrait jamais arriver normalement
+          <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 dark:border-red-600 rounded-lg p-6 text-center">
+            <Clock className="w-12 h-12 mx-auto text-red-600 dark:text-red-400 mb-2" />
+            <p className="font-bold text-red-700 dark:text-red-400 mb-2">⏰ Temps écoulé !</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">En attente de la question suivante...</p>
+          </div>
+        ) : question ?.type === 'qcm' ? (
+          // ✅ CORRECTION: Interface QCM sans auto-submit
+          <div className="space-y-3">
+            {question.choices ?.map((choice, index) => (
+              <button
+                key={index}
+                onClick={() => handleQCMChoice(choice)}
+                disabled={isTimeExpired}
+                className={`w-full p-4 rounded-lg border-2 text-left font-semibold transition-all ${
+                  isTimeExpired
+                    ? 'opacity-50 cursor-not-allowed border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700'
+                    : myAnswer === choice
                       ? 'border-purple-600 dark:border-purple-500 bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-200 scale-105 shadow-lg'
                       : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
                   }`}
-                >
-                  <span className="text-purple-600 dark:text-purple-400 mr-2 font-bold">
-                    {String.fromCharCode(65 + index)}.
+              >
+                <span className="text-purple-600 dark:text-purple-400 mr-2 font-bold">
+                  {String.fromCharCode(65 + index)}.
                   </span>
-                  {choice}
-                  {myAnswer === choice && (
-                    <span className="ml-2 text-purple-600 dark:text-purple-400">✓</span>
-                  )}
-                </button>
-              ))}
+                {choice}
+                {myAnswer === choice && (
+                  <span className="ml-2 text-purple-600 dark:text-purple-400">✓</span>
+                )}
+              </button>
+            ))}
               
-              {/* ✅ NOUVEAU: Bouton de validation pour QCM */}
-              {myAnswer && (
-                <div className="pt-4">
-                  <button
-                    onClick={onSubmitAnswer}
-                    disabled={isTimeExpired}
-                    className={`w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2 ${
-                      isTimeExpired
-                        ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
-                        : 'bg-purple-600 dark:bg-purple-700 text-white hover:bg-purple-700 dark:hover:bg-purple-600 shadow-lg'
+            {/* ✅ NOUVEAU: Bouton de validation pour QCM */}
+            {myAnswer && (
+              <div className="pt-4">
+                <button
+                  onClick={onSubmitAnswer}
+                  disabled={isTimeExpired}
+                  className={`w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2 ${
+                    isTimeExpired
+                      ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
+                      : 'bg-purple-600 dark:bg-purple-700 text-white hover:bg-purple-700 dark:hover:bg-purple-600 shadow-lg'
                     }`}
-                  >
-                    <Check className="w-5 h-5" />
-                    Valider ma réponse
+                >
+                  <Check className="w-5 h-5" />
+                  Valider ma réponse
                   </button>
-                  
-                  <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
-                    💾 Réponse auto-sauvegardée : {myAnswer}
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
+
+                <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+                  💾 Réponse auto-sauvegardée : {myAnswer}
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
             <>
-              <input
-                ref={inputRef}
-                type="text"
-                value={myAnswer}
-                onChange={handleAnswerChange}
-                placeholder="Votre réponse..."
-                className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none mb-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                onKeyPress={(e) => e.key === 'Enter' && !hasAnswered && !isTimeExpired && onSubmitAnswer()}
-                disabled={isTimeExpired}
-              />
+            <input
+              ref={inputRef}
+              type="text"
+              value={myAnswer}
+              onChange={handleAnswerChange}
+              placeholder="Votre réponse..."
+              className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none mb-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+              onKeyPress={(e) => e.key === 'Enter' && !hasAnswered && !isTimeExpired && onSubmitAnswer()}
+              disabled={isTimeExpired}
+            />
               
-              {/* Indicateur d'auto-sauvegarde */}
+              {/* Indicateur d'auto-sauvegarde */ }
               {myAnswer && !hasAnswered && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 flex items-center gap-1">
-                  💾 Réponse sauvegardée automatiquement
+          💾 Réponse sauvegardée automatiquement
                 </p>
-              )}
+        )}
 
               <button
-                onClick={onSubmitAnswer}
-                disabled={isTimeExpired}
-                className={`w-full py-3 rounded-lg font-semibold ${
-                  isTimeExpired
-                    ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
-                    : 'bg-purple-600 dark:bg-purple-700 text-white hover:bg-purple-700 dark:hover:bg-purple-600'
-                }`}
-              >
-                {isTimeExpired ? '⏰ Temps écoulé' : 'Valider ma réponse'}
-              </button>
-              
-              <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
-                💡 Votre réponse est automatiquement sauvegardée pendant que vous tapez
+          onClick={onSubmitAnswer}
+          disabled={isTimeExpired}
+          className={`w-full py-3 rounded-lg font-semibold ${
+            isTimeExpired
+              ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
+              : 'bg-purple-600 dark:bg-purple-700 text-white hover:bg-purple-700 dark:hover:bg-purple-600'
+            }`}
+        >
+          {isTimeExpired ? '⏰ Temps écoulé' : 'Valider ma réponse'}
+        </button>
+
+        <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+          💡 Votre réponse est automatiquement sauvegardée pendant que vous tapez
               </p>
             </>
-          )}
+      )}
         </div>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };
 

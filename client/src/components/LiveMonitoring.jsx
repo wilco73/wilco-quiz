@@ -25,13 +25,13 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
     setShowAnswers(false);
   }, [activeLobby?.session?.currentQuestionIndex]);
 
-  // ✅ NOUVEAU: Définir le volume à 50% pour les médias de l'admin
+  // ✅ NOUVEAU: Définir le volume à 30% pour les médias de l'admin
   useEffect(() => {
     if (adminVideoRef.current) {
-      adminVideoRef.current.volume = 0.5;
+      adminVideoRef.current.volume = 0.3;
     }
     if (adminAudioRef.current) {
-      adminAudioRef.current.volume = 0.5;
+      adminAudioRef.current.volume = 0.3;
     }
   }, [activeLobby?.session?.currentQuestionIndex]);
 
