@@ -828,8 +828,13 @@ const QuestionBank = ({ questions, onSave }) => {
                 className="max-w-full max-h-64 rounded border border-gray-300 dark:border-gray-600"
                 onError={(e) => {
                   e.target.style.display = 'none';
+
+                  // ✅ Vérifier si un message d'erreur existe déjà
+                  const existingError = e.target.parentElement.querySelector('.media-error-message');
+                  if (existingError) return; // Ne rien faire si déjà affiché
+
                   const errorMsg = document.createElement('p');
-                  errorMsg.className = 'text-red-600 text-sm';
+                  errorMsg.className = 'text-red-600 text-sm media-error-message'; // ✅ Ajouter classe pour identification
                   errorMsg.textContent = '❌ Impossible de charger l\'image';
                   e.target.parentElement.appendChild(errorMsg);
                 }}
@@ -851,8 +856,13 @@ const QuestionBank = ({ questions, onSave }) => {
                 className="max-w-full max-h-64 rounded border border-gray-300 dark:border-gray-600"
                 onError={(e) => {
                   e.target.style.display = 'none';
+
+                  // ✅ Vérifier si un message d'erreur existe déjà
+                  const existingError = e.target.parentElement.querySelector('.media-error-message');
+                  if (existingError) return;
+
                   const errorMsg = document.createElement('p');
-                  errorMsg.className = 'text-red-600 text-sm';
+                  errorMsg.className = 'text-red-600 text-sm media-error-message';
                   errorMsg.textContent = '❌ Impossible de charger la vidéo';
                   e.target.parentElement.appendChild(errorMsg);
                 }}
@@ -877,8 +887,13 @@ const QuestionBank = ({ questions, onSave }) => {
                 className="w-full"
                 onError={(e) => {
                   e.target.style.display = 'none';
+
+                  // ✅ Vérifier si un message d'erreur existe déjà
+                  const existingError = e.target.parentElement.querySelector('.media-error-message');
+                  if (existingError) return;
+
                   const errorMsg = document.createElement('p');
-                  errorMsg.className = 'text-red-600 text-sm';
+                  errorMsg.className = 'text-red-600 text-sm media-error-message';
                   errorMsg.textContent = '❌ Impossible de charger l\'audio';
                   e.target.parentElement.appendChild(errorMsg);
                 }}

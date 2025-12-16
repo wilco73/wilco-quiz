@@ -1,8 +1,8 @@
 # Définir le chemin du dossier contenant les fichiers
-$dossier = ".\client\src\resources\quiz\musique\blindtest\series"
+$dossier = ".\client\public\resources\quiz\musique\blindtest\musique\medieval"
 
 # Définir le préfixe pour les nouveaux noms
-$prefixe = "bt_serie"
+$prefixe = "bt_medieval"
 
 # Chemin du fichier de correspondance
 $fichierLog = Join-Path $dossier "correspondance.txt"

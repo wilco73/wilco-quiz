@@ -47,7 +47,7 @@ const App = () => {
   // Restaurer la session au chargement
   useEffect(() => {
     if (hasReconnected.current) return;
-    
+
     const savedSession = getSession();
     if (savedSession) {
       if (savedSession.isAdmin) {
@@ -57,11 +57,11 @@ const App = () => {
         hasReconnected.current = true;
       } else if (savedSession.currentUser) {
         setCurrentUser(savedSession.currentUser);
-        
+
         if (savedSession.currentLobbyId && !loading && lobbies.length > 0) {
           setIsReconnecting(true);
           hasReconnected.current = true;
-          
+
           setTimeout(() => {
             reconnectToLobby(savedSession.currentLobbyId, savedSession.currentUser);
             setIsReconnecting(false);
@@ -81,26 +81,26 @@ const App = () => {
     if (currentLobby && lobbies.length > 0) {
       const updated = lobbies.find(l => l.id === currentLobby.id);
       if (updated) {
-        const oldQuestionIndex = currentSession?.currentQuestionIndex || 0;
-        const newQuestionIndex = updated.session?.currentQuestionIndex || 0;
+        const oldQuestionIndex = currentSession ?.currentQuestionIndex || 0;
+        const newQuestionIndex = updated.session ?.currentQuestionIndex || 0;
 
         setCurrentLobby(updated);
 
         // ✅ NOUVEAU: Synchroniser currentUser avec les données du lobby
         if (currentUser && !isAdmin) {
-          const updatedParticipant = updated.participants?.find(p => p.participantId === currentUser.id);
+          const updatedParticipant = updated.participants ?.find(p => p.participantId === currentUser.id);
           if (updatedParticipant) {
             const updatedUser = {
               ...currentUser,
               teamName: updatedParticipant.teamName,
             };
-            
+
             // Ne mettre à jour que si l'équipe a changé (éviter boucles infinies)
             if (updatedUser.teamName !== currentUser.teamName) {
               setCurrentUser(updatedUser);
-              saveSession({ 
-                currentUser: updatedUser, 
-                currentLobbyId: currentLobby.id 
+              saveSession({
+                currentUser: updatedUser,
+                currentLobbyId: currentLobby.id
               });
               console.log('🔄 Équipe mise à jour:', updatedUser.pseudo, '→', updatedUser.teamName || '(Sans équipe)');
             }
@@ -124,9 +124,9 @@ const App = () => {
         // Ne rediriger vers résultats que si on n'est pas déjà sur le classement
         if (updated.status === 'finished' && !isAdmin && view !== 'results' && view !== 'scoreboard') {
           setView('results');
-          saveSession({ 
-            currentUser, 
-            currentLobbyId: currentLobby.id 
+          saveSession({
+            currentUser,
+            currentLobbyId: currentLobby.id
           });
         }
       } else if (!isAdmin) {
@@ -140,7 +140,7 @@ const App = () => {
 
   const reconnectToLobby = (lobbyId, user) => {
     const lobby = lobbies.find(l => l.id === lobbyId);
-    
+
     if (!lobby) {
       console.log('Lobby introuvable, redirection vers la liste');
       clearSession();
@@ -149,11 +149,11 @@ const App = () => {
       return;
     }
 
-    const isInLobby = lobby.participants?.some(p => p.participantId === user.id);
+    const isInLobby = lobby.participants ?.some(p => p.participantId === user.id);
     
     if (isInLobby) {
       setCurrentLobby(lobby);
-      
+
       // ✅ NOUVEAU: Gérer le cas où le quiz est terminé
       if (lobby.status === 'finished') {
         setView('results');
@@ -211,28 +211,28 @@ const App = () => {
         toast.erro('Ce pseudo existe avec un mot de passe différent');
         return;
       }
-      
+
       // ✅ NOUVEAU: Permettre le changement d'équipe
       if (existingParticipant.teamName !== teamName) {
         const confirmChange = window.confirm(
           `Votre pseudo "${pseudo}" est actuellement dans l'équipe "${existingParticipant.teamName}".\n\n` +
           `Voulez-vous changer pour l'équipe "${teamName}" ?`
         );
-        
+
         if (!confirmChange) {
           return;
         }
-        
+
         // Mettre à jour l'équipe du participant
         existingParticipant.teamName = teamName;
-        
+
         // Mettre à jour dans la base
-        const updatedParticipants = participants.map(p => 
+        const updatedParticipants = participants.map(p =>
           p.id === existingParticipant.id ? existingParticipant : p
         );
         await api.saveParticipants(updatedParticipants);
         setParticipants(updatedParticipants);
-        
+
         console.log(`✅ ${pseudo} a changé d'équipe: "${existingParticipant.teamName}" → "${teamName}"`);
       }
     }
@@ -284,9 +284,9 @@ const App = () => {
         const lobby = lobbies.find(l => l.id === lobbyId);
         setCurrentLobby(lobby);
         setView('lobby');
-        saveSession({ 
-          currentUser, 
-          currentLobbyId: lobbyId 
+        saveSession({
+          currentUser,
+          currentLobbyId: lobbyId
         });
       }
     } catch (error) {
@@ -368,7 +368,7 @@ const App = () => {
       const data = await api.deleteTeam(teamName);
       if (data.success) {
         toast.info(`✅ Équipe "${teamName}" supprimée\n${data.affectedCount} participant(s) retiré(s) de l'équipe`);
-        
+
         // Recharger les données
         const [participantsData, teamsData] = await Promise.all([
           api.fetchParticipants(),
@@ -404,18 +404,18 @@ const App = () => {
     try {
       await api.saveQuestions(newQuestions);
       setQuestions(newQuestions);
-      
+
       const updatedQuizzes = syncQuizzesWithQuestions(quizzes, newQuestions);
       const quizzesChanged = JSON.stringify(updatedQuizzes) !== JSON.stringify(quizzes);
-      
+
       if (quizzesChanged) {
         await api.saveQuizzes(updatedQuizzes);
         setQuizzes(updatedQuizzes);
-        
-        const affectedQuizzes = updatedQuizzes.filter((quiz, index) => 
-          JSON.stringify(quiz.questions) !== JSON.stringify(quizzes[index]?.questions)
+
+        const affectedQuizzes = updatedQuizzes.filter((quiz, index) =>
+          JSON.stringify(quiz.questions) !== JSON.stringify(quizzes[index] ?.questions)
         );
-        
+
         toast.success(`✅ Questions sauvegardées !\n\n🔄 ${affectedQuizzes.length} quiz synchronisé(s) automatiquement.`);
       } else {
         toast.success('✅ Questions sauvegardées !');
@@ -429,12 +429,12 @@ const App = () => {
   const syncQuizzesWithQuestions = (quizzes, questions) => {
     return quizzes.map(quiz => {
       if (!quiz.questions || quiz.questions.length === 0) return quiz;
-      
+
       const updatedQuestions = quiz.questions.map(quizQuestion => {
         const updatedQuestion = questions.find(q => q.id === quizQuestion.id);
         return updatedQuestion ? updatedQuestion : quizQuestion;
       });
-      
+
       return {
         ...quiz,
         questions: updatedQuestions
@@ -460,14 +460,12 @@ const App = () => {
   };
 
   const handleDeleteQuiz = async (id) => {
-    if (window.confirm('Supprimer ce quiz ?')) {
-      try {
-        const updatedQuizzes = quizzes.filter(q => q.id !== id);
-        await api.saveQuizzes(updatedQuizzes);
-        setQuizzes(updatedQuizzes);
-      } catch (error) {
-        console.error('Erreur:', error);
-      }
+    try {
+      const updatedQuizzes = quizzes.filter(q => q.id !== id);
+      await api.saveQuizzes(updatedQuizzes);
+      setQuizzes(updatedQuizzes);
+    } catch (error) {
+      console.error('Erreur:', error);
     }
   };
 
@@ -505,7 +503,7 @@ const App = () => {
     try {
       await api.validateAnswer(lobbyId, participantId, questionIndex, isCorrect);
       await loadLobbies();
-      
+
       const teamsData = await api.fetchTeams();
       setTeams(teamsData);
     } catch (error) {
@@ -596,7 +594,7 @@ const App = () => {
       {view === 'results' && (
         <QuizResultsView
           currentLobby={currentLobby}
-          quiz={quizzes.find(q => q.id === currentLobby?.quizId)}
+          quiz={quizzes.find(q => q.id === currentLobby ?.quizId)}
           currentUser={currentUser}
           onLeaveLobby={handleLeaveLobby}
           onViewScoreboard={handleViewScoreboard}
