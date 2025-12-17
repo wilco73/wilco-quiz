@@ -45,36 +45,57 @@ const App = () => {
   const hasReconnected = useRef(false);
 
   // Restaurer la session au chargement
-  useEffect(() => {
-    if (hasReconnected.current) return;
+useEffect(() => {
+  if (hasReconnected.current) return;
 
-    const savedSession = getSession();
-    if (savedSession) {
-      if (savedSession.isAdmin) {
-        setIsAdmin(true);
-        setAdminUsername(savedSession.adminUsername || 'Admin');
-        setView('admin');
-        hasReconnected.current = true;
-      } else if (savedSession.currentUser) {
-        setCurrentUser(savedSession.currentUser);
-
-        if (savedSession.currentLobbyId && !loading && lobbies.length > 0) {
-          setIsReconnecting(true);
-          hasReconnected.current = true;
-
-          setTimeout(() => {
-            reconnectToLobby(savedSession.currentLobbyId, savedSession.currentUser);
-            setIsReconnecting(false);
-          }, 500);
-        } else if (!savedSession.currentLobbyId) {
-          setView('lobby-list');
-          hasReconnected.current = true;
+  const savedSession = getSession();
+  if (savedSession) {
+    if (savedSession.isAdmin) {
+      setIsAdmin(true);
+      setAdminUsername(savedSession.adminUsername || 'Admin');
+      setView('admin');
+      hasReconnected.current = true;
+    } else if (savedSession.currentUser) {
+      // ✅ VALIDATION: Vérifier que l'équipe existe encore
+      const user = savedSession.currentUser;
+      
+      if (!loading && teams.length > 0) {
+        // Chercher l'équipe dans la liste actuelle
+        const teamExists = teams.some(t => t.name === user.teamName);
+        
+        if (!teamExists && user.teamName) {
+          console.warn(`⚠️  Équipe "${user.teamName}" n'existe plus, réinitialisation`);
+          // Retirer l'équipe obsolète
+          user.teamName = '';
+          user.teamId = undefined;
+          
+          // Mettre à jour le localStorage
+          saveSession({
+            ...savedSession,
+            currentUser: user
+          });
         }
       }
-    } else {
-      hasReconnected.current = true;
+      
+      setCurrentUser(user);  // ✅ Utilise version validée
+
+      if (savedSession.currentLobbyId && !loading && lobbies.length > 0) {
+        setIsReconnecting(true);
+        hasReconnected.current = true;
+
+        setTimeout(() => {
+          reconnectToLobby(savedSession.currentLobbyId, user);
+          setIsReconnecting(false);
+        }, 500);
+      } else if (!savedSession.currentLobbyId) {
+        setView('lobby-list');
+        hasReconnected.current = true;
+      }
     }
-  }, [loading, lobbies]);
+  } else {
+    hasReconnected.current = true;
+  }
+}, [loading, lobbies, teams]);  // ✅ Ajouter teams aux dépendances
 
   // Synchroniser le currentLobby avec les mises à jour
   useEffect(() => {

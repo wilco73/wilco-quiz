@@ -14,7 +14,7 @@ export const API_URL = process.env.REACT_APP_API_URL ||
   );
 
 // Intervalle de polling en millisecondes
-export const POLL_INTERVAL = parseInt(process.env.REACT_APP_POLL_INTERVAL) || 1000;
+export const POLL_INTERVAL = parseInt(process.env.REACT_APP_POLL_INTERVAL) || 5000;
 
 // Statuts des quiz
 export const STATUS = {

@@ -48,6 +48,74 @@ function writeDB(data) {
   }
 }
 
+// ==================== PROTECTION RACE CONDITIONS ====================
+
+let dbLock = Promise.resolve();
+let lockedDB = null;
+
+/**
+ * Acquérir le verrou et lire la DB
+ * @returns {Promise<Object>} Base de données
+ */
+async function acquireDB() {
+  // Attendre que le verrou précédent soit libéré
+  await dbLock;
+  
+  // Lire la DB
+  lockedDB = readDB();
+  return lockedDB;
+}
+
+/**
+ * Libérer le verrou et écrire la DB
+ * @param {Object} db - Base de données modifiée
+ */
+function releaseDB(db) {
+  if (!db) {
+    console.warn('⚠️  releaseDB appelé sans DB');
+    return;
+  }
+  
+  writeDB(db);
+  lockedDB = null;
+}
+
+/**
+ * Exécuter une opération avec verrou automatique
+ * @param {Function} operation - Fonction async qui reçoit db et doit retourner résultat
+ * @returns {Promise<any>} Résultat de l'opération
+ */
+async function withLock(operation) {
+  // Créer une nouvelle promesse de verrou
+  let resolveLock;
+  const newLock = new Promise(resolve => {
+    resolveLock = resolve;
+  });
+  
+  // Chaîner avec le verrou précédent
+  const previousLock = dbLock;
+  dbLock = newLock;
+  
+  try {
+    // Attendre libération du verrou précédent
+    await previousLock;
+    
+    // Lire la DB
+    const db = readDB();
+    
+    // Exécuter l'opération
+    const result = await operation(db);
+    
+    // Écrire la DB
+    writeDB(db);
+    
+    return result;
+  } finally {
+    // Libérer le verrou
+    resolveLock();
+  }
+}
+
 // ==================== HELPERS NORMALISATION ====================
 
 /**
@@ -433,47 +501,47 @@ app.post('/api/create-lobby', (req, res) => {
   res.json({ success: true, lobby });
 });
 
-app.post('/api/join-lobby', (req, res) => {
+app.post('/api/join-lobby', async (req, res) => {  // ✅ async
   const { lobbyId, participantId, pseudo, teamName } = req.body;
-  const db = readDB();
-  const lobby = db.lobbies.find(l => l.id === lobbyId);
-
-  if (!lobby || lobby.status !== 'waiting') {
-    return res.json({ success: false, message: 'Salle non disponible' });
-  }
-
-  // ✅ AMÉLIORATION: Normaliser et trouver équipe existante
-  const normalizedTeamName = normalizeTeamName(teamName);
-  let team = findTeamByName(db.teams, normalizedTeamName);
-
-  if (!team) {
-    team = {
-      id: Date.now().toString(),
-      name: normalizedTeamName,
-      validatedScore: 0,
-      createdAt: Date.now()
-    };
-    db.teams.push(team);
-    console.log(`✅ Nouvelle équipe créée (join-lobby): "${normalizedTeamName}"`);
-  } else {
-    console.log(`✅ Équipe existante trouvée (join-lobby): "${team.name}"`);
-  }
-
-  if (!lobby.participants.find(p => p.participantId === participantId)) {
-    lobby.participants.push({
-      participantId,
-      pseudo,
-      teamName: team.name,  // Utiliser le nom exact
-      hasAnswered: false,
-      currentAnswer: '',
-      answers: {},
-      validations: {}
-    });
-    console.log(`✅ Participant "${pseudo}" a rejoint le lobby avec équipe "${team.name}"`);
-  }
-
-  writeDB(db);
-  res.json({ success: true });
+  
+  const result = await withLock(async (db) => {  // ✅ Protection
+    const lobby = db.lobbies.find(l => l.id === lobbyId);
+    
+    if (!lobby || lobby.status !== 'waiting') {
+      return { success: false, message: 'Salle non disponible' };
+    }
+    
+    const normalizedTeamName = normalizeTeamName(teamName);
+    let team = findTeamByName(db.teams, normalizedTeamName);
+    
+    if (!team) {
+      team = {
+        id: Date.now().toString(),
+        name: normalizedTeamName,
+        validatedScore: 0,
+        createdAt: Date.now()
+      };
+      db.teams.push(team);
+      console.log(`✅ Nouvelle équipe créée: "${normalizedTeamName}"`);
+    }
+    
+    if (!lobby.participants.find(p => p.participantId === participantId)) {
+      lobby.participants.push({
+        participantId,
+        pseudo,
+        teamName: team.name,
+        hasAnswered: false,
+        currentAnswer: '',
+        answers: {},
+        validations: {}
+      });
+      console.log(`✅ "${pseudo}" rejoint lobby avec équipe "${team.name}"`);
+    }
+    
+    return { success: true };  // ✅ Retourner résultat
+  });
+  
+  res.json(result);  // ✅ Envoyer résultat
 });
 
 app.post('/api/leave-lobby', (req, res) => {

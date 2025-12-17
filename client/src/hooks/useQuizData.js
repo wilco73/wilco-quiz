@@ -20,7 +20,7 @@ export const useQuizData = (shouldPoll = false) => {
         api.fetchQuestions(),
         api.fetchLobbies()
       ]);
-      
+
       setTeams(teamsData);
       setParticipants(participantsData);
       setQuizzes(quizzesData);
@@ -49,8 +49,18 @@ export const useQuizData = (shouldPoll = false) => {
         api.fetchLobbies(),
         api.fetchTeams()
       ]);
-      setLobbies(lobbiesData);
-      setTeams(teamsData);
+
+      // ✅ Ne mettre à jour que si changements
+      const lobbiesChanged = JSON.stringify(lobbiesData) !== JSON.stringify(lobbies);
+      const teamsChanged = JSON.stringify(teamsData) !== JSON.stringify(teams);
+
+      if (lobbiesChanged) {
+        setLobbies(lobbiesData);
+      }
+
+      if (teamsChanged) {
+        setTeams(teamsData);
+      }
     } catch (error) {
       console.error('Erreur chargement lobbies et teams:', error);
     }
@@ -66,9 +76,17 @@ export const useQuizData = (shouldPoll = false) => {
     }
 
     if (shouldPoll) {
-      // ✅ CORRECTION: Utiliser loadLobbiesAndTeams au lieu de loadLobbies
+      let counter = 0;
+
       pollingIntervalRef.current = setInterval(() => {
-        loadLobbiesAndTeams();
+        // ✅ Recharger lobbies chaque seconde
+        loadLobbies();
+
+        // ✅ Recharger teams seulement toutes les 5 secondes
+        counter++;
+        if (counter % 5 === 0) {
+          loadTeams();
+        }
       }, POLL_INTERVAL);
     }
 
@@ -78,6 +96,16 @@ export const useQuizData = (shouldPoll = false) => {
       }
     };
   }, [shouldPoll]);
+
+  // ✅ Ajouter fonction loadTeams
+  const loadTeams = async () => {
+    try {
+      const teamsData = await api.fetchTeams();
+      setTeams(teamsData);
+    } catch (error) {
+      console.error('Erreur chargement teams:', error);
+    }
+  };
 
   return {
     teams,
