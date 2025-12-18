@@ -157,6 +157,14 @@ export function useSocket() {
     });
   }, []);
   
+  const stopLobby = useCallback((lobbyId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      console.log('[SOCKET] stopLobby:', lobbyId);
+      socketRef.current.emit('lobby:stop', { lobbyId }, resolve);
+    });
+  }, []);
+  
   // Quiz
   const startQuiz = useCallback((lobbyId) => {
     return new Promise((resolve) => {
@@ -245,6 +253,7 @@ export function useSocket() {
     joinLobby,
     leaveLobby,
     deleteLobby,
+    stopLobby,
     // Quiz
     startQuiz,
     nextQuestion,

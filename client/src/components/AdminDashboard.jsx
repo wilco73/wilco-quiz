@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogOut, RotateCcw, Monitor, Check, BookOpen, Trash, Trophy, FileQuestion, Play, Edit, Trash2, Users, Shuffle } from 'lucide-react';
+import { LogOut, RotateCcw, Monitor, Check, BookOpen, Trash, Trophy, FileQuestion, Play, Edit, Trash2, Users, Shuffle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import * as api from '../services/api';
 import QuestionBank from './QuestionBank';
@@ -9,6 +9,38 @@ import LiveMonitoring from './LiveMonitoring';
 import ValidationView from './ValidationView';
 import ParticipantManager from './ParticipantManager';
 import DarkModeToggle from './DarkModeToggle';
+
+// Composant de pagination réutilisable
+const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, totalItems }) => {
+  if (totalPages <= 1) return null;
+  
+  return (
+    <div className="flex justify-between items-center mt-4 pt-4 border-t dark:border-gray-600">
+      <span className="text-sm text-gray-500 dark:text-gray-400">
+        {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalItems)} sur {totalItems}
+      </span>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="px-3 py-1 bg-gray-200 dark:bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300 dark:hover:bg-gray-500 transition"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <span className="px-3 py-1 text-sm dark:text-white">
+          {currentPage} / {totalPages}
+        </span>
+        <button
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+          className="px-3 py-1 bg-gray-200 dark:bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300 dark:hover:bg-gray-500 transition"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const AdminDashboard = ({ 
   adminUsername,
@@ -26,8 +58,12 @@ const AdminDashboard = ({
   const [activeTab, setActiveTab] = useState('dashboard');
   const [editingQuiz, setEditingQuiz] = useState(null);
   const [shuffleMode, setShuffleMode] = useState({});
+  
+  // Pagination states
   const [teamsPage, setTeamsPage] = useState(1);
+  const [quizzesPage, setQuizzesPage] = useState(1);
   const teamsPerPage = 5;
+  const quizzesPerPage = 4;
   
   const toast = useToast();
 
@@ -104,6 +140,15 @@ const AdminDashboard = ({
     const result = await socket.deleteLobby(lobbyId);
     if (result.success) {
       toast.success('Salle supprimee');
+    }
+  };
+
+  const onStopQuiz = async (lobbyId) => {
+    const result = await socket.stopLobby(lobbyId);
+    if (result.success) {
+      toast.success('Quiz arrete - retour en salle d\'attente');
+    } else {
+      toast.error(result.message || 'Erreur lors de l\'arret');
     }
   };
 
@@ -215,7 +260,7 @@ const AdminDashboard = ({
                   {/* Liste des Quiz */}
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-xl font-bold dark:text-white">Quiz</h3>
+                      <h3 className="text-xl font-bold dark:text-white">Quiz ({quizzes.length})</h3>
                       <button
                         onClick={() => setEditingQuiz({})}
                         className="px-4 py-2 bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600"
@@ -224,70 +269,89 @@ const AdminDashboard = ({
                       </button>
                     </div>
                     
-                    <div className="space-y-3">
-                      {quizzes.map(quiz => (
-                        <div key={quiz.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700">
-                          <h4 className="font-bold dark:text-white">{quiz.title}</h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{quiz.questions?.length || 0} questions</p>
-                          
-                          {/* Checkbox pour mode shuffle */}
-                          <label className="flex items-center gap-2 mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition">
-                            <input
-                              type="checkbox"
-                              checked={shuffleMode[quiz.id] || false}
-                              onChange={(e) => setShuffleMode(prev => ({ 
-                                ...prev, 
-                                [quiz.id]: e.target.checked 
-                              }))}
-                              className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                            />
-                            <Shuffle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                              Ordre aléatoire des questions
-                            </span>
-                          </label>
-                          
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleCreateLobby(quiz.id)}
-                              className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm flex items-center gap-1"
-                            >
-                              <Play className="w-3 h-3" />
-                              Créer salle
-                            </button>
-                            <button
-                              onClick={() => setEditingQuiz(quiz)}
-                              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-1"
-                            >
-                              <Edit className="w-3 h-3" />
-                              Modifier
-                            </button>
-                            <button
-                              onClick={() => handleDeleteQuiz(quiz.id)}
-                              className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-1"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              Supprimer
-                            </button>
+                    {(() => {
+                      const totalQuizzesPages = Math.ceil(quizzes.length / quizzesPerPage);
+                      const startIndex = (quizzesPage - 1) * quizzesPerPage;
+                      const paginatedQuizzes = quizzes.slice(startIndex, startIndex + quizzesPerPage);
+                      
+                      return (
+                        <>
+                          <div className="space-y-3">
+                            {paginatedQuizzes.map(quiz => (
+                              <div key={quiz.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700">
+                                <h4 className="font-bold dark:text-white">{quiz.title}</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{quiz.questions?.length || 0} questions</p>
+                                
+                                {/* Checkbox pour mode shuffle */}
+                                <label className="flex items-center gap-2 mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition">
+                                  <input
+                                    type="checkbox"
+                                    checked={shuffleMode[quiz.id] || false}
+                                    onChange={(e) => setShuffleMode(prev => ({ 
+                                      ...prev, 
+                                      [quiz.id]: e.target.checked 
+                                    }))}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                  />
+                                  <Shuffle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                                    Ordre aléatoire des questions
+                                  </span>
+                                </label>
+                                
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleCreateLobby(quiz.id)}
+                                    className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm flex items-center gap-1"
+                                  >
+                                    <Play className="w-3 h-3" />
+                                    Créer salle
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingQuiz(quiz)}
+                                    className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-1"
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                    Modifier
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteQuiz(quiz.id)}
+                                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-1"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                    Supprimer
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            {quizzes.length === 0 && (
+                              <p className="text-center text-gray-500 dark:text-gray-400 py-8">Aucun quiz</p>
+                            )}
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                          <Pagination
+                            currentPage={quizzesPage}
+                            totalPages={totalQuizzesPages}
+                            onPageChange={setQuizzesPage}
+                            itemsPerPage={quizzesPerPage}
+                            totalItems={quizzes.length}
+                          />
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* Classement */}
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-                    <h3 className="text-xl font-bold mb-4 dark:text-white">Classement</h3>
-                    <div className="space-y-3">
-                      {(() => {
-                        const sortedTeams = [...teams].sort((a, b) => (b.validatedScore || 0) - (a.validatedScore || 0));
-                        const totalTeamsPages = Math.ceil(sortedTeams.length / teamsPerPage);
-                        const startIndex = (teamsPage - 1) * teamsPerPage;
-                        const endIndex = startIndex + teamsPerPage;
-                        const paginatedTeams = sortedTeams.slice(startIndex, endIndex);
-                        
-                        return (
-                          <>
+                    <h3 className="text-xl font-bold mb-4 dark:text-white">Classement ({teams.length} équipes)</h3>
+                    {(() => {
+                      const sortedTeams = [...teams].sort((a, b) => (b.validatedScore || 0) - (a.validatedScore || 0));
+                      const totalTeamsPages = Math.ceil(sortedTeams.length / teamsPerPage);
+                      const startIndex = (teamsPage - 1) * teamsPerPage;
+                      const paginatedTeams = sortedTeams.slice(startIndex, startIndex + teamsPerPage);
+                      
+                      return (
+                        <>
+                          <div className="space-y-3">
                             {paginatedTeams.map((team, pageIndex) => {
                               const actualIndex = startIndex + pageIndex;
                               return (
@@ -300,46 +364,20 @@ const AdminDashboard = ({
                                 </div>
                               );
                             })}
-                            
                             {teams.length === 0 && (
                               <p className="text-center text-gray-500 dark:text-gray-400 py-8">Aucune équipe</p>
                             )}
-                            
-                            {totalTeamsPages > 1 && (
-                              <div className="flex justify-center items-center gap-2 mt-4 pt-4 border-t dark:border-gray-600">
-                                <button
-                                  onClick={() => setTeamsPage(prev => Math.max(1, prev - 1))}
-                                  disabled={teamsPage === 1}
-                                  className={`px-3 py-1 rounded text-sm ${
-                                    teamsPage === 1
-                                      ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed'
-                                      : 'bg-purple-600 text-white hover:bg-purple-700'
-                                  }`}
-                                >
-                                  ←
-                                </button>
-                                
-                                <span className="text-sm text-gray-600 dark:text-gray-400">
-                                  {teamsPage} / {totalTeamsPages}
-                                </span>
-                                
-                                <button
-                                  onClick={() => setTeamsPage(prev => Math.min(totalTeamsPages, prev + 1))}
-                                  disabled={teamsPage === totalTeamsPages}
-                                  className={`px-3 py-1 rounded text-sm ${
-                                    teamsPage === totalTeamsPages
-                                      ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed'
-                                      : 'bg-purple-600 text-white hover:bg-purple-700'
-                                  }`}
-                                >
-                                  →
-                                </button>
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
+                          </div>
+                          <Pagination
+                            currentPage={teamsPage}
+                            totalPages={totalTeamsPages}
+                            onPageChange={setTeamsPage}
+                            itemsPerPage={teamsPerPage}
+                            totalItems={teams.length}
+                          />
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* Salles actives */}
@@ -428,6 +466,7 @@ const AdminDashboard = ({
               quizzes={quizzes}
               socket={socket}
               onNextQuestion={onNextQuestion}
+              onStopQuiz={onStopQuiz}
             />
           )}
 

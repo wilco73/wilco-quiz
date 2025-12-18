@@ -789,6 +789,25 @@ function finishLobby(lobbyId) {
   run("UPDATE lobbies SET status = 'finished' WHERE id = ?", [lobbyId]);
 }
 
+function resetLobby(lobbyId) {
+  // Remettre le lobby en attente
+  run(`
+    UPDATE lobbies 
+    SET status = 'waiting', current_question_index = 0, start_time = NULL
+    WHERE id = ?
+  `, [lobbyId]);
+  
+  // Reinitialiser les reponses des participants
+  run(`
+    UPDATE lobby_participants 
+    SET has_answered = 0, current_answer = '', draft_answer = ''
+    WHERE lobby_id = ?
+  `, [lobbyId]);
+  
+  // Supprimer les reponses enregistrees
+  run('DELETE FROM lobby_answers WHERE lobby_id = ?', [lobbyId]);
+}
+
 function deleteLobby(lobbyId) {
   run('DELETE FROM lobbies WHERE id = ?', [lobbyId]);
 }
@@ -955,6 +974,7 @@ module.exports = {
   startLobby,
   updateLobbyQuestionIndex,
   finishLobby,
+  resetLobby,
   deleteLobby,
   
   // Lobby Answers

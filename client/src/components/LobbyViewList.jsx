@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { LogOut, UserPlus, Trophy, Users, Star } from 'lucide-react';
+import { LogOut, UserPlus, Trophy, Users, Star, User } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 
-const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJoinLobby, onViewScoreboard, onLogout }) => {
-  const availableLobbies = lobbies.filter(l => l.status === 'waiting');
+const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJoinLobby, onViewScoreboard, onViewProfile, onLogout }) => {
+  const availableLobbies = lobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
   const userTeam = teams.find(t => t.name === currentUser.teamName);
   
-  // ✅ NOUVEAU: Récupérer les coéquipiers en temps réel
+  // Récupérer les coéquipiers en temps réel
   const [teamMembers, setTeamMembers] = useState([]);
 
   useEffect(() => {
@@ -116,7 +116,7 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
               {!currentUser.teamName && (
                 <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4 border-2 border-orange-200 dark:border-orange-700">
                   <p className="text-sm text-orange-800 dark:text-orange-300">
-                    ℹ️ Vous n'êtes pas encore assigné à une équipe. Contactez l'administrateur pour être ajouté à une équipe.
+                    ℹ️ Vous n'êtes pas encore dans une équipe. Cliquez sur <strong>Profil</strong> pour rejoindre ou créer une équipe.
                   </p>
                 </div>
               )}
@@ -125,6 +125,14 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
             {/* Boutons d'action */}
             <div className="flex gap-2 ml-4">
               <DarkModeToggle />
+              <button
+                onClick={onViewProfile}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600"
+                title="Mon profil"
+              >
+                <User className="w-4 h-4" />
+                Profil
+              </button>
               <button
                 onClick={onViewScoreboard}
                 className="flex items-center gap-2 px-4 py-2 bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600"
@@ -148,9 +156,22 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
         <div className="grid gap-4">
           {availableLobbies.map(lobby => {
             const quiz = quizzes.find(q => q.id === lobby.quizId);
+            const isPlaying = lobby.status === 'playing';
+            const currentQ = lobby.session?.currentQuestionIndex || 0;
+            const totalQ = quiz?.questions?.length || 0;
+            
             return (
-              <div key={lobby.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition">
-                <h4 className="text-xl font-bold mb-2 dark:text-white">{quiz?.title}</h4>
+              <div key={lobby.id} className={`bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition ${
+                isPlaying ? 'border-2 border-orange-400 dark:border-orange-500' : ''
+              }`}>
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="text-xl font-bold dark:text-white">{quiz?.title}</h4>
+                  {isPlaying && (
+                    <span className="px-3 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-sm rounded-full font-semibold animate-pulse">
+                      🔴 En cours (Q{currentQ + 1}/{totalQ})
+                    </span>
+                  )}
+                </div>
                 <p className="text-gray-600 dark:text-gray-400 mb-4">{quiz?.description}</p>
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -160,17 +181,26 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
                     </p>
                     <p className="flex items-center gap-1 mt-1">
                       <Trophy className="w-4 h-4" />
-                      {quiz?.questions?.length || 0} questions
+                      {totalQ} questions
                     </p>
                   </div>
                   <button
                     onClick={() => onJoinLobby(lobby.id)}
-                    className="px-6 py-2 bg-purple-600 dark:bg-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 flex items-center gap-2"
+                    className={`px-6 py-2 text-white rounded-lg flex items-center gap-2 ${
+                      isPlaying 
+                        ? 'bg-orange-500 hover:bg-orange-600' 
+                        : 'bg-purple-600 dark:bg-purple-700 hover:bg-purple-700 dark:hover:bg-purple-600'
+                    }`}
                   >
                     <UserPlus className="w-4 h-4" />
-                    Rejoindre
+                    {isPlaying ? 'Rejoindre en cours' : 'Rejoindre'}
                   </button>
                 </div>
+                {isPlaying && (
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-3">
+                    ⚠️ Le quiz est deja en cours. Les questions manquees seront comptees comme non repondues.
+                  </p>
+                )}
               </div>
             );
           })}

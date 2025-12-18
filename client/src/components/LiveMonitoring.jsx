@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Eye, Check, Clock, SkipForward, Users, Trophy, EyeOff, Image as ImageIcon, Video as VideoIcon, Music } from 'lucide-react';
+import { Eye, Check, Clock, SkipForward, Users, Trophy, EyeOff, Image as ImageIcon, Video as VideoIcon, Music, StopCircle } from 'lucide-react';
 
-const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion }) => {
+const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }) => {
   const activeLobby = lobbies.find(l => l.status === 'playing');
   const audioRef = useRef(null);
   const adminVideoRef = useRef(null);
@@ -157,13 +157,27 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion }) => {
               )}
             </div>
           </div>
-          <button
-            onClick={() => onNextQuestion(activeLobby.id)}
-            className="px-6 py-3 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600 flex items-center gap-2 font-semibold transition-all hover:scale-105"
-          >
-            <SkipForward className="w-5 h-5" />
-            Question suivante
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                if (window.confirm('Voulez-vous vraiment arreter ce quiz ? Toutes les reponses seront perdues.')) {
+                  onStopQuiz(activeLobby.id);
+                }
+              }}
+              className="px-4 py-3 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 flex items-center gap-2 font-semibold transition-all hover:scale-105"
+              title="Arreter le quiz et revenir en salle d'attente"
+            >
+              <StopCircle className="w-5 h-5" />
+              Arreter
+            </button>
+            <button
+              onClick={() => onNextQuestion(activeLobby.id)}
+              className="px-6 py-3 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600 flex items-center gap-2 font-semibold transition-all hover:scale-105"
+            >
+              <SkipForward className="w-5 h-5" />
+              Question suivante
+            </button>
+          </div>
         </div>
 
         {hasTimer && localTimeRemaining !== null && (

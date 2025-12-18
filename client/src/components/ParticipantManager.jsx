@@ -1,12 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Trash2, Edit2, UserMinus, UserPlus, AlertCircle, Search, Filter, 
-  Check, X, Plus, Save, Key, Trophy, RefreshCw
+  Check, X, Plus, Save, Key, Trophy, RefreshCw, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { normalizeTeamName, validateTeamName, findTeamByName } from '../utils/helpers';
 import { useToast } from './ToastProvider';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+
+// Composant de pagination
+const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, totalItems }) => {
+  if (totalPages <= 1) return null;
+  
+  return (
+    <div className="flex justify-between items-center mt-4 pt-4 border-t dark:border-gray-600">
+      <span className="text-sm text-gray-500 dark:text-gray-400">
+        {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalItems)} sur {totalItems}
+      </span>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="px-3 py-1 bg-gray-200 dark:bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300 dark:hover:bg-gray-500 transition"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <span className="px-3 py-1 text-sm dark:text-white">
+          {currentPage} / {totalPages}
+        </span>
+        <button
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+          className="px-3 py-1 bg-gray-200 dark:bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300 dark:hover:bg-gray-500 transition"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDeleteTeam, onRefreshData }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,6 +46,12 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
   const [editingParticipant, setEditingParticipant] = useState(null);
   const [newTeamName, setNewTeamName] = useState('');
   const toast = useToast();
+  
+  // Pagination
+  const [teamsPage, setTeamsPage] = useState(1);
+  const [participantsPage, setParticipantsPage] = useState(1);
+  const teamsPerPage = 8;
+  const participantsPerPage = 10;
   
   // Etats pour feedback normalisation
   const [normalizedPreview, setNormalizedPreview] = useState('');
@@ -414,12 +452,20 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
           </div>
 
           {/* Liste des equipes */}
-          {teams.sort((a, b) => a.name.localeCompare(b.name)).map(team => {
-            const teamMembers = participantsByTeam[team.name] || [];
-            const isEmpty = teamMembers.length === 0;
-            const isEditing = editingTeam?.id === team.id;
-
+          {(() => {
+            const sortedTeams = [...teams].sort((a, b) => a.name.localeCompare(b.name));
+            const totalTeamsPages = Math.ceil(sortedTeams.length / teamsPerPage);
+            const startIndex = (teamsPage - 1) * teamsPerPage;
+            const paginatedTeams = sortedTeams.slice(startIndex, startIndex + teamsPerPage);
+            
             return (
+              <>
+                {paginatedTeams.map(team => {
+                  const teamMembers = participantsByTeam[team.name] || [];
+                  const isEmpty = teamMembers.length === 0;
+                  const isEditing = editingTeam?.id === team.id;
+
+                  return (
               <div 
                 key={team.id} 
                 className={`bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden ${
@@ -516,6 +562,19 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
               </div>
             );
           })}
+          {teams.length === 0 && (
+            <p className="text-center text-gray-500 dark:text-gray-400 py-8">Aucune equipe</p>
+          )}
+          <Pagination
+            currentPage={teamsPage}
+            totalPages={totalTeamsPages}
+            onPageChange={setTeamsPage}
+            itemsPerPage={teamsPerPage}
+            totalItems={teams.length}
+          />
+        </>
+      );
+    })()}
         </div>
       )}
 
@@ -587,57 +646,64 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
                 {filteredParticipants.length} participant{filteredParticipants.length > 1 ? 's' : ''}
               </h3>
             </div>
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredParticipants.map(participant => {
-                const isEditingFull = editingParticipantFull?.id === participant.id;
-                const isEditingTeam = editingParticipant?.id === participant.id;
+            {(() => {
+              const totalParticipantsPages = Math.ceil(filteredParticipants.length / participantsPerPage);
+              const startIndex = (participantsPage - 1) * participantsPerPage;
+              const paginatedParticipants = filteredParticipants.slice(startIndex, startIndex + participantsPerPage);
+              
+              return (
+                <>
+                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {paginatedParticipants.map(participant => {
+                      const isEditingFull = editingParticipantFull?.id === participant.id;
+                      const isEditingTeam = editingParticipant?.id === participant.id;
 
-                return (
-                  <div key={participant.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-lg dark:text-white">{participant.pseudo}</p>
-                          {participant.teamName && (
-                            <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded-full">
-                              {participant.teamName}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">ID: {participant.id}</p>
-                      </div>
+                      return (
+                        <div key={participant.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="font-bold text-lg dark:text-white">{participant.pseudo}</p>
+                                {participant.teamName && (
+                                  <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded-full">
+                                    {participant.teamName}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">ID: {participant.id}</p>
+                            </div>
 
-                      {!isEditingFull && !isEditingTeam && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingParticipant(participant);
-                              setNewTeamName(participant.teamName || '');
-                            }}
-                            className="p-2 bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900"
-                            title="Changer d'equipe"
-                          >
-                            <Users className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingParticipantFull(participant);
-                              setEditParticipantData({ teamName: participant.teamName || '', newPassword: '' });
-                            }}
-                            className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900"
-                            title="Modifier"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteParticipant(participant)}
-                            className="p-2 bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900"
-                            title="Supprimer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
+                            {!isEditingFull && !isEditingTeam && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingParticipant(participant);
+                                    setNewTeamName(participant.teamName || '');
+                                  }}
+                                  className="p-2 bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900"
+                                  title="Changer d'equipe"
+                                >
+                                  <Users className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingParticipantFull(participant);
+                                    setEditParticipantData({ teamName: participant.teamName || '', newPassword: '' });
+                                  }}
+                                  className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900"
+                                  title="Modifier"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteParticipant(participant)}
+                                  className="p-2 bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900"
+                                  title="Supprimer"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
                     </div>
 
                     {/* Edition equipe rapide */}
@@ -730,6 +796,18 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
                 </div>
               )}
             </div>
+            <div className="p-4">
+              <Pagination
+                currentPage={participantsPage}
+                totalPages={totalParticipantsPages}
+                onPageChange={setParticipantsPage}
+                itemsPerPage={participantsPerPage}
+                totalItems={filteredParticipants.length}
+              />
+            </div>
+          </>
+        );
+      })()}
           </div>
         </div>
       )}

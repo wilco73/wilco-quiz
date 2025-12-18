@@ -172,6 +172,7 @@ function handleTimerExpired(lobbyId, questionId) {
   
   // Broadcast l'etat mis a jour
   broadcastLobbyState(lobbyId);
+  broadcastGlobalState(); // Pour que l'admin voie la mise a jour
 }
 
 // ==================== SOCKET.IO EVENTS ====================
@@ -204,7 +205,6 @@ io.on('connection', (socket) => {
     }
     
     // Login participant
-    const normalizedTeamName = db.normalizeTeamName(teamName);
     const existingParticipant = db.getParticipantByPseudo(pseudo);
     
     if (existingParticipant) {
@@ -213,19 +213,7 @@ io.on('connection', (socket) => {
         return;
       }
       
-      // Verifier changement d'equipe
-      if (!db.areTeamNamesEqual(existingParticipant.teamName, normalizedTeamName)) {
-        callback({
-          success: false,
-          needsConfirmation: true,
-          message: `Ce pseudo est deja dans l'equipe "${existingParticipant.teamName}"`,
-          currentTeam: existingParticipant.teamName,
-          participant: existingParticipant
-        });
-        return;
-      }
-      
-      // Connexion reussie
+      // Connexion reussie - on garde l'equipe existante du participant
       connectedParticipants.set(socket.id, { odId: existingParticipant.id, pseudo });
       
       if (!participantSockets.has(existingParticipant.id)) {
@@ -237,15 +225,9 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Creer nouveau participant
-    let team = db.getTeamByName(normalizedTeamName);
-    if (!team) {
-      team = db.createTeam(normalizedTeamName);
-      console.log(`[AUTH] Nouvelle equipe creee: "${normalizedTeamName}"`);
-    }
-    
+    // Creer nouveau participant SANS equipe
     const odId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const newParticipant = db.createParticipant(odId, pseudo, password, team.id);
+    const newParticipant = db.createParticipant(odId, pseudo, password, null);
     
     connectedParticipants.set(socket.id, { odId, pseudo });
     if (!participantSockets.has(odId)) {
@@ -253,7 +235,7 @@ io.on('connection', (socket) => {
     }
     participantSockets.get(odId).add(socket.id);
     
-    console.log(`[AUTH] Nouveau participant: "${pseudo}" dans equipe "${normalizedTeamName}"`);
+    console.log(`[AUTH] Nouveau participant: "${pseudo}" (sans equipe)`);
     
     // Notifier tout le monde du nouveau participant
     broadcastGlobalState();
@@ -315,15 +297,33 @@ io.on('connection', (socket) => {
     // Verifier si deja dans le lobby
     const alreadyInLobby = lobby.participants?.some(p => p.participantId === odId);
     
-    // Si pas encore dans le lobby et quiz deja commence, refuser
-    if (!alreadyInLobby && lobby.status !== 'waiting') {
-      callback({ success: false, message: 'Le quiz a deja commence' });
+    // Refuser si le quiz est termine
+    if (!alreadyInLobby && lobby.status === 'finished') {
+      callback({ success: false, message: 'Le quiz est termine' });
       return;
     }
     
     // Si pas encore dans le lobby, l'ajouter
     if (!alreadyInLobby) {
       db.joinLobby(lobbyId, odId, pseudo, teamName);
+      
+      // Si le quiz est en cours, marquer les questions passees comme "manquees"
+      if (lobby.status === 'playing' && lobby.session) {
+        const quiz = db.getQuizById(lobby.quizId);
+        const questions = lobby.shuffled && lobby.shuffledQuestions 
+          ? lobby.shuffledQuestions 
+          : quiz?.questions || [];
+        
+        // Marquer toutes les questions deja passees comme repondues (vide)
+        for (let i = 0; i < lobby.session.currentQuestionIndex; i++) {
+          const question = questions[i];
+          if (question) {
+            db.submitAnswer(lobbyId, odId, question.id, '');
+            db.validateAnswer(lobbyId, odId, question.id, false);
+          }
+        }
+        console.log(`[LOBBY] ${pseudo} rejoint en cours - ${lobby.session.currentQuestionIndex} questions manquees`);
+      }
     }
     
     // TOUJOURS rejoindre la room Socket.IO (meme si deja dans le lobby DB)
@@ -381,6 +381,44 @@ io.on('connection', (socket) => {
     if (callback) callback({ success: true });
   });
   
+  // Arreter un quiz en cours et le remettre en attente
+  socket.on('lobby:stop', (data, callback) => {
+    const { lobbyId } = data;
+    
+    const lobby = db.getLobbyById(lobbyId);
+    if (!lobby) {
+      callback({ success: false, message: 'Lobby introuvable' });
+      return;
+    }
+    
+    if (lobby.status !== 'playing') {
+      callback({ success: false, message: 'Le quiz n\'est pas en cours' });
+      return;
+    }
+    
+    // Arreter le timer
+    stopTimer(lobbyId);
+    
+    // Remettre le lobby en attente
+    db.resetLobby(lobbyId);
+    
+    const updatedLobby = db.getLobbyById(lobbyId);
+    
+    // Notifier tous les participants
+    io.to(`lobby:${lobbyId}`).emit('lobby:stopped', { 
+      lobbyId,
+      lobby: updatedLobby,
+      message: 'Le quiz a ete arrete par l\'administrateur'
+    });
+    
+    console.log(`[LOBBY] Quiz arrete: ${lobbyId}`);
+    
+    broadcastLobbyState(lobbyId);
+    broadcastGlobalState();
+    
+    callback({ success: true });
+  });
+  
   // ==================== QUIZ FLOW ====================
   
   socket.on('quiz:start', (data, callback) => {
@@ -434,7 +472,14 @@ io.on('connection', (socket) => {
       stopTimer(lobbyId);
       db.finishLobby(lobbyId);
       
-      io.to(`lobby:${lobbyId}`).emit('quiz:finished', { lobbyId });
+      const finishedLobby = db.getLobbyById(lobbyId);
+      
+      io.to(`lobby:${lobbyId}`).emit('quiz:finished', { 
+        lobbyId,
+        lobby: getLobbyWithTimer(finishedLobby),
+        quiz
+      });
+      broadcastLobbyState(lobbyId);
       broadcastGlobalState();
       
       callback({ success: true, finished: true });
@@ -548,6 +593,7 @@ io.on('connection', (socket) => {
     });
     
     broadcastLobbyState(lobbyId);
+    broadcastGlobalState(); // Pour que l'admin voie la mise a jour dans LiveMonitoring
     callback({ success: true, autoValidated });
   });
   
@@ -800,6 +846,55 @@ app.delete('/api/participants/:id', (req, res) => {
   
   broadcastGlobalState();
   res.json({ success: true });
+});
+
+// Route pour que le participant change son equipe
+app.put('/api/participants/:id/team', (req, res) => {
+  const { id } = req.params;
+  const { teamName } = req.body;
+  
+  const participant = db.getParticipantById(id);
+  if (!participant) {
+    return res.json({ success: false, message: 'Participant introuvable' });
+  }
+  
+  if (teamName === null || teamName === '') {
+    // Quitter l'equipe
+    db.updateParticipantTeam(id, null);
+  } else {
+    const normalizedTeamName = db.normalizeTeamName(teamName);
+    let team = db.getTeamByName(normalizedTeamName);
+    if (!team) {
+      team = db.createTeam(normalizedTeamName);
+    }
+    db.updateParticipantTeam(id, team.id);
+  }
+  
+  broadcastGlobalState();
+  res.json({ success: true, participant: db.getParticipantById(id) });
+});
+
+// Route pour que le participant change son mot de passe
+app.put('/api/participants/:id/password', (req, res) => {
+  const { id } = req.params;
+  const { currentPassword, newPassword } = req.body;
+  
+  const participant = db.getParticipantById(id);
+  if (!participant) {
+    return res.json({ success: false, message: 'Participant introuvable' });
+  }
+  
+  if (!db.verifyPasswordSync(currentPassword, participant.password)) {
+    return res.json({ success: false, message: 'Mot de passe actuel incorrect' });
+  }
+  
+  if (!newPassword || newPassword.length < 4) {
+    return res.json({ success: false, message: 'Le nouveau mot de passe doit contenir au moins 4 caracteres' });
+  }
+  
+  db.updateParticipantPassword(id, newPassword);
+  
+  res.json({ success: true, message: 'Mot de passe modifie avec succes' });
 });
 
 app.post('/api/update-participant', (req, res) => {

@@ -1,17 +1,51 @@
 import React, { useState } from 'react';
 import { CheckCircle, XCircle, Clock, Trophy, Target, Users, ChevronDown, ChevronUp } from 'lucide-react';
 
-const QuizResultsView = ({ currentLobby, quiz, currentUser, onLeaveLobby, onViewScoreboard }) => {
+const QuizResultsView = ({ currentLobby, quiz, currentUser, onLeaveLobby, onViewScoreboard, onBackToLobbies }) => {
   const [expandedQuestions, setExpandedQuestions] = useState({});
   const [viewMode, setViewMode] = useState('personal'); // 'personal' ou 'team'
 
-  if (!currentLobby || !quiz || !currentUser) return null;
+  // Afficher un loader si données manquantes
+  if (!currentLobby || !quiz || !currentUser) {
+    return (
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Chargement des resultats...</p>
+          {onBackToLobbies && (
+            <button 
+              onClick={onBackToLobbies}
+              className="mt-4 text-purple-600 hover:text-purple-800 underline"
+            >
+              Retour a la liste des salles
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ✅ Récupérer tous les membres de l'équipe
-  const teamMembers = currentLobby.participants.filter(p => p.teamName === currentUser.teamName);
+  const teamMembers = currentLobby.participants?.filter(p => p.teamName === currentUser.teamName) || [];
   const currentParticipant = teamMembers.find(p => p.participantId === currentUser.id);
   
-  if (!currentParticipant) return null;
+  if (!currentParticipant) {
+    return (
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600 dark:text-gray-400">Participant non trouve dans le lobby</p>
+          {onBackToLobbies && (
+            <button 
+              onClick={onBackToLobbies}
+              className="mt-4 text-purple-600 hover:text-purple-800 underline"
+            >
+              Retour a la liste des salles
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ✅ Utiliser les bonnes questions (mélangées ou non)
   const questions = currentLobby.shuffled && currentLobby.shuffledQuestions 
@@ -543,7 +577,7 @@ const QuizResultsView = ({ currentLobby, quiz, currentUser, onLeaveLobby, onView
             Voir le Classement Général
           </button>
           <button
-            onClick={onLeaveLobby}
+            onClick={onBackToLobbies}
             className="w-full py-4 bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-400 dark:hover:bg-gray-600 text-lg transition"
           >
             Quitter le Quiz

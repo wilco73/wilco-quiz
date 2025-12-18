@@ -10,6 +10,7 @@ import QuizResultsView from './components/QuizResultsView';
 import ScoreboardView from './components/ScoreboardView';
 import AdminDashboard from './components/AdminDashboard';
 import ReconnectingScreen from './components/ReconnectingScreen';
+import ProfileView from './components/ProfileView';
 import { useToast } from './components/ToastProvider';
 import './App.css';
 
@@ -117,9 +118,18 @@ const App = () => {
     };
     
     const handleQuizFinished = (data) => {
-      console.log('[EVENT] quiz:finished recu');
-      // Mettre à jour le status du lobby
-      setCurrentLobby(prev => prev ? { ...prev, status: 'finished' } : null);
+      console.log('[EVENT] quiz:finished recu', data);
+      // Mettre à jour avec le lobby complet si disponible
+      if (data.lobby) {
+        setCurrentLobby(data.lobby);
+        socket.setCurrentLobbyState({ lobby: data.lobby, quiz: data.quiz || currentQuiz });
+      } else {
+        // Fallback: juste mettre à jour le status
+        setCurrentLobby(prev => prev ? { ...prev, status: 'finished' } : null);
+      }
+      if (data.quiz) {
+        setCurrentQuiz(data.quiz);
+      }
       if (!isAdmin) {
         setView('results');
       }
@@ -145,11 +155,26 @@ const App = () => {
       }
     };
     
+    const handleLobbyStopped = (data) => {
+      console.log('[EVENT] lobby:stopped recu');
+      if (currentLobby?.id === data.lobbyId) {
+        setCurrentLobby(data.lobby);
+        socket.setCurrentLobbyState({ lobby: data.lobby, quiz: currentQuiz });
+        setMyAnswer('');
+        setHasAnswered(false);
+        if (!isAdmin) {
+          setView('lobby');
+          toast.info('Le quiz a ete arrete par l\'administrateur');
+        }
+      }
+    };
+    
     socket.on('quiz:started', handleQuizStarted);
     socket.on('quiz:questionChanged', handleQuestionChanged);
     socket.on('quiz:finished', handleQuizFinished);
     socket.on('timer:expired', handleTimerExpired);
     socket.on('lobby:deleted', handleLobbyDeleted);
+    socket.on('lobby:stopped', handleLobbyStopped);
     
     return () => {
       console.log('[APP] Nettoyage des event listeners');
@@ -158,6 +183,7 @@ const App = () => {
       socket.off('quiz:finished', handleQuizFinished);
       socket.off('timer:expired', handleTimerExpired);
       socket.off('lobby:deleted', handleLobbyDeleted);
+      socket.off('lobby:stopped', handleLobbyStopped);
     };
   }, [socketReady, isAdmin, hasAnswered, toast, currentLobby?.id, currentQuiz, socket]);
 
@@ -445,7 +471,20 @@ const App = () => {
           participants={participants}
           onJoinLobby={handleJoinLobby}
           onViewScoreboard={() => setView('scoreboard')}
+          onViewProfile={() => setView('profile')}
           onLogout={handleLogout}
+        />
+      )}
+      
+      {view === 'profile' && currentUser && (
+        <ProfileView
+          currentUser={currentUser}
+          teams={teams}
+          onUpdateProfile={(updatedUser) => {
+            setCurrentUser(updatedUser);
+            saveSession({ currentUser: updatedUser });
+          }}
+          onClose={() => setView('lobby-list')}
         />
       )}
       
@@ -471,10 +510,10 @@ const App = () => {
         />
       )}
       
-      {view === 'results' && currentLobby && (
+      {view === 'results' && (
         <QuizResultsView
-          lobby={currentLobby}
-          quiz={currentQuiz || quizzes.find(q => q.id === currentLobby.quizId)}
+          currentLobby={currentLobby}
+          quiz={currentQuiz || quizzes.find(q => q.id === currentLobby?.quizId)}
           currentUser={currentUser}
           teams={teams}
           onViewScoreboard={() => setView('scoreboard')}
