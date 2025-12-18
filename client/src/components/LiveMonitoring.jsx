@@ -1,13 +1,65 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Eye, Check, Clock, SkipForward, Users, Trophy, EyeOff, Image as ImageIcon, Video as VideoIcon, Music } from 'lucide-react';
 
-const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
+const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion }) => {
   const activeLobby = lobbies.find(l => l.status === 'playing');
   const audioRef = useRef(null);
   const adminVideoRef = useRef(null);
   const adminAudioRef = useRef(null);
   const [localTimeRemaining, setLocalTimeRemaining] = useState(null);
   const [showAnswers, setShowAnswers] = useState(false);
+  const joinedLobbyRef = useRef(null);
+
+  // Rejoindre la room du lobby actif pour recevoir les events timer
+  useEffect(() => {
+    if (activeLobby && socket) {
+      if (joinedLobbyRef.current !== activeLobby.id) {
+        // Quitter l'ancienne room si necessaire
+        if (joinedLobbyRef.current) {
+          socket.leaveMonitoring(joinedLobbyRef.current);
+        }
+        // Rejoindre la nouvelle room
+        socket.joinMonitoring(activeLobby.id);
+        joinedLobbyRef.current = activeLobby.id;
+        console.log('[MONITORING] Rejoint room:', activeLobby.id);
+      }
+    } else if (!activeLobby && joinedLobbyRef.current && socket) {
+      socket.leaveMonitoring(joinedLobbyRef.current);
+      joinedLobbyRef.current = null;
+    }
+    
+    return () => {
+      if (joinedLobbyRef.current && socket) {
+        socket.leaveMonitoring(joinedLobbyRef.current);
+        joinedLobbyRef.current = null;
+      }
+    };
+  }, [activeLobby?.id, socket]);
+
+  // Ecouter les ticks du timer
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleTimerTick = (data) => {
+      if (activeLobby && data.lobbyId === activeLobby.id) {
+        setLocalTimeRemaining(data.remaining);
+      }
+    };
+    
+    const handleTimerExpired = (data) => {
+      if (activeLobby && data.lobbyId === activeLobby.id) {
+        setLocalTimeRemaining(0);
+      }
+    };
+    
+    socket.on('timer:tick', handleTimerTick);
+    socket.on('timer:expired', handleTimerExpired);
+    
+    return () => {
+      socket.off('timer:tick', handleTimerTick);
+      socket.off('timer:expired', handleTimerExpired);
+    };
+  }, [socket, activeLobby?.id]);
 
   useEffect(() => {
     if (activeLobby) {
@@ -20,12 +72,12 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
     }
   }, [activeLobby?.participants]);
 
-  // ✅ NOUVEAU: Réinitialiser showAnswers à chaque nouvelle question
+  // Reinitialiser showAnswers a chaque nouvelle question
   useEffect(() => {
     setShowAnswers(false);
   }, [activeLobby?.session?.currentQuestionIndex]);
 
-  // ✅ NOUVEAU: Définir le volume à 30% pour les médias de l'admin
+  // Definir le volume a 30% pour les medias de l'admin
   useEffect(() => {
     if (adminVideoRef.current) {
       adminVideoRef.current.volume = 0.3;
@@ -35,18 +87,18 @@ const LiveMonitoring = ({ lobbies, quizzes, onNextQuestion }) => {
     }
   }, [activeLobby?.session?.currentQuestionIndex]);
 
+  // Initialiser le timer depuis le lobby si pas encore de tick recu
   useEffect(() => {
     if (!activeLobby) {
       setLocalTimeRemaining(null);
       return;
     }
 
-    if (activeLobby.timeRemaining !== undefined && activeLobby.timeRemaining >= 0) {
+    // Utiliser timeRemaining du lobby comme valeur initiale
+    if (localTimeRemaining === null && activeLobby.timeRemaining !== undefined) {
       setLocalTimeRemaining(activeLobby.timeRemaining);
-    } else {
-      setLocalTimeRemaining(null);
     }
-  }, [activeLobby?.timeRemaining]);
+  }, [activeLobby?.timeRemaining, activeLobby?.id]);
 
   if (!activeLobby) {
     return (

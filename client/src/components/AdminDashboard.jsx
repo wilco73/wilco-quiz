@@ -426,6 +426,7 @@ const AdminDashboard = ({
             <LiveMonitoring
               lobbies={lobbies}
               quizzes={quizzes}
+              socket={socket}
               onNextQuestion={onNextQuestion}
             />
           )}

@@ -33,17 +33,20 @@ const App = () => {
   
   // Raccourcis vers l'etat global Socket
   const { lobbies, teams, participants, quizzes, questions } = socket.globalState;
-  const { timerState, isConnected, currentLobbyState } = socket;
+  const { timerState, isConnected, currentLobbyState, socketReady } = socket;
 
   // Synchroniser le lobby actuel avec les mises a jour Socket
   useEffect(() => {
-    if (currentLobbyState && currentLobby) {
+    // Mise a jour depuis currentLobbyState (events socket)
+    if (currentLobbyState) {
       const updatedLobby = currentLobbyState.lobby;
       const updatedQuiz = currentLobbyState.quiz;
       
       if (updatedLobby) {
-        const oldIndex = currentLobby.session?.currentQuestionIndex || 0;
+        const oldIndex = currentLobby?.session?.currentQuestionIndex || 0;
         const newIndex = updatedLobby.session?.currentQuestionIndex || 0;
+        
+        console.log('[APP] lobby:state - status:', updatedLobby.status, 'questionIndex:', newIndex);
         
         setCurrentLobby(updatedLobby);
         if (updatedQuiz) setCurrentQuiz(updatedQuiz);
@@ -54,8 +57,9 @@ const App = () => {
           setHasAnswered(false);
         }
         
-        // Quiz demarre
-        if (updatedLobby.session && view === 'lobby' && !isAdmin) {
+        // Quiz demarre - passer en vue quiz
+        if (updatedLobby.status === 'playing' && view === 'lobby' && !isAdmin) {
+          console.log('[APP] Quiz demarre, passage en vue quiz');
           setView('quiz');
         }
         
@@ -68,7 +72,7 @@ const App = () => {
         if (currentUser && !isAdmin) {
           const myParticipant = updatedLobby.participants?.find(p => p.participantId === currentUser.id);
           if (myParticipant) {
-            setHasAnswered(myParticipant.hasAnswered);
+            setHasAnswered(myParticipant.hasAnswered || false);
             if (myParticipant.hasAnswered && myParticipant.currentAnswer) {
               setMyAnswer(myParticipant.currentAnswer);
             }
@@ -76,16 +80,23 @@ const App = () => {
         }
       }
     }
-  }, [currentLobbyState, currentLobby, view, isAdmin, currentUser]);
+  }, [currentLobbyState, view, isAdmin, currentUser]);
 
-  // Ecouter les evenements Socket
+  // Ecouter les evenements Socket - attendre que socketReady soit true
   useEffect(() => {
-    if (!socket.socket) return;
+    if (!socketReady) {
+      console.log('[APP] Socket pas encore pret pour les events');
+      return;
+    }
+    
+    console.log('[APP] Enregistrement des event listeners');
     
     const handleQuizStarted = (data) => {
-      console.log('[EVENT] Quiz demarre', data);
+      console.log('[EVENT] quiz:started recu', data);
       setCurrentLobby(data.lobby);
       setCurrentQuiz(data.quiz);
+      // Mettre a jour aussi currentLobbyState pour eviter l'ecrasement
+      socket.setCurrentLobbyState({ lobby: data.lobby, quiz: data.quiz });
       if (!isAdmin) {
         setView('quiz');
         setMyAnswer('');
@@ -94,8 +105,11 @@ const App = () => {
     };
     
     const handleQuestionChanged = (data) => {
-      console.log('[EVENT] Question changee', data.questionIndex);
+      console.log('[EVENT] quiz:questionChanged recu', data.questionIndex);
       setCurrentLobby(data.lobby);
+      if (data.quiz) setCurrentQuiz(data.quiz);
+      // Mettre a jour aussi currentLobbyState
+      socket.setCurrentLobbyState({ lobby: data.lobby, quiz: data.quiz || currentQuiz });
       if (!isAdmin) {
         setMyAnswer('');
         setHasAnswered(false);
@@ -103,25 +117,27 @@ const App = () => {
     };
     
     const handleQuizFinished = (data) => {
-      console.log('[EVENT] Quiz termine');
+      console.log('[EVENT] quiz:finished recu');
+      // Mettre à jour le status du lobby
+      setCurrentLobby(prev => prev ? { ...prev, status: 'finished' } : null);
       if (!isAdmin) {
         setView('results');
       }
     };
     
     const handleTimerExpired = (data) => {
-      console.log('[EVENT] Timer expire');
+      console.log('[EVENT] timer:expired recu');
       if (!isAdmin && !hasAnswered) {
-        // Le serveur a deja soumis la reponse
         setHasAnswered(true);
       }
     };
     
     const handleLobbyDeleted = (data) => {
-      console.log('[EVENT] Lobby supprime');
+      console.log('[EVENT] lobby:deleted recu');
       if (currentLobby?.id === data.lobbyId) {
         setCurrentLobby(null);
         setCurrentQuiz(null);
+        socket.setCurrentLobbyState(null);
         if (!isAdmin) {
           setView('lobby-list');
           toast.info('La salle a ete supprimee');
@@ -136,64 +152,88 @@ const App = () => {
     socket.on('lobby:deleted', handleLobbyDeleted);
     
     return () => {
+      console.log('[APP] Nettoyage des event listeners');
       socket.off('quiz:started', handleQuizStarted);
       socket.off('quiz:questionChanged', handleQuestionChanged);
       socket.off('quiz:finished', handleQuizFinished);
       socket.off('timer:expired', handleTimerExpired);
       socket.off('lobby:deleted', handleLobbyDeleted);
     };
-  }, [socket, isAdmin, currentLobby, hasAnswered, toast]);
+  }, [socketReady, isAdmin, hasAnswered, toast, currentLobby?.id, currentQuiz, socket]);
 
   // Restaurer la session
   useEffect(() => {
-    if (hasReconnected.current || !isConnected) return;
+    if (hasReconnected.current) return;
+    if (!isConnected) return;
     
     const savedSession = getSession();
-    if (savedSession) {
-      if (savedSession.isAdmin) {
-        setIsAdmin(true);
-        setAdminUsername(savedSession.adminUsername || 'Admin');
-        setView('admin');
-        hasReconnected.current = true;
-      } else if (savedSession.currentUser) {
-        setCurrentUser(savedSession.currentUser);
-        
-        if (savedSession.currentLobbyId && lobbies.length > 0) {
+    if (!savedSession) {
+      hasReconnected.current = true;
+      return;
+    }
+    
+    if (savedSession.isAdmin) {
+      setIsAdmin(true);
+      setAdminUsername(savedSession.adminUsername || 'Admin');
+      setView('admin');
+      hasReconnected.current = true;
+      return;
+    }
+    
+    if (savedSession.currentUser) {
+      setCurrentUser(savedSession.currentUser);
+      
+      // Attendre que les lobbies soient charges
+      if (savedSession.currentLobbyId) {
+        if (lobbies.length > 0) {
           setIsReconnecting(true);
           reconnectToLobby(savedSession.currentLobbyId, savedSession.currentUser);
-        } else {
-          setView('lobby-list');
+          hasReconnected.current = true;
         }
+        // Si lobbies pas encore charges, on attend le prochain render
+      } else {
+        setView('lobby-list');
         hasReconnected.current = true;
       }
     } else {
       hasReconnected.current = true;
     }
-  }, [isConnected, lobbies]);
+  }, [isConnected, lobbies.length]); // Utiliser lobbies.length au lieu de lobbies
 
   // Reconnexion a un lobby
   const reconnectToLobby = async (lobbyId, user) => {
+    console.log('[APP] Tentative de reconnexion au lobby:', lobbyId);
+    
     const lobby = lobbies.find(l => l.id === lobbyId);
     
     if (!lobby) {
+      console.log('[APP] Lobby introuvable, redirection vers liste');
       setView('lobby-list');
       setIsReconnecting(false);
+      saveSession({ currentUser: user });
       return;
     }
     
     const isInLobby = lobby.participants?.some(p => p.participantId === user.id);
+    console.log('[APP] Est dans le lobby:', isInLobby, 'Status:', lobby.status);
     
     if (isInLobby) {
       setCurrentLobby(lobby);
       const quiz = quizzes.find(q => q.id === lobby.quizId);
-      setCurrentQuiz(quiz);
+      if (quiz) {
+        setCurrentQuiz(quiz);
+      }
       
-      // Rejoindre la room Socket
-      await socket.joinLobby(lobbyId, user.id, user.pseudo, user.teamName);
+      // Rejoindre la room Socket pour recevoir les events
+      try {
+        await socket.joinLobby(lobbyId, user.id, user.pseudo, user.teamName);
+      } catch (err) {
+        console.error('[APP] Erreur joinLobby:', err);
+      }
       
       if (lobby.status === 'finished') {
         setView('results');
-      } else if (lobby.session) {
+      } else if (lobby.status === 'playing' || lobby.session) {
         const participant = lobby.participants.find(p => p.participantId === user.id);
         if (participant?.hasAnswered) {
           setHasAnswered(true);
@@ -204,10 +244,13 @@ const App = () => {
         setView('lobby');
       }
     } else if (lobby.status === 'waiting') {
+      // Pas dans le lobby mais il est en attente, on peut rejoindre
       await handleJoinLobby(lobbyId);
     } else {
+      console.log('[APP] Quiz deja en cours sans nous');
       setView('lobby-list');
       toast.info('Le quiz a continue sans vous');
+      saveSession({ currentUser: user });
     }
     
     setIsReconnecting(false);
@@ -414,7 +457,7 @@ const App = () => {
         />
       )}
       
-      {view === 'quiz' && currentLobby && currentQuiz && (
+      {view === 'quiz' && (
         <QuizView
           lobby={currentLobby}
           quiz={currentQuiz}

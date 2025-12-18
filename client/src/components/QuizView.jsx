@@ -16,18 +16,18 @@ const QuizView = ({
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
-  // Utiliser les props renommees
+  // Utiliser les props renommees avec protection null
   const currentLobby = lobby;
-  const currentSession = lobby?.session;
+  const currentSession = lobby?.session || null;
   const questions = currentLobby?.shuffled && currentLobby?.shuffledQuestions 
     ? currentLobby.shuffledQuestions 
     : quiz?.questions || [];
-  const question = questions[currentSession?.currentQuestionIndex || 0];
+  const questionIndex = currentSession?.currentQuestionIndex ?? 0;
+  const question = questions[questionIndex];
   const isFinished = currentSession?.status === 'finished' || currentLobby?.status === 'finished';
   
   // Timer depuis le serveur
   const timeRemaining = timerRemaining;
-  const setMyAnswer = (val) => onAnswerChange(val);
 
   // Handler pour changement de reponse texte
   const handleAnswerChange = (e) => {
@@ -47,16 +47,38 @@ const QuizView = ({
     if (audioRef.current) {
       audioRef.current.volume = 0.3;
     }
-  }, [question?.id, currentSession?.currentQuestionIndex]);
+  }, [question?.id, questionIndex]);
 
   // Focus automatique sur l'input
   useEffect(() => {
     if (inputRef.current && !hasAnswered && !isFinished && question?.type !== 'qcm') {
       inputRef.current.focus();
     }
-  }, [currentSession?.currentQuestionIndex, hasAnswered, isFinished, question?.type]);
+  }, [questionIndex, hasAnswered, isFinished, question?.type]);
 
-  if (!currentSession || !currentLobby) return null;
+  // Afficher un loader si pas encore de donnees
+  if (!currentLobby || !quiz) {
+    return (
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Chargement du quiz...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si pas de question, afficher un message
+  if (!question) {
+    return (
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">En attente de la question...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isFinished) {
     return (
@@ -91,13 +113,13 @@ const QuizView = ({
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold dark:text-white">{quiz?.title}</h3>
               <span className="text-gray-600 dark:text-gray-400">
-                Question {currentSession.currentQuestionIndex + 1}/{questions.length}
+                Question {questionIndex + 1}/{questions.length}
               </span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
               <div
                 className="bg-purple-600 dark:bg-purple-500 h-2 rounded-full transition-all"
-                style={{ width: `${((currentSession.currentQuestionIndex + 1) / questions.length) * 100}%` }}
+                style={{ width: `${((questionIndex + 1) / questions.length) * 100}%` }}
               />
             </div>
           </div>

@@ -12,6 +12,7 @@ export function useSocket() {
   const socketRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
+  const [socketReady, setSocketReady] = useState(false);
   
   // Etat global synchronise
   const [globalState, setGlobalState] = useState({
@@ -34,6 +35,8 @@ export function useSocket() {
 
   // Initialiser la connexion
   useEffect(() => {
+    console.log('[SOCKET] Initialisation...');
+    
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -49,6 +52,7 @@ export function useSocket() {
       console.log('[SOCKET] Connecte:', socket.id);
       setIsConnected(true);
       setConnectionError(null);
+      setSocketReady(true);
     });
     
     socket.on('disconnect', (reason) => {
@@ -63,10 +67,12 @@ export function useSocket() {
     });
     
     socket.on('global:state', (data) => {
+      console.log('[SOCKET] global:state recu');
       setGlobalState(prev => ({ ...prev, ...data }));
     });
     
     socket.on('lobby:state', (data) => {
+      console.log('[SOCKET] lobby:state recu');
       setCurrentLobbyState(data);
     });
     
@@ -82,20 +88,27 @@ export function useSocket() {
       setTimerState(prev => ({ ...prev, remaining: 0 }));
     });
     
-    return () => { socket.disconnect(); };
+    return () => {
+      console.log('[SOCKET] Cleanup');
+      socket.disconnect();
+    };
   }, []);
   
   // Auth
   const login = useCallback((teamName, pseudo, password, isAdmin = false) => {
     return new Promise((resolve) => {
-      if (!socketRef.current) { resolve({ success: false }); return; }
+      if (!socketRef.current?.connected) { 
+        console.log('[SOCKET] login: socket non connecte');
+        resolve({ success: false, message: 'Socket non connecte' }); 
+        return; 
+      }
       socketRef.current.emit('auth:login', { teamName, pseudo, password, isAdmin }, resolve);
     });
   }, []);
   
   const confirmTeamChange = useCallback((odId, newTeamName, password) => {
     return new Promise((resolve) => {
-      if (!socketRef.current) { resolve({ success: false }); return; }
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
       socketRef.current.emit('auth:confirmTeamChange', { odId, newTeamName, password }, resolve);
     });
   }, []);
@@ -103,15 +116,21 @@ export function useSocket() {
   // Lobby
   const createLobby = useCallback((quizId, shuffle = false) => {
     return new Promise((resolve) => {
-      if (!socketRef.current) { resolve({ success: false }); return; }
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
       socketRef.current.emit('lobby:create', { quizId, shuffle }, resolve);
     });
   }, []);
   
   const joinLobby = useCallback((lobbyId, odId, pseudo, teamName) => {
     return new Promise((resolve) => {
-      if (!socketRef.current) { resolve({ success: false }); return; }
+      if (!socketRef.current?.connected) { 
+        console.log('[SOCKET] joinLobby: socket non connecte');
+        resolve({ success: false, message: 'Socket non connecte' }); 
+        return; 
+      }
+      console.log('[SOCKET] joinLobby:', lobbyId, pseudo);
       socketRef.current.emit('lobby:join', { lobbyId, odId, pseudo, teamName }, (response) => {
+        console.log('[SOCKET] joinLobby response:', response.success);
         if (response.success) {
           setCurrentLobbyState({ lobby: response.lobby, quiz: response.quiz });
         }
@@ -122,7 +141,7 @@ export function useSocket() {
   
   const leaveLobby = useCallback((lobbyId, odId) => {
     return new Promise((resolve) => {
-      if (!socketRef.current) { resolve({ success: false }); return; }
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
       socketRef.current.emit('lobby:leave', { lobbyId, odId }, () => {
         setCurrentLobbyState(null);
         setTimerState({ remaining: 0, total: 0, questionId: null });
@@ -133,7 +152,7 @@ export function useSocket() {
   
   const deleteLobby = useCallback((lobbyId) => {
     return new Promise((resolve) => {
-      if (!socketRef.current) { resolve({ success: false }); return; }
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
       socketRef.current.emit('lobby:delete', { lobbyId }, resolve);
     });
   }, []);
@@ -141,60 +160,62 @@ export function useSocket() {
   // Quiz
   const startQuiz = useCallback((lobbyId) => {
     return new Promise((resolve) => {
-      if (!socketRef.current) { resolve({ success: false }); return; }
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      console.log('[SOCKET] startQuiz:', lobbyId);
       socketRef.current.emit('quiz:start', { lobbyId }, resolve);
     });
   }, []);
   
   const nextQuestion = useCallback((lobbyId) => {
     return new Promise((resolve) => {
-      if (!socketRef.current) { resolve({ success: false }); return; }
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
       socketRef.current.emit('quiz:nextQuestion', { lobbyId }, resolve);
     });
   }, []);
   
   // Answers
   const saveDraft = useCallback((lobbyId, odId, answer) => {
-    if (socketRef.current) {
+    if (socketRef.current?.connected) {
       socketRef.current.emit('answer:draft', { lobbyId, odId, answer });
     }
   }, []);
   
   const submitAnswer = useCallback((lobbyId, odId, questionId, answer) => {
     return new Promise((resolve) => {
-      if (!socketRef.current) { resolve({ success: false }); return; }
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
       socketRef.current.emit('answer:submit', { lobbyId, odId, questionId, answer }, resolve);
     });
   }, []);
   
   const validateAnswer = useCallback((lobbyId, odId, questionId, isCorrect, points) => {
     return new Promise((resolve) => {
-      if (!socketRef.current) { resolve({ success: false }); return; }
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
       socketRef.current.emit('answer:validate', { lobbyId, odId, questionId, isCorrect, points }, resolve);
     });
   }, []);
   
   // Admin
   const joinMonitoring = useCallback((lobbyId) => {
-    if (socketRef.current) {
+    if (socketRef.current?.connected) {
+      console.log('[SOCKET] joinMonitoring:', lobbyId);
       socketRef.current.emit('admin:joinMonitoring', { lobbyId });
     }
   }, []);
   
   const leaveMonitoring = useCallback((lobbyId) => {
-    if (socketRef.current) {
+    if (socketRef.current?.connected) {
       socketRef.current.emit('admin:leaveMonitoring', { lobbyId });
     }
   }, []);
   
   const resetScores = useCallback(() => {
     return new Promise((resolve) => {
-      if (!socketRef.current) { resolve({ success: false }); return; }
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
       socketRef.current.emit('admin:resetScores', resolve);
     });
   }, []);
   
-  // Event listeners
+  // Event listeners - accede directement au socket
   const on = useCallback((event, callback) => {
     if (socketRef.current) {
       socketRef.current.on(event, callback);
@@ -209,6 +230,7 @@ export function useSocket() {
 
   return {
     socket: socketRef.current,
+    socketReady,
     isConnected,
     connectionError,
     globalState,

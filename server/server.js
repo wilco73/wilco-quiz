@@ -312,15 +312,21 @@ io.on('connection', (socket) => {
       return;
     }
     
-    if (lobby.status !== 'waiting') {
+    // Verifier si deja dans le lobby
+    const alreadyInLobby = lobby.participants?.some(p => p.participantId === odId);
+    
+    // Si pas encore dans le lobby et quiz deja commence, refuser
+    if (!alreadyInLobby && lobby.status !== 'waiting') {
       callback({ success: false, message: 'Le quiz a deja commence' });
       return;
     }
     
-    // Rejoindre le lobby dans la DB
-    db.joinLobby(lobbyId, odId, pseudo, teamName);
+    // Si pas encore dans le lobby, l'ajouter
+    if (!alreadyInLobby) {
+      db.joinLobby(lobbyId, odId, pseudo, teamName);
+    }
     
-    // Rejoindre la room Socket.IO
+    // TOUJOURS rejoindre la room Socket.IO (meme si deja dans le lobby DB)
     socket.join(`lobby:${lobbyId}`);
     
     // Stocker l'association socket <-> lobby
@@ -330,16 +336,18 @@ io.on('connection', (socket) => {
     const updatedLobby = db.getLobbyById(lobbyId);
     const quiz = db.getQuizById(updatedLobby.quizId);
     
-    console.log(`[LOBBY] ${pseudo} a rejoint ${lobbyId}`);
+    console.log(`[LOBBY] ${pseudo} a rejoint ${lobbyId} (room socket + ${alreadyInLobby ? 'deja dans DB' : 'ajout DB'})`);
     
     // Notifier tous les participants du lobby
-    io.to(`lobby:${lobbyId}`).emit('lobby:participantJoined', {
-      participant: { odId, pseudo, teamName },
-      lobby: updatedLobby
-    });
+    if (!alreadyInLobby) {
+      io.to(`lobby:${lobbyId}`).emit('lobby:participantJoined', {
+        participant: { odId, pseudo, teamName },
+        lobby: updatedLobby
+      });
+    }
     
     broadcastGlobalState();
-    callback({ success: true, lobby: updatedLobby, quiz });
+    callback({ success: true, lobby: getLobbyWithTimer(updatedLobby), quiz });
   });
   
   socket.on('lobby:leave', (data, callback) => {
