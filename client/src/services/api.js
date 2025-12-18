@@ -55,6 +55,31 @@ export const saveQuizzes = async (quizzes) => {
   return res.json();
 };
 
+export const createQuiz = async (quiz) => {
+  const res = await fetch(`${API_URL}/quizzes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(quiz)
+  });
+  return res.json();
+};
+
+export const updateQuiz = async (quizId, quiz) => {
+  const res = await fetch(`${API_URL}/quizzes/${quizId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(quiz)
+  });
+  return res.json();
+};
+
+export const deleteQuiz = async (quizId) => {
+  const res = await fetch(`${API_URL}/quizzes/${quizId}`, {
+    method: 'DELETE'
+  });
+  return res.json();
+};
+
 // ==================== QUESTIONS ====================
 export const fetchQuestions = async () => {
   const res = await fetch(`${API_URL}/questions`);

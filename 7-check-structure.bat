@@ -1,258 +1,120 @@
 REM ===============================================
-REM 7-check-structure.bat (VERSION CORRIGÉE)
+REM 7-check-structure.bat
 REM ===============================================
 @echo off
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 echo.
-echo ╔══════════════════════════════════════════╗
-echo ║   🔍 VÉRIFICATION DE LA STRUCTURE        ║
-echo ╚══════════════════════════════════════════╝
+echo ================================================
+echo    VERIFICATION DE LA STRUCTURE
+echo ================================================
 echo.
 
 set ERROR_COUNT=0
 
-echo Vérification des dossiers...
+echo Verification des dossiers...
 echo.
 
-REM Vérifier client/src/components
+REM Verifier client/src/components
 if exist "client\src\components" (
-    echo ✓ client\src\components
+    echo [OK] client\src\components
 ) else (
-    echo ✗ client\src\components MANQUANT
+    echo [X] client\src\components MANQUANT
     set /a ERROR_COUNT+=1
 )
 
-REM Vérifier client/src/services
+REM Verifier client/src/services
 if exist "client\src\services" (
-    echo ✓ client\src\services
+    echo [OK] client\src\services
 ) else (
-    echo ✗ client\src\services MANQUANT
+    echo [X] client\src\services MANQUANT
     set /a ERROR_COUNT+=1
 )
 
-REM Vérifier client/src/hooks
+REM Verifier client/src/hooks
 if exist "client\src\hooks" (
-    echo ✓ client\src\hooks
+    echo [OK] client\src\hooks
 ) else (
-    echo ✗ client\src\hooks MANQUANT
+    echo [X] client\src\hooks MANQUANT
     set /a ERROR_COUNT+=1
 )
 
-REM Vérifier client/src/utils
+REM Verifier client/src/utils
 if exist "client\src\utils" (
-    echo ✓ client\src\utils
+    echo [OK] client\src\utils
 ) else (
-    echo ✗ client\src\utils MANQUANT
+    echo [X] client\src\utils MANQUANT
+    set /a ERROR_COUNT+=1
+)
+
+REM Verifier server
+if exist "server" (
+    echo [OK] server
+) else (
+    echo [X] server MANQUANT
     set /a ERROR_COUNT+=1
 )
 
 echo.
-echo Vérification des fichiers clés...
+echo Verification des fichiers principaux...
 echo.
 
-REM Vérifier App.js
-if exist "client\src\App.js" (
-    echo ✓ client\src\App.js
-) else (
-    echo ✗ client\src\App.js MANQUANT
-    set /a ERROR_COUNT+=1
-)
-
-REM Vérifier config.js
-if exist "client\src\config.js" (
-    echo ✓ client\src\config.js
-) else (
-    echo ✗ client\src\config.js MANQUANT
-    set /a ERROR_COUNT+=1
-)
-
-REM Vérifier server.js
+REM Fichiers serveur
 if exist "server\server.js" (
-    echo ✓ server\server.js
+    echo [OK] server\server.js
 ) else (
-    echo ✗ server\server.js MANQUANT
+    echo [X] server\server.js MANQUANT
     set /a ERROR_COUNT+=1
 )
 
-REM Vérifier .env files
-if exist "client\.env.development" (
-    echo ✓ client\.env.development
+if exist "server\database.js" (
+    echo [OK] server\database.js
 ) else (
-    echo ⚠ client\.env.development MANQUANT ^(optionnel^)
-)
-
-if exist "client\.env.production" (
-    echo ✓ client\.env.production
-) else (
-    echo ⚠ client\.env.production MANQUANT ^(optionnel^)
-)
-
-echo.
-echo Vérification des composants...
-echo.
-
-REM Liste des composants requis
-set COMPONENT_COUNT=0
-set COMPONENT_FOUND=0
-
-if exist "client\src\components\LoginView.jsx" (
-    echo ✓ components\LoginView.jsx
-    set /a COMPONENT_FOUND+=1
-) else (
-    echo ✗ components\LoginView.jsx MANQUANT
+    echo [X] server\database.js MANQUANT
     set /a ERROR_COUNT+=1
 )
-set /a COMPONENT_COUNT+=1
 
-if exist "client\src\components\LobbyViewList.jsx" (
-    echo ✓ components\LobbyViewList.jsx
-    set /a COMPONENT_FOUND+=1
+if exist "server\package.json" (
+    echo [OK] server\package.json
 ) else (
-    echo ✗ components\LobbyViewList.jsx MANQUANT
+    echo [X] server\package.json MANQUANT
     set /a ERROR_COUNT+=1
 )
-set /a COMPONENT_COUNT+=1
 
-if exist "client\src\components\LobbyView.jsx" (
-    echo ✓ components\LobbyView.jsx
-    set /a COMPONENT_FOUND+=1
+REM Fichiers client
+if exist "client\src\App.js" (
+    echo [OK] client\src\App.js
 ) else (
-    echo ✗ components\LobbyView.jsx MANQUANT
+    echo [X] client\src\App.js MANQUANT
     set /a ERROR_COUNT+=1
 )
-set /a COMPONENT_COUNT+=1
 
-if exist "client\src\components\QuizView.jsx" (
-    echo ✓ components\QuizView.jsx
-    set /a COMPONENT_FOUND+=1
+if exist "client\src\config.js" (
+    echo [OK] client\src\config.js
 ) else (
-    echo ✗ components\QuizView.jsx MANQUANT
+    echo [X] client\src\config.js MANQUANT
     set /a ERROR_COUNT+=1
 )
-set /a COMPONENT_COUNT+=1
-
-if exist "client\src\components\AdminDashboard.jsx" (
-    echo ✓ components\AdminDashboard.jsx
-    set /a COMPONENT_FOUND+=1
-) else (
-    echo ✗ components\AdminDashboard.jsx MANQUANT
-    set /a ERROR_COUNT+=1
-)
-set /a COMPONENT_COUNT+=1
-
-if exist "client\src\components\LiveMonitoring.jsx" (
-    echo ✓ components\LiveMonitoring.jsx
-    set /a COMPONENT_FOUND+=1
-) else (
-    echo ✗ components\LiveMonitoring.jsx MANQUANT
-    set /a ERROR_COUNT+=1
-)
-set /a COMPONENT_COUNT+=1
-
-if exist "client\src\components\ValidationView.jsx" (
-    echo ✓ components\ValidationView.jsx
-    set /a COMPONENT_FOUND+=1
-) else (
-    echo ✗ components\ValidationView.jsx MANQUANT
-    set /a ERROR_COUNT+=1
-)
-set /a COMPONENT_COUNT+=1
-
-if exist "client\src\components\LobbyManager.jsx" (
-    echo ✓ components\LobbyManager.jsx
-    set /a COMPONENT_FOUND+=1
-) else (
-    echo ✗ components\LobbyManager.jsx MANQUANT
-    set /a ERROR_COUNT+=1
-)
-set /a COMPONENT_COUNT+=1
-
-if exist "client\src\components\QuestionBank.jsx" (
-    echo ✓ components\QuestionBank.jsx
-    set /a COMPONENT_FOUND+=1
-) else (
-    echo ✗ components\QuestionBank.jsx MANQUANT
-    set /a ERROR_COUNT+=1
-)
-set /a COMPONENT_COUNT+=1
-
-if exist "client\src\components\QuizEditor.jsx" (
-    echo ✓ components\QuizEditor.jsx
-    set /a COMPONENT_FOUND+=1
-) else (
-    echo ✗ components\QuizEditor.jsx MANQUANT
-    set /a ERROR_COUNT+=1
-)
-set /a COMPONENT_COUNT+=1
-
-echo.
-echo Vérification des services...
-echo.
 
 if exist "client\src\services\api.js" (
-    echo ✓ services\api.js
+    echo [OK] client\src\services\api.js
 ) else (
-    echo ✗ services\api.js MANQUANT
-    set /a ERROR_COUNT+=1
-)
-
-if exist "client\src\services\storage.js" (
-    echo ✓ services\storage.js
-) else (
-    echo ✗ services\storage.js MANQUANT
+    echo [X] client\src\services\api.js MANQUANT
     set /a ERROR_COUNT+=1
 )
 
 echo.
-echo Vérification des hooks...
-echo.
+echo ================================================
 
-if exist "client\src\hooks\useQuizData.js" (
-    echo ✓ hooks\useQuizData.js
+if %ERROR_COUNT% EQU 0 (
+    echo    TOUT EST OK !
 ) else (
-    echo ✗ hooks\useQuizData.js MANQUANT
-    set /a ERROR_COUNT+=1
-)
-
-echo.
-echo Vérification des utils...
-echo.
-
-if exist "client\src\utils\helpers.js" (
-    echo ✓ utils\helpers.js
-) else (
-    echo ✗ utils\helpers.js MANQUANT
-    set /a ERROR_COUNT+=1
-)
-
-echo.
-echo ═══════════════════════════════════════════
-echo.
-
-if !ERROR_COUNT! EQU 0 (
-    echo ✅ Structure correcte ! Tous les fichiers sont présents.
+    echo    %ERROR_COUNT% PROBLEME(S) DETECTE(S)
     echo.
-    echo 📊 Résumé:
-    echo    - Composants: !COMPONENT_FOUND!/!COMPONENT_COUNT!
-    echo    - Services: 2/2
-    echo    - Hooks: 1/1
-    echo    - Utils: 1/1
-    echo.
-    echo 👉 Vous pouvez maintenant exécuter:
-    echo    - 2-create-env.bat ^(si pas encore fait^)
-    echo    - 3-install.bat ^(si pas encore fait^)
-    echo    - 4-start-dev.bat pour développer
-    echo    - 5-deploy-prod.bat pour déployer
-) else (
-    echo ❌ !ERROR_COUNT! problème^(s^) détecté^(s^)
-    echo.
-    echo 👉 Actions recommandées:
-    echo    1. Vérifiez que tous les fichiers .jsx sont créés
-    echo    2. Exécutez à nouveau: 1-setup-structure.bat
-    echo    3. Si le problème persiste, créez manuellement les fichiers manquants
+    echo    Executez 9-create-missing-files.bat pour creer
+    echo    les fichiers manquants.
 )
 
+echo ================================================
 echo.
 pause
-endlocal

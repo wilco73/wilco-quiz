@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import * as api from './services/api';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSocketContext } from './contexts/SocketContext';
 import { saveSession, getSession, clearSession } from './services/storage';
-import { useQuizData } from './hooks/useQuizData';
+import * as api from './services/api';
 import LoginView from './components/LoginView';
 import LobbyViewList from './components/LobbyViewList';
 import LobbyView from './components/LobbyView';
@@ -14,569 +14,386 @@ import { useToast } from './components/ToastProvider';
 import './App.css';
 
 const App = () => {
-  // États globaux
+  const socket = useSocketContext();
+  const toast = useToast();
+  
+  // Etats principaux
   const [view, setView] = useState('login');
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [adminUsername, setAdminUsername] = useState('');
   const [currentLobby, setCurrentLobby] = useState(null);
-  const [currentSession, setCurrentSession] = useState(null);
+  const [currentQuiz, setCurrentQuiz] = useState(null);
   const [myAnswer, setMyAnswer] = useState('');
   const [hasAnswered, setHasAnswered] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
-
-  const toast = useToast();
-  const shouldPoll = view !== 'login';
-  const {
-    teams,
-    setTeams,
-    participants,
-    setParticipants,
-    quizzes,
-    setQuizzes,
-    questions,
-    setQuestions,
-    lobbies,
-    setLobbies,
-    loading,
-    loadLobbies
-  } = useQuizData(shouldPoll);
-
+  
   const hasReconnected = useRef(false);
+  const draftTimeoutRef = useRef(null);
+  
+  // Raccourcis vers l'etat global Socket
+  const { lobbies, teams, participants, quizzes, questions } = socket.globalState;
+  const { timerState, isConnected, currentLobbyState } = socket;
 
-  // Restaurer la session au chargement
-useEffect(() => {
-  if (hasReconnected.current) return;
-
-  const savedSession = getSession();
-  if (savedSession) {
-    if (savedSession.isAdmin) {
-      setIsAdmin(true);
-      setAdminUsername(savedSession.adminUsername || 'Admin');
-      setView('admin');
-      hasReconnected.current = true;
-    } else if (savedSession.currentUser) {
-      // ✅ VALIDATION: Vérifier que l'équipe existe encore
-      const user = savedSession.currentUser;
-      
-      if (!loading && teams.length > 0) {
-        // Chercher l'équipe dans la liste actuelle
-        const teamExists = teams.some(t => t.name === user.teamName);
-        
-        if (!teamExists && user.teamName) {
-          console.warn(`⚠️  Équipe "${user.teamName}" n'existe plus, réinitialisation`);
-          // Retirer l'équipe obsolète
-          user.teamName = '';
-          user.teamId = undefined;
-          
-          // Mettre à jour le localStorage
-          saveSession({
-            ...savedSession,
-            currentUser: user
-          });
-        }
-      }
-      
-      setCurrentUser(user);  // ✅ Utilise version validée
-
-      if (savedSession.currentLobbyId && !loading && lobbies.length > 0) {
-        setIsReconnecting(true);
-        hasReconnected.current = true;
-
-        setTimeout(() => {
-          reconnectToLobby(savedSession.currentLobbyId, user);
-          setIsReconnecting(false);
-        }, 500);
-      } else if (!savedSession.currentLobbyId) {
-        setView('lobby-list');
-        hasReconnected.current = true;
-      }
-    }
-  } else {
-    hasReconnected.current = true;
-  }
-}, [loading, lobbies, teams]);  // ✅ Ajouter teams aux dépendances
-
-  // Synchroniser le currentLobby avec les mises à jour
+  // Synchroniser le lobby actuel avec les mises a jour Socket
   useEffect(() => {
-    if (currentLobby && lobbies.length > 0) {
-      const updated = lobbies.find(l => l.id === currentLobby.id);
-      if (updated) {
-        const oldQuestionIndex = currentSession ?.currentQuestionIndex || 0;
-        const newQuestionIndex = updated.session ?.currentQuestionIndex || 0;
-
-        setCurrentLobby(updated);
-
-        // ✅ NOUVEAU: Synchroniser currentUser avec les données du lobby
+    if (currentLobbyState && currentLobby) {
+      const updatedLobby = currentLobbyState.lobby;
+      const updatedQuiz = currentLobbyState.quiz;
+      
+      if (updatedLobby) {
+        const oldIndex = currentLobby.session?.currentQuestionIndex || 0;
+        const newIndex = updatedLobby.session?.currentQuestionIndex || 0;
+        
+        setCurrentLobby(updatedLobby);
+        if (updatedQuiz) setCurrentQuiz(updatedQuiz);
+        
+        // Changement de question
+        if (newIndex > oldIndex && !isAdmin) {
+          setMyAnswer('');
+          setHasAnswered(false);
+        }
+        
+        // Quiz demarre
+        if (updatedLobby.session && view === 'lobby' && !isAdmin) {
+          setView('quiz');
+        }
+        
+        // Quiz termine
+        if (updatedLobby.status === 'finished' && view !== 'results' && view !== 'scoreboard' && !isAdmin) {
+          setView('results');
+        }
+        
+        // Synchroniser hasAnswered
         if (currentUser && !isAdmin) {
-          const updatedParticipant = updated.participants ?.find(p => p.participantId === currentUser.id);
-          if (updatedParticipant) {
-            const updatedUser = {
-              ...currentUser,
-              teamName: updatedParticipant.teamName,
-            };
-
-            // Ne mettre à jour que si l'équipe a changé (éviter boucles infinies)
-            if (updatedUser.teamName !== currentUser.teamName) {
-              setCurrentUser(updatedUser);
-              saveSession({
-                currentUser: updatedUser,
-                currentLobbyId: currentLobby.id
-              });
-              console.log('🔄 Équipe mise à jour:', updatedUser.pseudo, '→', updatedUser.teamName || '(Sans équipe)');
+          const myParticipant = updatedLobby.participants?.find(p => p.participantId === currentUser.id);
+          if (myParticipant) {
+            setHasAnswered(myParticipant.hasAnswered);
+            if (myParticipant.hasAnswered && myParticipant.currentAnswer) {
+              setMyAnswer(myParticipant.currentAnswer);
             }
           }
         }
-
-        if (updated.session && !currentSession) {
-          setCurrentSession(updated.session);
-          if (!isAdmin) setView('quiz');
-        }
-
-        if (updated.session) {
-          setCurrentSession(updated.session);
-
-          if (newQuestionIndex > oldQuestionIndex && !isAdmin) {
-            setMyAnswer('');
-            setHasAnswered(false);
-          }
-        }
-
-        // Ne rediriger vers résultats que si on n'est pas déjà sur le classement
-        if (updated.status === 'finished' && !isAdmin && view !== 'results' && view !== 'scoreboard') {
-          setView('results');
-          saveSession({
-            currentUser,
-            currentLobbyId: currentLobby.id
-          });
-        }
-      } else if (!isAdmin) {
-        console.log('Le lobby a été supprimé');
-        setCurrentLobby(null);
-        setCurrentSession(null);
-        setView('lobby-list');
       }
     }
-  }, [currentLobby, lobbies, currentSession, isAdmin, currentUser, view]);
+  }, [currentLobbyState, currentLobby, view, isAdmin, currentUser]);
 
-  const reconnectToLobby = (lobbyId, user) => {
+  // Ecouter les evenements Socket
+  useEffect(() => {
+    if (!socket.socket) return;
+    
+    const handleQuizStarted = (data) => {
+      console.log('[EVENT] Quiz demarre', data);
+      setCurrentLobby(data.lobby);
+      setCurrentQuiz(data.quiz);
+      if (!isAdmin) {
+        setView('quiz');
+        setMyAnswer('');
+        setHasAnswered(false);
+      }
+    };
+    
+    const handleQuestionChanged = (data) => {
+      console.log('[EVENT] Question changee', data.questionIndex);
+      setCurrentLobby(data.lobby);
+      if (!isAdmin) {
+        setMyAnswer('');
+        setHasAnswered(false);
+      }
+    };
+    
+    const handleQuizFinished = (data) => {
+      console.log('[EVENT] Quiz termine');
+      if (!isAdmin) {
+        setView('results');
+      }
+    };
+    
+    const handleTimerExpired = (data) => {
+      console.log('[EVENT] Timer expire');
+      if (!isAdmin && !hasAnswered) {
+        // Le serveur a deja soumis la reponse
+        setHasAnswered(true);
+      }
+    };
+    
+    const handleLobbyDeleted = (data) => {
+      console.log('[EVENT] Lobby supprime');
+      if (currentLobby?.id === data.lobbyId) {
+        setCurrentLobby(null);
+        setCurrentQuiz(null);
+        if (!isAdmin) {
+          setView('lobby-list');
+          toast.info('La salle a ete supprimee');
+        }
+      }
+    };
+    
+    socket.on('quiz:started', handleQuizStarted);
+    socket.on('quiz:questionChanged', handleQuestionChanged);
+    socket.on('quiz:finished', handleQuizFinished);
+    socket.on('timer:expired', handleTimerExpired);
+    socket.on('lobby:deleted', handleLobbyDeleted);
+    
+    return () => {
+      socket.off('quiz:started', handleQuizStarted);
+      socket.off('quiz:questionChanged', handleQuestionChanged);
+      socket.off('quiz:finished', handleQuizFinished);
+      socket.off('timer:expired', handleTimerExpired);
+      socket.off('lobby:deleted', handleLobbyDeleted);
+    };
+  }, [socket, isAdmin, currentLobby, hasAnswered, toast]);
+
+  // Restaurer la session
+  useEffect(() => {
+    if (hasReconnected.current || !isConnected) return;
+    
+    const savedSession = getSession();
+    if (savedSession) {
+      if (savedSession.isAdmin) {
+        setIsAdmin(true);
+        setAdminUsername(savedSession.adminUsername || 'Admin');
+        setView('admin');
+        hasReconnected.current = true;
+      } else if (savedSession.currentUser) {
+        setCurrentUser(savedSession.currentUser);
+        
+        if (savedSession.currentLobbyId && lobbies.length > 0) {
+          setIsReconnecting(true);
+          reconnectToLobby(savedSession.currentLobbyId, savedSession.currentUser);
+        } else {
+          setView('lobby-list');
+        }
+        hasReconnected.current = true;
+      }
+    } else {
+      hasReconnected.current = true;
+    }
+  }, [isConnected, lobbies]);
+
+  // Reconnexion a un lobby
+  const reconnectToLobby = async (lobbyId, user) => {
     const lobby = lobbies.find(l => l.id === lobbyId);
-
+    
     if (!lobby) {
-      console.log('Lobby introuvable, redirection vers la liste');
-      clearSession();
-      saveSession({ currentUser: user });
       setView('lobby-list');
+      setIsReconnecting(false);
       return;
     }
-
-    const isInLobby = lobby.participants ?.some(p => p.participantId === user.id);
+    
+    const isInLobby = lobby.participants?.some(p => p.participantId === user.id);
     
     if (isInLobby) {
       setCurrentLobby(lobby);
-
-      // ✅ NOUVEAU: Gérer le cas où le quiz est terminé
+      const quiz = quizzes.find(q => q.id === lobby.quizId);
+      setCurrentQuiz(quiz);
+      
+      // Rejoindre la room Socket
+      await socket.joinLobby(lobbyId, user.id, user.pseudo, user.teamName);
+      
       if (lobby.status === 'finished') {
         setView('results');
       } else if (lobby.session) {
-        setCurrentSession(lobby.session);
         const participant = lobby.participants.find(p => p.participantId === user.id);
-        if (participant && participant.hasAnswered) {
+        if (participant?.hasAnswered) {
           setHasAnswered(true);
           setMyAnswer(participant.currentAnswer || '');
-        } else {
-          setHasAnswered(false);
-          setMyAnswer('');
         }
         setView('quiz');
       } else {
         setView('lobby');
       }
+    } else if (lobby.status === 'waiting') {
+      await handleJoinLobby(lobbyId);
     } else {
-      if (lobby.status === 'waiting') {
-        handleJoinLobby(lobbyId);
-      } else {
-        console.log('Impossible de rejoindre, quiz déjà commencé');
-        toast.info('⚠️ Le quiz a continué sans vous. Vous avez été déconnecté.');
-        clearSession();
-        saveSession({ currentUser: user });
-        setView('lobby-list');
-      }
+      setView('lobby-list');
+      toast.info('Le quiz a continue sans vous');
     }
+    
+    setIsReconnecting(false);
   };
 
-  // ==================== HANDLERS LOGIN ====================
-  const handleLogin = async (teamName, pseudo, password, isAdminLogin = false) => {
-    if (isAdminLogin) {
+  // === HANDLERS ===
+  
+  const handleLogin = async (teamName, pseudo, password, adminMode) => {
+    if (adminMode) {
       try {
-        const data = await api.adminLogin(pseudo, password);
-        if (data.success) {
+        const result = await api.adminLogin(pseudo, password);
+        if (result.success) {
           setIsAdmin(true);
-          setAdminUsername(data.username);
+          setAdminUsername(pseudo);
           setView('admin');
-          saveSession({ isAdmin: true, adminUsername: data.username });
+          saveSession({ isAdmin: true, adminUsername: pseudo });
+          toast.success('Connexion admin reussie');
         } else {
-          toast.error(data.message || 'Identifiants incorrects');
+          toast.error(result.message || 'Echec connexion admin');
         }
       } catch (error) {
         toast.error('Erreur de connexion');
       }
       return;
     }
-
-    const existingParticipant = participants.find(p => p.pseudo === pseudo);
-
-    if (existingParticipant) {
-      // ✅ CORRECTION: Vérifier le mot de passe
-      if (existingParticipant.password !== password) {
-        toast.erro('Ce pseudo existe avec un mot de passe différent');
-        return;
-      }
-
-      // ✅ NOUVEAU: Permettre le changement d'équipe
-      if (existingParticipant.teamName !== teamName) {
-        const confirmChange = window.confirm(
-          `Votre pseudo "${pseudo}" est actuellement dans l'équipe "${existingParticipant.teamName}".\n\n` +
-          `Voulez-vous changer pour l'équipe "${teamName}" ?`
-        );
-
-        if (!confirmChange) {
-          return;
+    
+    // Login participant via Socket
+    const result = await socket.login(teamName, pseudo, password, false);
+    
+    if (result.success) {
+      setCurrentUser(result.user);
+      setView('lobby-list');
+      saveSession({ currentUser: result.user });
+      toast.success(`Bienvenue ${result.user.pseudo} !`);
+    } else if (result.needsConfirmation) {
+      const confirmed = window.confirm(
+        `${result.message}\n\nVoulez-vous changer d'equipe vers "${teamName}" ?`
+      );
+      
+      if (confirmed) {
+        const changeResult = await socket.confirmTeamChange(result.participant.id, teamName, password);
+        if (changeResult.success) {
+          setCurrentUser(changeResult.user);
+          setView('lobby-list');
+          saveSession({ currentUser: changeResult.user });
+          toast.success('Equipe changee avec succes');
         }
-
-        // Mettre à jour l'équipe du participant
-        existingParticipant.teamName = teamName;
-
-        // Mettre à jour dans la base
-        const updatedParticipants = participants.map(p =>
-          p.id === existingParticipant.id ? existingParticipant : p
-        );
-        await api.saveParticipants(updatedParticipants);
-        setParticipants(updatedParticipants);
-
-        console.log(`✅ ${pseudo} a changé d'équipe: "${existingParticipant.teamName}" → "${teamName}"`);
+      } else {
+        setCurrentUser(result.participant);
+        setView('lobby-list');
+        saveSession({ currentUser: result.participant });
       }
+    } else {
+      toast.error(result.message || 'Echec connexion');
     }
-
-    // Créer ou récupérer l'équipe
-    let team = teams.find(t => t.name === teamName);
-    if (!team) {
-      team = { id: Date.now().toString(), name: teamName, validatedScore: 0 };
-      const newTeams = [...teams, team];
-      await api.saveTeams(newTeams);
-      setTeams(newTeams);
-    }
-
-    // Créer le participant s'il n'existe pas
-    let participant = existingParticipant;
-    if (!participant) {
-      participant = {
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        pseudo,
-        password,
-        teamName,
-        teamId: team.id,
-        createdAt: Date.now()
-      };
-      const newParticipants = [...participants, participant];
-      await api.saveParticipants(newParticipants);
-      setParticipants(newParticipants);
-    }
-
-    setCurrentUser(participant);
-    setView('lobby-list');
-    saveSession({ currentUser: participant });
   };
 
-  const handleLogout = () => {
-    setView('login');
-    setCurrentUser(null);
-    setIsAdmin(false);
-    setCurrentLobby(null);
-    setCurrentSession(null);
-    clearSession();
-  };
-
-  // ==================== HANDLERS LOBBY ====================
   const handleJoinLobby = async (lobbyId) => {
-    try {
-      const data = await api.joinLobby(lobbyId, currentUser.id, currentUser.pseudo, currentUser.teamName);
-      if (data.success) {
-        const lobby = lobbies.find(l => l.id === lobbyId);
-        setCurrentLobby(lobby);
-        setView('lobby');
-        saveSession({
-          currentUser,
-          currentLobbyId: lobbyId
-        });
-      }
-    } catch (error) {
-      console.error('Erreur:', error);
+    if (!currentUser) return;
+    
+    const result = await socket.joinLobby(lobbyId, currentUser.id, currentUser.pseudo, currentUser.teamName);
+    
+    if (result.success) {
+      setCurrentLobby(result.lobby);
+      setCurrentQuiz(result.quiz);
+      setView('lobby');
+      saveSession({ currentUser, currentLobbyId: lobbyId });
+    } else {
+      toast.error(result.message || 'Impossible de rejoindre');
     }
   };
 
   const handleLeaveLobby = async () => {
-    // ✅ NOUVEAU: Si on est sur les résultats, juste revenir à la liste
-    if (view === 'results') {
-      setCurrentLobby(null);
-      setCurrentSession(null);
-      setMyAnswer('');
-      setHasAnswered(false);
-      setView('lobby-list');
-      saveSession({ currentUser });
-      return;
-    }
-
-    try {
-      await api.leaveLobby(currentLobby.id, currentUser.id);
-      setCurrentLobby(null);
-      setCurrentSession(null);
-      setMyAnswer('');
-      setHasAnswered(false);
-      setView('lobby-list');
-      saveSession({ currentUser });
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
+    if (!currentLobby || !currentUser) return;
+    
+    await socket.leaveLobby(currentLobby.id, currentUser.id);
+    
+    setCurrentLobby(null);
+    setCurrentQuiz(null);
+    setMyAnswer('');
+    setHasAnswered(false);
+    setView('lobby-list');
+    saveSession({ currentUser });
   };
 
-  // ==================== HANDLERS QUIZ ====================
+  const handleAnswerChange = (answer) => {
+    setMyAnswer(answer);
+    
+    // Debounce pour sauvegarder le brouillon
+    if (draftTimeoutRef.current) {
+      clearTimeout(draftTimeoutRef.current);
+    }
+    
+    draftTimeoutRef.current = setTimeout(() => {
+      if (currentLobby && currentUser) {
+        socket.saveDraft(currentLobby.id, currentUser.id, answer);
+      }
+    }, 300);
+  };
+
   const handleSubmitAnswer = async () => {
-    if (hasAnswered) return;
-
-    try {
-      await api.submitAnswer(currentLobby.id, currentUser.id, myAnswer);
+    if (!currentLobby || !currentUser || !currentQuiz) return;
+    
+    const questions = currentLobby.shuffled && currentLobby.shuffledQuestions
+      ? currentLobby.shuffledQuestions
+      : currentQuiz.questions;
+    const currentIndex = currentLobby.session?.currentQuestionIndex || 0;
+    const currentQuestion = questions[currentIndex];
+    
+    if (!currentQuestion) return;
+    
+    const result = await socket.submitAnswer(
+      currentLobby.id,
+      currentUser.id,
+      currentQuestion.id,
+      myAnswer
+    );
+    
+    if (result.success) {
       setHasAnswered(true);
-    } catch (error) {
-      console.error('Erreur:', error);
+    } else {
+      toast.error(result.message || 'Erreur lors de la soumission');
     }
   };
 
-  // ✅ NOUVEAU: Gérer la navigation vers le classement
-  const handleViewScoreboard = () => {
-    setView('scoreboard');
+  const handleLogout = () => {
+    if (currentLobby && currentUser) {
+      socket.leaveLobby(currentLobby.id, currentUser.id);
+    }
+    
+    clearSession();
+    setCurrentUser(null);
+    setCurrentLobby(null);
+    setCurrentQuiz(null);
+    setIsAdmin(false);
+    setAdminUsername('');
+    setMyAnswer('');
+    setHasAnswered(false);
+    setView('login');
+    hasReconnected.current = false;
   };
 
-  const handleBackToResults = () => {
-    setView('results');
-  };
+  const handleRefreshData = useCallback(async () => {
+    // Plus besoin avec Socket.IO, les donnees sont automatiquement synchronisees
+    // Cette fonction est gardee pour compatibilite
+  }, []);
 
-  // ==================== HANDLERS GESTION PARTICIPANTS ====================
-  // Handler pour mettre à jour un participant
   const handleUpdateParticipant = async (participantId, updates) => {
     try {
       const data = await api.updateParticipant(participantId, updates);
       if (data.success) {
-        // Recharger les données
-        const [participantsData, teamsData] = await Promise.all([
-          api.fetchParticipants(),
-          api.fetchTeams()
-        ]);
-        setParticipants(participantsData);
-        setTeams(teamsData);
-      } else {
-        toast.error(data.message || 'Erreur lors de la mise à jour');
+        toast.success('Participant mis a jour');
       }
     } catch (error) {
-      console.error('Erreur:', error);
-      toast.error('Erreur lors de la mise à jour du participant');
+      toast.error('Erreur lors de la mise a jour');
     }
   };
 
-  // Handler pour supprimer une équipe
   const handleDeleteTeam = async (teamName) => {
     try {
       const data = await api.deleteTeam(teamName);
       if (data.success) {
-        toast.info(`✅ Équipe "${teamName}" supprimée\n${data.affectedCount} participant(s) retiré(s) de l'équipe`);
-
-        // Recharger les données
-        const [participantsData, teamsData] = await Promise.all([
-          api.fetchParticipants(),
-          api.fetchTeams()
-        ]);
-        setParticipants(participantsData);
-        setTeams(teamsData);
-      } else {
-        toast.error(data.message || 'Erreur lors de la suppression');
+        toast.success(`Equipe "${teamName}" supprimee`);
       }
     } catch (error) {
-      console.error('Erreur:', error);
-      toast.error('Erreur lors de la suppression de l\'équipe');
+      toast.error('Erreur lors de la suppression');
     }
   };
 
-  // Handler pour recharger les données
-  const handleRefreshData = async () => {
-    try {
-      const [participantsData, teamsData] = await Promise.all([
-        api.fetchParticipants(),
-        api.fetchTeams()
-      ]);
-      setParticipants(participantsData);
-      setTeams(teamsData);
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
-  };
-
-  // ==================== HANDLERS ADMIN ====================
-  const handleSaveQuestions = async (newQuestions) => {
-    try {
-      await api.saveQuestions(newQuestions);
-      setQuestions(newQuestions);
-
-      const updatedQuizzes = syncQuizzesWithQuestions(quizzes, newQuestions);
-      const quizzesChanged = JSON.stringify(updatedQuizzes) !== JSON.stringify(quizzes);
-
-      if (quizzesChanged) {
-        await api.saveQuizzes(updatedQuizzes);
-        setQuizzes(updatedQuizzes);
-
-        const affectedQuizzes = updatedQuizzes.filter((quiz, index) =>
-          JSON.stringify(quiz.questions) !== JSON.stringify(quizzes[index] ?.questions)
-        );
-
-        toast.success(`✅ Questions sauvegardées !\n\n🔄 ${affectedQuizzes.length} quiz synchronisé(s) automatiquement.`);
-      } else {
-        toast.success('✅ Questions sauvegardées !');
-      }
-    } catch (error) {
-      console.error('Erreur:', error);
-      toast.error('❌ Erreur lors de la sauvegarde');
-    }
-  };
-
-  const syncQuizzesWithQuestions = (quizzes, questions) => {
-    return quizzes.map(quiz => {
-      if (!quiz.questions || quiz.questions.length === 0) return quiz;
-
-      const updatedQuestions = quiz.questions.map(quizQuestion => {
-        const updatedQuestion = questions.find(q => q.id === quizQuestion.id);
-        return updatedQuestion ? updatedQuestion : quizQuestion;
-      });
-
-      return {
-        ...quiz,
-        questions: updatedQuestions
-      };
-    });
-  };
-
-  const handleSaveQuiz = async (quiz) => {
-    try {
-      let updatedQuizzes;
-      if (quiz.id) {
-        updatedQuizzes = quizzes.map(q => q.id === quiz.id ? quiz : q);
-      } else {
-        const newQuiz = { ...quiz, id: Date.now().toString() };
-        updatedQuizzes = [...quizzes, newQuiz];
-      }
-      await api.saveQuizzes(updatedQuizzes);
-      setQuizzes(updatedQuizzes);
-      toast.success('Quiz sauvegardé !');
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
-  };
-
-  const handleDeleteQuiz = async (id) => {
-    try {
-      const updatedQuizzes = quizzes.filter(q => q.id !== id);
-      await api.saveQuizzes(updatedQuizzes);
-      setQuizzes(updatedQuizzes);
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
-  };
-
-  const handleCreateLobby = async (quizId, shuffle = false) => {
-    try {
-      const data = await api.createLobby(quizId, shuffle);
-      if (data.success) {
-        await loadLobbies();
-        toast.info(shuffle ? 'Lobby créé avec questions mélangées !' : 'Lobby créé !');
-      }
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
-  };
-
-  const handleStartQuiz = async (lobbyId) => {
-    try {
-      await api.startQuiz(lobbyId);
-      await loadLobbies();
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
-  };
-
-  const handleNextQuestion = async (lobbyId) => {
-    try {
-      await api.nextQuestion(lobbyId);
-      await loadLobbies();
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
-  };
-
-  const handleValidateAnswer = async (lobbyId, participantId, questionIndex, isCorrect) => {
-    try {
-      await api.validateAnswer(lobbyId, participantId, questionIndex, isCorrect);
-      await loadLobbies();
-
-      const teamsData = await api.fetchTeams();
-      setTeams(teamsData);
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
-  };
-
-  const handleDeleteLobby = async (lobbyId) => {
-    try {
-      await api.deleteLobby(lobbyId);
-      await loadLobbies();
-      toast.success('Lobby supprimé !');
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
-  };
-
-  const handleResetScores = async () => {
-    if (!window.confirm('Réinitialiser tous les scores ?')) return;
-    try {
-      const resetTeams = teams.map(t => ({ ...t, validatedScore: 0 }));
-      await api.saveTeams(resetTeams);
-      setTeams(resetTeams);
-      toast.success('Scores réinitialisés !');
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
-  };
-
-  // ==================== RENDU ====================
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement...</p>
-        </div>
-      </div>
-    );
+  // === RENDER ===
+  
+  if (!isConnected && view !== 'login') {
+    return <ReconnectingScreen />;
   }
-
+  
   if (isReconnecting) {
-    return <ReconnectingScreen message="Restauration de votre session..." />;
+    return <ReconnectingScreen />;
   }
 
   return (
-    <div>
+    <div className="App">
       {view === 'login' && (
         <LoginView onLogin={handleLogin} />
       )}
-
-      {view === 'lobby-list' && (
+      
+      {view === 'lobby-list' && currentUser && (
         <LobbyViewList
           currentUser={currentUser}
           lobbies={lobbies}
@@ -584,73 +401,70 @@ useEffect(() => {
           teams={teams}
           participants={participants}
           onJoinLobby={handleJoinLobby}
-          onViewScoreboard={handleViewScoreboard}
+          onViewScoreboard={() => setView('scoreboard')}
           onLogout={handleLogout}
         />
       )}
-
-      {view === 'lobby' && (
+      
+      {view === 'lobby' && currentLobby && (
         <LobbyView
           currentLobby={currentLobby}
           quizzes={quizzes}
           onLeaveLobby={handleLeaveLobby}
         />
       )}
-
-      {view === 'quiz' && (
+      
+      {view === 'quiz' && currentLobby && currentQuiz && (
         <QuizView
-          currentLobby={currentLobby}
-          currentSession={currentSession}
-          quizzes={quizzes}
-          myAnswer={myAnswer}
-          setMyAnswer={setMyAnswer}
-          hasAnswered={hasAnswered}
-          setHasAnswered={setHasAnswered}
+          lobby={currentLobby}
+          quiz={currentQuiz}
           currentUser={currentUser}
+          myAnswer={myAnswer}
+          hasAnswered={hasAnswered}
+          timerRemaining={timerState.remaining}
+          onAnswerChange={handleAnswerChange}
           onSubmitAnswer={handleSubmitAnswer}
           onLeaveLobby={handleLeaveLobby}
         />
       )}
-
-      {view === 'results' && (
+      
+      {view === 'results' && currentLobby && (
         <QuizResultsView
-          currentLobby={currentLobby}
-          quiz={quizzes.find(q => q.id === currentLobby ?.quizId)}
+          lobby={currentLobby}
+          quiz={currentQuiz || quizzes.find(q => q.id === currentLobby.quizId)}
           currentUser={currentUser}
-          onLeaveLobby={handleLeaveLobby}
-          onViewScoreboard={handleViewScoreboard}
+          teams={teams}
+          onViewScoreboard={() => setView('scoreboard')}
+          onBackToLobbies={() => {
+            setCurrentLobby(null);
+            setCurrentQuiz(null);
+            setView('lobby-list');
+            saveSession({ currentUser });
+          }}
         />
       )}
-
+      
       {view === 'scoreboard' && (
         <ScoreboardView
           teams={teams}
           currentUser={currentUser}
-          onBack={() => currentLobby ? handleBackToResults() : setView('lobby-list')}
+          onBack={() => setView(currentLobby ? 'results' : 'lobby-list')}
         />
       )}
-
+      
       {view === 'admin' && (
         <AdminDashboard
           adminUsername={adminUsername}
+          lobbies={lobbies}
           teams={teams}
           participants={participants}
           quizzes={quizzes}
           questions={questions}
-          lobbies={lobbies}
-          onSaveQuestions={handleSaveQuestions}
-          onSaveQuiz={handleSaveQuiz}
-          onDeleteQuiz={handleDeleteQuiz}
-          onCreateLobby={handleCreateLobby}
-          onStartQuiz={handleStartQuiz}
-          onNextQuestion={handleNextQuestion}
-          onValidateAnswer={handleValidateAnswer}
-          onDeleteLobby={handleDeleteLobby}
-          onResetScores={handleResetScores}
+          socket={socket}
+          onLogout={handleLogout}
+          onRefreshData={handleRefreshData}
           onUpdateParticipant={handleUpdateParticipant}
           onDeleteTeam={handleDeleteTeam}
-          onRefreshData={handleRefreshData}
-          onLogout={handleLogout}
         />
       )}
     </div>

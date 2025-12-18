@@ -2,69 +2,41 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Check, Clock } from 'lucide-react';
 
 const QuizView = ({
-  currentLobby,
-  currentSession,
-  quizzes,
+  lobby,
+  quiz,
   myAnswer,
-  setMyAnswer,
   hasAnswered,
-  setHasAnswered,
+  timerRemaining,
   currentUser,
+  onAnswerChange,
   onSubmitAnswer,
   onLeaveLobby
 }) => {
   const inputRef = useRef(null);
-  const [timeRemaining, setTimeRemaining] = useState(null);
-  const autoSaveTimerRef = useRef(null);
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
-  const quiz = currentLobby ? quizzes.find(q => q.id === currentLobby.quizId) : null;
-  const questions = currentLobby ?.shuffled && currentLobby ?.shuffledQuestions ? currentLobby.shuffledQuestions : quiz ?.questions || [];
-  const question = questions[currentSession ?.currentQuestionIndex];
-  const isFinished = currentSession ?.status === 'finished';
+  // Utiliser les props renommees
+  const currentLobby = lobby;
+  const currentSession = lobby?.session;
+  const questions = currentLobby?.shuffled && currentLobby?.shuffledQuestions 
+    ? currentLobby.shuffledQuestions 
+    : quiz?.questions || [];
+  const question = questions[currentSession?.currentQuestionIndex || 0];
+  const isFinished = currentSession?.status === 'finished' || currentLobby?.status === 'finished';
+  
+  // Timer depuis le serveur
+  const timeRemaining = timerRemaining;
+  const setMyAnswer = (val) => onAnswerChange(val);
 
-  // Auto-sauvegarde de la réponse en temps réel
-  const autoSaveAnswer = async (answer) => {
-    if (hasAnswered || isFinished) return;
-
-    try {
-      await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/auto-save-answer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lobbyId: currentLobby.id,
-          participantId: currentUser.id,
-          answer: answer
-        })
-      });
-      console.log(`💾 Auto-save: "${answer}"`);
-    } catch (error) {
-      console.error('Erreur auto-sauvegarde:', error);
-    }
-  };
-
-  // Déclencher l'auto-sauvegarde lors de la frappe (texte uniquement)
+  // Handler pour changement de reponse texte
   const handleAnswerChange = (e) => {
-    const newAnswer = e.target.value;
-    setMyAnswer(newAnswer);
-
-    // Annuler le timer précédent
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-    }
-
-    // Attendre 1 seconde après la dernière frappe avant de sauvegarder
-    autoSaveTimerRef.current = setTimeout(() => {
-      autoSaveAnswer(newAnswer);
-    }, 1000);
+    onAnswerChange(e.target.value);
   };
 
-  // ✅ CORRECTION: Pour QCM, juste sélectionner sans auto-submit
+  // Handler pour QCM
   const handleQCMChoice = (choice) => {
-    setMyAnswer(choice);
-    // Auto-save immédiate pour QCM
-    autoSaveAnswer(choice);
+    onAnswerChange(choice);
   };
 
   // Volume à 30%
@@ -75,89 +47,14 @@ const QuizView = ({
     if (audioRef.current) {
       audioRef.current.volume = 0.3;
     }
-  }, [question ?.id, currentSession ?.currentQuestionIndex]);
+  }, [question?.id, currentSession?.currentQuestionIndex]);
 
   // Focus automatique sur l'input
   useEffect(() => {
-    if (inputRef.current && !hasAnswered && !isFinished && question ?.type !== 'qcm') {
+    if (inputRef.current && !hasAnswered && !isFinished && question?.type !== 'qcm') {
       inputRef.current.focus();
     }
-  }, [currentSession ?.currentQuestionIndex, hasAnswered, isFinished, question ?.type]);
-
-  // Gestion du timer
-  useEffect(() => {
-    if (!question || hasAnswered || isFinished) {
-      setTimeRemaining(null);
-      return;
-    }
-
-    const timer = question.timer || 0;
-
-    if (timer <= 0) {
-      setTimeRemaining(null);
-      return;
-    }
-
-    if (currentLobby.timeRemaining !== undefined) {
-      setTimeRemaining(currentLobby.timeRemaining);
-
-      if (currentLobby.timeRemaining === 0 && !hasAnswered) {
-        const markExpired = async () => {
-          try {
-            // La réponse auto-sauvegardée est déjà sur le serveur (draftAnswer)
-            const response = await fetch(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/mark-time-expired`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                lobbyId: currentLobby.id,
-                participantId: currentUser ?.id 
-              })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-              setHasAnswered(true);
-              // ✅ NE PAS vider myAnswer - on garde pour l'affichage
-              // Si myAnswer est vide, c'est que le participant n'avait rien tapé
-              console.log(`⏰ Timer expiré - Réponse finale: "${myAnswer}"`);
-            }
-          } catch (error) {
-            console.error('Erreur marquage temps écoulé:', error);
-          }
-        };
-        markExpired();
-        return;
-      }
-    } else {
-      const questionStartTime = currentSession ?.questionStartTime || currentLobby.questionStartTime || Date.now();
-      const elapsed = Math.floor((Date.now() - questionStartTime) / 1000);
-      const remaining = Math.max(0, timer - elapsed);
-      setTimeRemaining(remaining);
-    }
-
-    const interval = setInterval(() => {
-      if (currentLobby.timeRemaining !== undefined) {
-        setTimeRemaining(currentLobby.timeRemaining);
-      } else {
-        const questionStartTime = currentSession ?.questionStartTime || currentLobby.questionStartTime || Date.now();
-        const newElapsed = Math.floor((Date.now() - questionStartTime) / 1000);
-        const newRemaining = Math.max(0, timer - newElapsed);
-        setTimeRemaining(newRemaining);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [question ?.id, currentSession ?.currentQuestionIndex, hasAnswered, isFinished, currentLobby.timeRemaining]);
-
-  // Nettoyer le timer d'auto-sauvegarde
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-    };
-  }, []);
+  }, [currentSession?.currentQuestionIndex, hasAnswered, isFinished, question?.type]);
 
   if (!currentSession || !currentLobby) return null;
 
@@ -184,7 +81,7 @@ const QuizView = ({
     );
   }
 
-  const isTimeExpired = timeRemaining === 0 && question ?.timer > 0;
+  const isTimeExpired = timeRemaining === 0 && question?.timer > 0;
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
@@ -192,7 +89,7 @@ const QuizView = ({
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
           <div className="mb-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold dark:text-white">{quiz ?.title}</h3>
+              <h3 className="text-xl font-bold dark:text-white">{quiz?.title}</h3>
               <span className="text-gray-600 dark:text-gray-400">
                 Question {currentSession.currentQuestionIndex + 1}/{questions.length}
               </span>
@@ -231,9 +128,9 @@ const QuizView = ({
           {/* ✅ TEXTE DE LA QUESTION */}
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-4">
-              {question ?.text}
+              {question?.text}
             </h2>
-            {question ?.category && (
+            {question?.category && (
               <div className="text-center">
                 <span className="inline-block px-3 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-full text-sm">
                   {question.category}
@@ -243,9 +140,9 @@ const QuizView = ({
           </div>
 
           {/* ✅ MODIFIÉ: Afficher média pour QCM aussi */}
-          {question ?.media && (
+          {question?.media && (
             <>
-            {(question ?.type === 'image' || (question ?.type === 'qcm' && question ?.mediaType === 'image')) && (
+            {(question?.type === 'image' || (question?.type === 'qcm' && question?.mediaType === 'image')) && (
               <div className="flex content-center item-center text-center mb-8">
                 <div className="text-center m-auto">
                   <img src={question.media} alt="Question" className="max-w-md h-auto rounded-lg mb-4" />
@@ -253,10 +150,10 @@ const QuizView = ({
               </div>
             )}
               
-          {(question ?.type === 'video' || (question ?.type === 'qcm' && question ?.mediaType === 'video')) && (
+          {(question?.type === 'video' || (question?.type === 'qcm' && question?.mediaType === 'video')) && (
             <video
               ref={videoRef}
-              key={`video-${currentSession ?.currentQuestionIndex}-${question.id}`}
+              key={`video-${currentSession?.currentQuestionIndex}-${question.id}`}
               controls
               autoPlay
               className="w-full rounded-lg mb-4"
@@ -265,10 +162,10 @@ const QuizView = ({
             </video>
           )}
 
-          {(question ?.type === 'audio' || (question ?.type === 'qcm' && question ?.mediaType === 'audio')) && (
+          {(question?.type === 'audio' || (question?.type === 'qcm' && question?.mediaType === 'audio')) && (
             <audio
               ref={audioRef}
-              key={`audio-${currentSession ?.currentQuestionIndex}-${question.id}`}
+              key={`audio-${currentSession?.currentQuestionIndex}-${question.id}`}
               controls
               autoPlay
               className="w-full mb-4"
@@ -316,7 +213,7 @@ const QuizView = ({
             <p className="font-bold text-red-700 dark:text-red-400 mb-2">⏰ Temps écoulé !</p>
             <p className="text-sm text-gray-600 dark:text-gray-400">En attente de la question suivante...</p>
           </div>
-        ) : question ?.type === 'qcm' ? (
+        ) : question?.type === 'qcm' ? (
           // ✅ CORRECTION: Interface QCM sans auto-submit
           <div className="space-y-3">
             {question.choices ?.map((choice, index) => (

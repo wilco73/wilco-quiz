@@ -1,38 +1,38 @@
 REM ===============================================
 REM 6-start-prod.bat
-REM Démarrer en mode production
+REM Demarrer en mode production
 REM ===============================================
 @echo off
 chcp 65001 >nul
 echo.
-echo ╔══════════════════════════════════════════╗
-echo ║   🚀 MODE PRODUCTION                     ║
-echo ╚══════════════════════════════════════════╝
+echo ================================================
+echo    MODE PRODUCTION
+echo ================================================
 echo.
 
-REM Vérifier que le build existe
+REM Verifier que le build existe
 if not exist "client\build\index.html" (
-    echo ❌ Erreur: Le build du client n'existe pas
+    echo [ERREUR] Le build du client n'existe pas
     echo.
-    echo Exécutez d'abord: 5-deploy-prod.bat
+    echo Executez d'abord: 5-deploy-prod.bat
     echo.
     pause
     exit /b 1
 )
 
-echo 🔌 Démarrage du serveur en mode production...
+echo Demarrage du serveur en mode production...
 echo.
-echo 📡 Le serveur servira:
+echo Le serveur servira:
 echo    - L'API sur /api/*
 echo    - L'application React sur /*
 echo.
-echo 🌐 Une fois démarré, accédez à:
+echo Une fois demarre, accedez a:
 echo    - Local: http://localhost:3001
-echo    - Réseau: http://votre-ip:32769 (selon config)
+echo    - Reseau: http://VOTRE_IP:3001
 echo.
-echo 💡 Appuyez sur Ctrl+C pour arrêter le serveur
+echo Appuyez sur Ctrl+C pour arreter le serveur
 echo.
-echo ═══════════════════════════════════════════
+echo ================================================
 echo.
 
 cd server

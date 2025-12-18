@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LogOut, RotateCcw, Monitor, Check, BookOpen, Trash, Trophy, FileQuestion, Play, Edit, Trash2, Users, Shuffle } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import * as api from '../services/api';
 import QuestionBank from './QuestionBank';
 import QuizEditor from './QuizEditor';
 import LobbyManager from './LobbyManager';
@@ -16,15 +17,7 @@ const AdminDashboard = ({
   quizzes,
   questions,
   lobbies,
-  onSaveQuestions,
-  onSaveQuiz,
-  onDeleteQuiz,
-  onCreateLobby,
-  onStartQuiz,
-  onNextQuestion,
-  onValidateAnswer,
-  onDeleteLobby,
-  onResetScores,
+  socket,
   onUpdateParticipant,
   onDeleteTeam,
   onRefreshData,
@@ -36,26 +29,101 @@ const AdminDashboard = ({
   const [teamsPage, setTeamsPage] = useState(1);
   const teamsPerPage = 5;
   
-  // ✅ Utiliser Toast au lieu d'alert
   const toast = useToast();
+
+  // Handlers utilisant l'API REST pour les operations CRUD
+  const onSaveQuestions = async (questionsData) => {
+    try {
+      await api.saveQuestions(questionsData);
+      toast.success('Questions sauvegardees');
+    } catch (error) {
+      toast.error('Erreur lors de la sauvegarde');
+    }
+  };
+
+  const onSaveQuiz = async (quiz) => {
+    try {
+      if (quiz.id && quizzes.find(q => q.id === quiz.id)) {
+        await api.updateQuiz(quiz.id, quiz);
+      } else {
+        await api.createQuiz(quiz);
+      }
+      toast.success('Quiz sauvegarde');
+    } catch (error) {
+      toast.error('Erreur lors de la sauvegarde');
+    }
+  };
+
+  const onDeleteQuiz = async (quizId) => {
+    try {
+      await api.deleteQuiz(quizId);
+      toast.success('Quiz supprime');
+    } catch (error) {
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  // Handlers utilisant Socket.IO pour le temps reel
+  const onCreateLobby = async (quizId, shuffle) => {
+    const result = await socket.createLobby(quizId, shuffle);
+    if (result.success) {
+      toast.success(shuffle ? 'Salle creee avec questions melangees' : 'Salle creee');
+    } else {
+      toast.error(result.message || 'Erreur lors de la creation');
+    }
+  };
+
+  const onStartQuiz = async (lobbyId) => {
+    const result = await socket.startQuiz(lobbyId);
+    if (result.success) {
+      toast.success('Quiz demarre');
+    } else {
+      toast.error(result.message || 'Erreur lors du demarrage');
+    }
+  };
+
+  const onNextQuestion = async (lobbyId) => {
+    const result = await socket.nextQuestion(lobbyId);
+    if (result.finished) {
+      toast.success('Quiz termine');
+    } else if (result.success) {
+      toast.success(`Question ${result.questionIndex + 1}`);
+    } else {
+      toast.error(result.message || 'Erreur');
+    }
+  };
+
+  const onValidateAnswer = async (lobbyId, odId, questionId, isCorrect, points) => {
+    const result = await socket.validateAnswer(lobbyId, odId, questionId, isCorrect, points);
+    if (!result.success) {
+      toast.error('Erreur lors de la validation');
+    }
+  };
+
+  const onDeleteLobby = async (lobbyId) => {
+    const result = await socket.deleteLobby(lobbyId);
+    if (result.success) {
+      toast.success('Salle supprimee');
+    }
+  };
+
+  const onResetScores = async () => {
+    const result = await socket.resetScores();
+    if (result.success) {
+      toast.success('Scores reinitialises');
+    }
+  };
 
   const handleSaveQuiz = (quiz) => {
     onSaveQuiz(quiz);
     setEditingQuiz(null);
     setActiveTab('dashboard');
-    toast.success('Quiz sauvegardé !');
   };
 
   const handleCreateLobby = (quizId) => {
     const shuffle = shuffleMode[quizId] || false;
     onCreateLobby(quizId, shuffle);
     setShuffleMode(prev => ({ ...prev, [quizId]: false }));
-    
-    if (shuffle) {
-      toast.success('Salle créée avec questions mélangées !');
-    } else {
-      toast.success('Salle créée !');
-    }
   };
 
   const handleDeleteQuiz = (id) => {
