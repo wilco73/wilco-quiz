@@ -65,8 +65,9 @@ const App = () => {
           setView('quiz');
         }
         
-        // Quiz termine
-        if (updatedLobby.status === 'finished' && view !== 'results' && view !== 'scoreboard' && !isAdmin) {
+        // Quiz termine - ne pas forcer si l'utilisateur est deja sur une autre vue
+        // (lobby-list, history, profile, etc.)
+        if (updatedLobby.status === 'finished' && view === 'quiz' && !isAdmin) {
           setView('results');
         }
         
@@ -535,8 +536,9 @@ const App = () => {
           onViewScoreboard={() => setView('scoreboard')}
           onBackToLobbies={() => {
             console.log('[APP] Quitter le quiz - retour a la liste des lobbies');
-            // NE PAS appeler leaveLobby pour les quiz termines (sinon on perd l'historique)
-            // Reset des etats
+            // Reset du currentLobbyState pour eviter que le useEffect ne force la vue
+            socket.setCurrentLobbyState(null);
+            // Reset des etats locaux
             setCurrentLobby(null);
             setCurrentQuiz(null);
             setMyAnswer('');
