@@ -521,7 +521,8 @@ const App = () => {
             setCurrentLobby(null);
             setCurrentQuiz(null);
             setView('lobby-list');
-            saveSession({ currentUser });
+            // Important: sauvegarder SANS currentLobbyId pour eviter la reconnexion
+            saveSession({ currentUser, currentLobbyId: null });
           }}
         />
       )}

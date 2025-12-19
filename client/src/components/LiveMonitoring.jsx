@@ -213,25 +213,26 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
         </div>
       </div>
 
-      {/* ✅ NOUVEAU: Aperçu du média pour l'admin */}
-      {(currentQuestion?.type === 'image' || currentQuestion?.type === 'video' || currentQuestion?.type === 'audio') && currentQuestion?.media && (
-        <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-300 dark:border-purple-700 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-3">
-            {currentQuestion.type === 'image' && <ImageIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
-            {currentQuestion.type === 'video' && <VideoIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
-            {currentQuestion.type === 'audio' && <Music className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
-            <h4 className="font-bold text-purple-900 dark:text-purple-300">
-              📺 Aperçu du média (vue participant)
+      {/* Aperçu du média pour l'admin */}
+      {currentQuestion?.media && (
+        <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-300 dark:border-purple-700 rounded-lg p-3">
+          <div className="flex items-center gap-2 mb-2">
+            {currentQuestion.type === 'image' && <ImageIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
+            {currentQuestion.type === 'video' && <VideoIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
+            {currentQuestion.type === 'audio' && <Music className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
+            {currentQuestion.type === 'qcm' && <ImageIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
+            <h4 className="font-semibold text-sm text-purple-900 dark:text-purple-300">
+              Media de la question
             </h4>
           </div>
           
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-purple-200 dark:border-purple-600">
-            {currentQuestion.type === 'image' && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-2 border border-purple-200 dark:border-purple-600">
+            {(currentQuestion.type === 'image' || currentQuestion.type === 'qcm') && (
               <div className="text-center">
                 <img 
                   src={currentQuestion.media} 
                   alt="Question" 
-                  className="max-w-xs h-auto rounded-lg mx-auto border border-gray-300 dark:border-gray-600"
+                  className="max-h-32 w-auto rounded mx-auto border border-gray-300 dark:border-gray-600"
                 />
               </div>
             )}
@@ -241,30 +242,21 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
                 ref={adminVideoRef}
                 key={`admin-video-${currentQuestionIndex}-${currentQuestion.id}`}
                 controls 
-                autoPlay
-                className="w-full max-w-2xl mx-auto rounded-lg"
+                className="w-full max-h-40 mx-auto rounded"
               >
                 <source src={currentQuestion.media} />
-                Votre navigateur ne supporte pas la vidéo.
               </video>
             )}
             
             {currentQuestion.type === 'audio' && (
-              <div className="max-w-2xl mx-auto">
-                <audio 
-                  ref={adminAudioRef}
-                  key={`admin-audio-${currentQuestionIndex}-${currentQuestion.id}`}
-                  controls 
-                  autoPlay
-                  className="w-full"
-                >
-                  <source src={currentQuestion.media} />
-                  Votre navigateur ne supporte pas l'audio.
-                </audio>
-                <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-2">
-                  🎵 Les participants entendent le même audio
-                </p>
-              </div>
+              <audio 
+                ref={adminAudioRef}
+                key={`admin-audio-${currentQuestionIndex}-${currentQuestion.id}`}
+                controls 
+                className="w-full"
+              >
+                <source src={currentQuestion.media} />
+              </audio>
             )}
           </div>
         </div>

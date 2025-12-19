@@ -100,8 +100,10 @@ function broadcastGlobalState() {
   const lobbies = db.getAllLobbies().map(l => getLobbyWithTimer(l));
   const teams = db.getAllTeams();
   const participants = db.getAllParticipants().map(p => ({ ...p, password: '********' }));
+  const quizzes = db.getAllQuizzes();
+  const questions = db.getAllQuestions();
   
-  io.emit('global:state', { lobbies, teams, participants });
+  io.emit('global:state', { lobbies, teams, participants, quizzes, questions });
 }
 
 // ==================== GESTION DES TIMERS ====================

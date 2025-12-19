@@ -1,5 +1,36 @@
 import React, { useState } from 'react';
-import { Trophy, Check, XCircle, Users, ChevronDown, ChevronUp, AlertCircle, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trophy, Check, XCircle, Users, ChevronDown, ChevronUp, AlertCircle, RotateCcw, ChevronLeft, ChevronRight, Image as ImageIcon, Video as VideoIcon, Music } from 'lucide-react';
+
+// Composant pour afficher les médias en miniature
+const MediaPreview = ({ question }) => {
+  if (!question?.media) return null;
+  
+  return (
+    <div className="mt-2 mb-3">
+      {(question.type === 'image' || question.type === 'qcm') && (
+        <img 
+          src={question.media} 
+          alt="Media" 
+          className="max-h-24 w-auto rounded border border-gray-300 dark:border-gray-600"
+        />
+      )}
+      {question.type === 'video' && (
+        <video 
+          src={question.media}
+          controls
+          className="max-h-24 w-auto rounded border border-gray-300 dark:border-gray-600"
+        />
+      )}
+      {question.type === 'audio' && (
+        <audio 
+          src={question.media}
+          controls
+          className="w-full max-w-xs"
+        />
+      )}
+    </div>
+  );
+};
 
 // Composant de pagination
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
@@ -202,6 +233,9 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
 
                       {isExpanded && (
                         <div className="p-3 space-y-2">
+                          {/* Aperçu du média */}
+                          <MediaPreview question={question} />
+                          
                           <div className="text-sm text-gray-600 dark:text-gray-400 mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
                             <strong>Reponse attendue :</strong> {question.answer}
                           </div>

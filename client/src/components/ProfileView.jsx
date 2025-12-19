@@ -24,7 +24,7 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose }) => {
       // Quitter l'equipe actuelle
       setIsLoading(true);
       try {
-        const response = await fetch(`${API_URL}/participants/${currentUser.odId}/team`, {
+        const response = await fetch(`${API_URL}/participants/${currentUser.id}/team`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ teamName: null })
@@ -79,7 +79,7 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose }) => {
       }
 
       // Mettre a jour l'equipe du participant
-      const response = await fetch(`${API_URL}/participants/${currentUser.odId}/team`, {
+      const response = await fetch(`${API_URL}/participants/${currentUser.id}/team`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teamName: teamToJoin })
@@ -119,7 +119,7 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose }) => {
 
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/participants/${currentUser.odId}/password`, {
+      const response = await fetch(`${API_URL}/participants/${currentUser.id}/password`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
