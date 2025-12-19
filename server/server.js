@@ -916,6 +916,37 @@ app.put('/api/participants/:id/password', (req, res) => {
   res.json({ success: true, message: 'Mot de passe modifie avec succes' });
 });
 
+// Route pour que le participant change son avatar
+app.put('/api/participants/:id/avatar', (req, res) => {
+  const { id } = req.params;
+  const { avatar } = req.body;
+  
+  const participant = db.getParticipantById(id);
+  if (!participant) {
+    return res.json({ success: false, message: 'Participant introuvable' });
+  }
+  
+  // Liste des avatars autorisés
+  const allowedAvatars = [
+    'default', 'cat', 'dog', 'fox', 'owl', 'panda', 'rabbit', 'bear', 'koala', 'lion',
+    'tiger', 'wolf', 'penguin', 'monkey', 'elephant', 'giraffe', 'zebra', 'deer', 'squirrel', 'hedgehog',
+    'robot', 'alien', 'ghost', 'ninja', 'pirate', 'wizard', 'knight', 'astronaut', 'chef', 'detective'
+  ];
+  
+  if (!allowedAvatars.includes(avatar)) {
+    return res.json({ success: false, message: 'Avatar non autorise' });
+  }
+  
+  const updatedParticipant = db.updateParticipantAvatar(id, avatar);
+  broadcastGlobalState();
+  
+  res.json({ 
+    success: true, 
+    message: 'Avatar mis a jour', 
+    participant: { ...updatedParticipant, password: '********' }
+  });
+});
+
 app.post('/api/update-participant', (req, res) => {
   const { participantId, updates } = req.body;
   

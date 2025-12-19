@@ -1,7 +1,8 @@
 import React from 'react';
 import { Users, LogOut, Shuffle } from 'lucide-react';
+import Avatar from './Avatar';
 
-const LobbyView = ({ currentLobby, quizzes, onLeaveLobby }) => {
+const LobbyView = ({ currentLobby, quizzes, participants, onLeaveLobby }) => {
   if (!currentLobby) {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
@@ -11,6 +12,12 @@ const LobbyView = ({ currentLobby, quizzes, onLeaveLobby }) => {
   }
 
   const quiz = quizzes.find(q => q.id === currentLobby.quizId);
+  
+  // Récupérer les avatars des participants
+  const getParticipantAvatar = (participantId) => {
+    const p = participants?.find(p => p.id === participantId);
+    return p?.avatar || 'default';
+  };
   
   // ✅ FIX: Protection contre shuffledQuestions undefined
   const questions = currentLobby.shuffled && currentLobby.shuffledQuestions 
@@ -58,12 +65,13 @@ const LobbyView = ({ currentLobby, quizzes, onLeaveLobby }) => {
                 {currentLobby.participants.map((participant, index) => (
                   <div 
                     key={index} 
-                    className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                    className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
                   >
+                    <Avatar avatarId={getParticipantAvatar(participant.participantId)} size="md" />
                     <div>
                       <p className="font-semibold dark:text-white">{participant.pseudo}</p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Équipe: {participant.teamName}
+                        {participant.teamName || 'Sans équipe'}
                       </p>
                     </div>
                   </div>

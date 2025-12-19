@@ -509,6 +509,7 @@ const App = () => {
         <LobbyView
           currentLobby={currentLobby}
           quizzes={quizzes}
+          participants={participants}
           onLeaveLobby={handleLeaveLobby}
         />
       )}
@@ -532,6 +533,7 @@ const App = () => {
           currentLobby={currentLobby}
           quiz={currentQuiz || quizzes.find(q => q.id === currentLobby?.quizId)}
           currentUser={currentUser}
+          participants={participants}
           teams={teams}
           onViewScoreboard={() => setView('scoreboard')}
           onBackToLobbies={() => {

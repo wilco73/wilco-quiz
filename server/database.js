@@ -79,10 +79,18 @@ function createTables() {
       pseudo TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       team_id INTEGER,
+      avatar TEXT DEFAULT 'default',
       created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
       FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL
     )
   `);
+  
+  // Migration: ajouter la colonne avatar si elle n'existe pas
+  try {
+    db.run(`ALTER TABLE participants ADD COLUMN avatar TEXT DEFAULT 'default'`);
+  } catch (e) {
+    // Colonne existe deja
+  }
 
   db.run(`
     -- Table des questions (banque de questions)
@@ -375,7 +383,8 @@ function saveAllTeams(teams) {
 
 function getAllParticipants() {
   return query(`
-    SELECT p.id, p.pseudo, p.password_hash as password, t.name as teamName, p.team_id as teamId, p.created_at as createdAt
+    SELECT p.id, p.pseudo, p.password_hash as password, t.name as teamName, p.team_id as teamId, 
+           p.avatar, p.created_at as createdAt
     FROM participants p
     LEFT JOIN teams t ON p.team_id = t.id
     ORDER BY p.pseudo
@@ -384,7 +393,8 @@ function getAllParticipants() {
 
 function getParticipantByPseudo(pseudo) {
   return queryOne(`
-    SELECT p.id, p.pseudo, p.password_hash as password, t.name as teamName, p.team_id as teamId, p.created_at as createdAt
+    SELECT p.id, p.pseudo, p.password_hash as password, t.name as teamName, p.team_id as teamId,
+           p.avatar, p.created_at as createdAt
     FROM participants p
     LEFT JOIN teams t ON p.team_id = t.id
     WHERE p.pseudo = ?
@@ -393,22 +403,28 @@ function getParticipantByPseudo(pseudo) {
 
 function getParticipantById(id) {
   return queryOne(`
-    SELECT p.id, p.pseudo, p.password_hash as password, t.name as teamName, p.team_id as teamId, p.created_at as createdAt
+    SELECT p.id, p.pseudo, p.password_hash as password, t.name as teamName, p.team_id as teamId,
+           p.avatar, p.created_at as createdAt
     FROM participants p
     LEFT JOIN teams t ON p.team_id = t.id
     WHERE p.id = ?
   `, [id]);
 }
 
-function createParticipant(id, pseudo, password, teamId) {
+function createParticipant(id, pseudo, password, teamId, avatar = 'default') {
   const passwordHash = hashPasswordSync(password);
-  run('INSERT INTO participants (id, pseudo, password_hash, team_id) VALUES (?, ?, ?, ?)',
-    [id, pseudo, passwordHash, teamId]);
+  run('INSERT INTO participants (id, pseudo, password_hash, team_id, avatar) VALUES (?, ?, ?, ?, ?)',
+    [id, pseudo, passwordHash, teamId, avatar]);
   return getParticipantById(id);
 }
 
 function updateParticipantTeam(participantId, teamId) {
   run('UPDATE participants SET team_id = ? WHERE id = ?', [teamId, participantId]);
+}
+
+function updateParticipantAvatar(participantId, avatar) {
+  run('UPDATE participants SET avatar = ? WHERE id = ?', [avatar, participantId]);
+  return getParticipantById(participantId);
 }
 
 function verifyParticipantPassword(pseudo, password) {
@@ -959,6 +975,7 @@ module.exports = {
   getParticipantById,
   createParticipant,
   updateParticipantTeam,
+  updateParticipantAvatar,
   updateParticipantPassword,
   deleteParticipant,
   verifyParticipantPassword,

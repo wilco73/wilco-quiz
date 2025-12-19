@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { LogOut, UserPlus, Trophy, Users, Star, User, History } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
+import Avatar from './Avatar';
 
 const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJoinLobby, onViewScoreboard, onViewProfile, onViewHistory, onLogout }) => {
   const availableLobbies = lobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
@@ -38,9 +39,7 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
           <div className="flex justify-between items-start mb-4">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-3">
-                <div className="bg-purple-100 dark:bg-purple-900/50 rounded-full p-3">
-                  <Users className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-                </div>
+                <Avatar avatarId={currentUser.avatar} size="lg" />
                 <div>
                   <h2 className="text-2xl font-bold dark:text-white">{currentUser.pseudo}</h2>
                   {currentUser.teamName ? (

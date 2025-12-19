@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { User, Users, Key, Save, Plus, ChevronDown, Check, X, AlertCircle } from 'lucide-react';
+import { User, Users, Key, Save, Plus, ChevronDown, Check, X, AlertCircle, Smile } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import Avatar, { AvatarSelector, AVATARS } from './Avatar';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -12,12 +13,41 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose }) => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedAvatar, setSelectedAvatar] = useState(currentUser?.avatar || 'default');
+  const [showAvatarSelector, setShowAvatarSelector] = useState(false);
   const toast = useToast();
 
   // Mettre a jour le champ quand l'utilisateur change
   useEffect(() => {
     setSelectedTeam(currentUser?.teamName || '');
-  }, [currentUser?.teamName]);
+    setSelectedAvatar(currentUser?.avatar || 'default');
+  }, [currentUser?.teamName, currentUser?.avatar]);
+
+  const handleChangeAvatar = async (avatarId) => {
+    setSelectedAvatar(avatarId);
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/participants/${currentUser.id}/avatar`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar: avatarId })
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        toast.success('Avatar mis a jour !');
+        onUpdateProfile({ ...currentUser, avatar: avatarId });
+        setShowAvatarSelector(false);
+      } else {
+        toast.error(data.message || 'Erreur');
+        setSelectedAvatar(currentUser?.avatar || 'default');
+      }
+    } catch (error) {
+      toast.error('Erreur de connexion');
+      setSelectedAvatar(currentUser?.avatar || 'default');
+    }
+    setIsLoading(false);
+  };
 
   const handleChangeTeam = async () => {
     if (!selectedTeam && !showCreateTeam) {
@@ -146,13 +176,20 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 p-4">
       <div className="max-w-lg mx-auto">
-        {/* Header */}
+        {/* Header avec Avatar */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/50 rounded-full flex items-center justify-center">
-                <User className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-              </div>
+              <button 
+                onClick={() => setShowAvatarSelector(!showAvatarSelector)}
+                className="relative group"
+                title="Changer d'avatar"
+              >
+                <Avatar avatarId={selectedAvatar} size="xl" />
+                <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Smile className="w-6 h-6 text-white" />
+                </div>
+              </button>
               <div>
                 <h2 className="text-2xl font-bold dark:text-white">{currentUser?.pseudo}</h2>
                 <p className="text-gray-600 dark:text-gray-400">
@@ -165,6 +202,9 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose }) => {
                     <span className="text-orange-600 dark:text-orange-400">Sans equipe</span>
                   )}
                 </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  Cliquez sur l'avatar pour le changer
+                </p>
               </div>
             </div>
             <button
@@ -175,6 +215,28 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose }) => {
             </button>
           </div>
         </div>
+
+        {/* Sélecteur d'avatar */}
+        {showAvatarSelector && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
+                <Smile className="w-5 h-5 text-purple-600" />
+                Choisir un avatar
+              </h3>
+              <button
+                onClick={() => setShowAvatarSelector(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <AvatarSelector 
+              selectedAvatar={selectedAvatar} 
+              onSelect={handleChangeAvatar}
+            />
+          </div>
+        )}
 
         {/* Gestion equipe */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-4">

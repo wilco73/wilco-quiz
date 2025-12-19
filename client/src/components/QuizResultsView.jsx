@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
 import { CheckCircle, XCircle, Clock, Trophy, Target, Users, ChevronDown, ChevronUp } from 'lucide-react';
+import Avatar from './Avatar';
 
-const QuizResultsView = ({ currentLobby, quiz, currentUser, onLeaveLobby, onViewScoreboard, onBackToLobbies }) => {
+const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeaveLobby, onViewScoreboard, onBackToLobbies }) => {
   const [expandedQuestions, setExpandedQuestions] = useState({});
   const [viewMode, setViewMode] = useState('personal'); // 'personal' ou 'team'
+
+  // Récupérer l'avatar d'un participant
+  const getParticipantAvatar = (participantId) => {
+    const p = participants?.find(p => p.id === participantId);
+    return p?.avatar || 'default';
+  };
 
   // Afficher un loader si données manquantes
   if (!currentLobby || !quiz || !currentUser) {
