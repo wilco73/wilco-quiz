@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { LogOut, UserPlus, Trophy, Users, Star, User } from 'lucide-react';
+import { LogOut, UserPlus, Trophy, Users, Star, User, History, Clock } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 
-const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJoinLobby, onViewScoreboard, onViewProfile, onLogout }) => {
+const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJoinLobby, onViewScoreboard, onViewProfile, onViewResults, onLogout }) => {
   const availableLobbies = lobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
   const userTeam = teams.find(t => t.name === currentUser.teamName);
+  const [showHistory, setShowHistory] = useState(false);
+  
+  // Lobbies terminés où le participant a joué
+  const myFinishedLobbies = lobbies.filter(l => 
+    l.status === 'finished' && 
+    l.participants?.some(p => p.participantId === currentUser.id)
+  );
   
   // Récupérer les coéquipiers en temps réel
   const [teamMembers, setTeamMembers] = useState([]);
@@ -214,6 +221,61 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
             </div>
           )}
         </div>
+        
+        {/* Section Historique */}
+        {myFinishedLobbies.length > 0 && (
+          <>
+            <div className="flex justify-between items-center mb-4 mt-8">
+              <h3 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                <History className="w-5 h-5" />
+                Mes quiz termines ({myFinishedLobbies.length})
+              </h3>
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
+              >
+                {showHistory ? 'Masquer' : 'Afficher'}
+              </button>
+            </div>
+            
+            {showHistory && (
+              <div className="grid gap-3">
+                {myFinishedLobbies.map(lobby => {
+                  const quiz = quizzes.find(q => q.id === lobby.quizId);
+                  const myParticipation = lobby.participants.find(p => p.participantId === currentUser.id);
+                  const myValidatedCount = myParticipation ? Object.values(myParticipation.validationsByQuestionId || {}).filter(v => v === true).length : 0;
+                  const totalQuestions = quiz?.questions?.length || 0;
+                  
+                  return (
+                    <div key={lobby.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 hover:shadow-lg transition">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h4 className="font-bold dark:text-white">{quiz?.title}</h4>
+                          <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            <span className="flex items-center gap-1">
+                              <Trophy className="w-3 h-3 text-green-500" />
+                              {myValidatedCount}/{totalQuestions} bonnes reponses
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {new Date(lobby.createdAt).toLocaleDateString('fr-FR')}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => onViewResults(lobby)}
+                          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+                        >
+                          Voir resultats
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

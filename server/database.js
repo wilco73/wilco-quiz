@@ -134,10 +134,18 @@ function createTables() {
       shuffled INTEGER DEFAULT 0,
       shuffled_questions TEXT,
       start_time INTEGER,
+      archived INTEGER DEFAULT 0,
       created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
       FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
     )
   `);
+  
+  // Migration: ajouter la colonne archived si elle n'existe pas
+  try {
+    db.run(`ALTER TABLE lobbies ADD COLUMN archived INTEGER DEFAULT 0`);
+  } catch (e) {
+    // Colonne existe deja
+  }
 
   db.run(`
     -- Table des participants dans un lobby
@@ -643,7 +651,8 @@ function saveAllQuizzes(quizzes) {
 function getAllLobbies() {
   const lobbies = query(`
     SELECT id, quiz_id as quizId, status, current_question_index as currentQuestionIndex,
-           shuffled, shuffled_questions as shuffledQuestions, start_time as startTime, created_at as createdAt
+           shuffled, shuffled_questions as shuffledQuestions, start_time as startTime, 
+           archived, created_at as createdAt
     FROM lobbies
     ORDER BY created_at DESC
   `);
@@ -658,6 +667,7 @@ function getAllLobbies() {
     
     return {
       ...lobby,
+      archived: lobby.archived === 1,
       shuffledQuestions: lobby.shuffledQuestions ? JSON.parse(lobby.shuffledQuestions) : null,
       participants,
       session
@@ -668,13 +678,15 @@ function getAllLobbies() {
 function getLobbyById(id) {
   const lobby = queryOne(`
     SELECT id, quiz_id as quizId, status, current_question_index as currentQuestionIndex,
-           shuffled, shuffled_questions as shuffledQuestions, start_time as startTime, created_at as createdAt
+           shuffled, shuffled_questions as shuffledQuestions, start_time as startTime, 
+           archived, created_at as createdAt
     FROM lobbies WHERE id = ?
   `, [id]);
   
   if (lobby) {
     lobby.participants = getLobbyParticipants(id);
     lobby.shuffledQuestions = lobby.shuffledQuestions ? JSON.parse(lobby.shuffledQuestions) : null;
+    lobby.archived = lobby.archived === 1;
     lobby.session = lobby.status !== 'waiting' ? {
       currentQuestionIndex: lobby.currentQuestionIndex,
       startTime: lobby.startTime,
@@ -806,6 +818,11 @@ function resetLobby(lobbyId) {
   
   // Supprimer les reponses enregistrees
   run('DELETE FROM lobby_answers WHERE lobby_id = ?', [lobbyId]);
+}
+
+function archiveLobby(lobbyId, archived = true) {
+  run(`UPDATE lobbies SET archived = ? WHERE id = ?`, [archived ? 1 : 0, lobbyId]);
+  return getLobbyById(lobbyId);
 }
 
 function deleteLobby(lobbyId) {
@@ -975,6 +992,7 @@ module.exports = {
   updateLobbyQuestionIndex,
   finishLobby,
   resetLobby,
+  archiveLobby,
   deleteLobby,
   
   // Lobby Answers

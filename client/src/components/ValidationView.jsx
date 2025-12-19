@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Trophy, Check, XCircle, Users, ChevronDown, ChevronUp, AlertCircle, RotateCcw, ChevronLeft, ChevronRight, Image as ImageIcon, Video as VideoIcon, Music } from 'lucide-react';
+import { Trophy, Check, XCircle, Users, ChevronDown, ChevronUp, AlertCircle, RotateCcw, ChevronLeft, ChevronRight, Image as ImageIcon, Video as VideoIcon, Music, Archive } from 'lucide-react';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
 // Composant pour afficher les médias en miniature
 const MediaPreview = ({ question }) => {
@@ -60,7 +62,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 };
 
 const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
-  const finishedLobbies = lobbies.filter(l => l.status === 'finished');
+  // Filtrer les lobbies terminés et NON archivés
+  const finishedLobbies = lobbies.filter(l => l.status === 'finished' && !l.archived);
   const [expandedQuestions, setExpandedQuestions] = useState({});
   const [expandedLobbies, setExpandedLobbies] = useState({});
   const [viewMode, setViewMode] = useState('team');
@@ -95,11 +98,25 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
     });
   };
 
+  const archiveLobby = async (lobbyId) => {
+    if (!window.confirm('Archiver ce lobby ? Il ne sera plus visible dans la validation mais restera accessible.')) return;
+    try {
+      await fetch(`${API_URL}/lobbies/${lobbyId}/archive`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: true })
+      });
+    } catch (error) {
+      console.error('Erreur archivage:', error);
+    }
+  };
+
   if (finishedLobbies.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-12 text-center">
         <Trophy className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-        <p className="text-xl text-gray-600 dark:text-gray-400">Aucun quiz termine</p>
+        <p className="text-xl text-gray-600 dark:text-gray-400">Aucun quiz a valider</p>
+        <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Les quiz termines apparaitront ici</p>
       </div>
     );
   }
@@ -184,6 +201,16 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                       <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${progressPercent}%` }} />
                     </div>
                   </div>
+                  {progressPercent === 100 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); archiveLobby(lobby.id); }}
+                      className="px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-1 text-sm"
+                      title="Archiver ce lobby"
+                    >
+                      <Archive className="w-4 h-4" />
+                      Archiver
+                    </button>
+                  )}
                   {isLobbyExpanded ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
                 </div>
               </div>

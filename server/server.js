@@ -191,6 +191,18 @@ io.on('connection', (socket) => {
     questions: db.getAllQuestions()
   });
   
+  // Handler pour demander l'etat global (reconnexion)
+  socket.on('global:requestState', () => {
+    console.log(`[SOCKET] Demande d'etat global de ${socket.id}`);
+    socket.emit('global:state', {
+      lobbies: db.getAllLobbies().map(l => getLobbyWithTimer(l)),
+      teams: db.getAllTeams(),
+      participants: db.getAllParticipants().map(p => ({ ...p, password: '********' })),
+      quizzes: db.getAllQuizzes(),
+      questions: db.getAllQuestions()
+    });
+  });
+  
   // ==================== AUTHENTIFICATION ====================
   
   socket.on('auth:login', async (data, callback) => {
@@ -348,6 +360,8 @@ io.on('connection', (socket) => {
       });
     }
     
+    // Broadcast l'etat du lobby a tous les participants
+    broadcastLobbyState(lobbyId);
     broadcastGlobalState();
     callback({ success: true, lobby: getLobbyWithTimer(updatedLobby), quiz });
   });
@@ -363,6 +377,9 @@ io.on('connection', (socket) => {
     console.log(`[LOBBY] Participant ${odId} a quitte ${lobbyId}`);
     
     io.to(`lobby:${lobbyId}`).emit('lobby:participantLeft', { odId });
+    
+    // Broadcast l'etat du lobby a tous les participants restants
+    broadcastLobbyState(lobbyId);
     broadcastGlobalState();
     
     if (callback) callback({ success: true });
@@ -1009,6 +1026,21 @@ app.delete('/api/questions/:id', (req, res) => {
 // Lobbies (lecture seule, la gestion se fait via Socket.IO)
 app.get('/api/lobbies', (req, res) => {
   res.json(db.getAllLobbies().map(l => getLobbyWithTimer(l)));
+});
+
+// Archiver/Desarchiver un lobby
+app.put('/api/lobbies/:id/archive', (req, res) => {
+  const { id } = req.params;
+  const { archived } = req.body;
+  
+  const lobby = db.getLobbyById(id);
+  if (!lobby) {
+    return res.json({ success: false, message: 'Lobby introuvable' });
+  }
+  
+  const updatedLobby = db.archiveLobby(id, archived);
+  broadcastGlobalState();
+  res.json({ success: true, lobby: getLobbyWithTimer(updatedLobby) });
 });
 
 // Production: servir le client React

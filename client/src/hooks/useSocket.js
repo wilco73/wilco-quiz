@@ -53,6 +53,9 @@ export function useSocket() {
       setIsConnected(true);
       setConnectionError(null);
       setSocketReady(true);
+      
+      // Demander l'etat global a chaque connexion/reconnexion
+      socket.emit('global:requestState');
     });
     
     socket.on('disconnect', (reason) => {

@@ -472,6 +472,11 @@ const App = () => {
           onJoinLobby={handleJoinLobby}
           onViewScoreboard={() => setView('scoreboard')}
           onViewProfile={() => setView('profile')}
+          onViewResults={(lobby) => {
+            setCurrentLobby(lobby);
+            setCurrentQuiz(quizzes.find(q => q.id === lobby.quizId));
+            setView('results');
+          }}
           onLogout={handleLogout}
         />
       )}
@@ -518,10 +523,19 @@ const App = () => {
           teams={teams}
           onViewScoreboard={() => setView('scoreboard')}
           onBackToLobbies={() => {
+            console.log('[APP] Quitter le quiz - retour à la liste des lobbies');
+            // Quitter la room socket si on y est
+            if (currentLobby && socket) {
+              socket.leaveLobby(currentLobby.id, currentUser?.id);
+            }
+            // Reset des états
             setCurrentLobby(null);
             setCurrentQuiz(null);
+            setMyAnswer('');
+            setHasAnswered(false);
+            // Changer la vue
             setView('lobby-list');
-            // Important: sauvegarder SANS currentLobbyId pour eviter la reconnexion
+            // Sauvegarder SANS currentLobbyId pour eviter la reconnexion
             saveSession({ currentUser, currentLobbyId: null });
           }}
         />
