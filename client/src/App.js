@@ -11,6 +11,7 @@ import ScoreboardView from './components/ScoreboardView';
 import AdminDashboard from './components/AdminDashboard';
 import ReconnectingScreen from './components/ReconnectingScreen';
 import ProfileView from './components/ProfileView';
+import HistoryView from './components/HistoryView';
 import { useToast } from './components/ToastProvider';
 import './App.css';
 
@@ -472,12 +473,22 @@ const App = () => {
           onJoinLobby={handleJoinLobby}
           onViewScoreboard={() => setView('scoreboard')}
           onViewProfile={() => setView('profile')}
+          onViewHistory={() => setView('history')}
+          onLogout={handleLogout}
+        />
+      )}
+      
+      {view === 'history' && currentUser && (
+        <HistoryView
+          currentUser={currentUser}
+          lobbies={lobbies}
+          quizzes={quizzes}
           onViewResults={(lobby) => {
             setCurrentLobby(lobby);
             setCurrentQuiz(quizzes.find(q => q.id === lobby.quizId));
             setView('results');
           }}
-          onLogout={handleLogout}
+          onBack={() => setView('lobby-list')}
         />
       )}
       
@@ -523,12 +534,9 @@ const App = () => {
           teams={teams}
           onViewScoreboard={() => setView('scoreboard')}
           onBackToLobbies={() => {
-            console.log('[APP] Quitter le quiz - retour à la liste des lobbies');
-            // Quitter la room socket si on y est
-            if (currentLobby && socket) {
-              socket.leaveLobby(currentLobby.id, currentUser?.id);
-            }
-            // Reset des états
+            console.log('[APP] Quitter le quiz - retour a la liste des lobbies');
+            // NE PAS appeler leaveLobby pour les quiz termines (sinon on perd l'historique)
+            // Reset des etats
             setCurrentLobby(null);
             setCurrentQuiz(null);
             setMyAnswer('');
