@@ -10,15 +10,17 @@ echo    INSTALLATION DES DEPENDANCES
 echo ================================================
 echo.
 
-REM Vérifier si Node.js est installé
-where node >nul 2>nul
+REM Verifier si Node.js est accessible
+node -v >nul 2>nul
 if errorlevel 1 (
-    echo [ERREUR] Node.js n'est pas installe !
+    echo [ERREUR] Node.js n est pas accessible !
     echo.
-    echo Veuillez d'abord installer Node.js depuis :
+    echo Si Node.js est installe, essayez de :
+    echo    - Redemarrer votre ordinateur
+    echo    - Relancer ce script
+    echo.
+    echo Sinon, installez Node.js depuis :
     echo    https://nodejs.org/
-    echo.
-    echo Conseil : Telechargez la version LTS
     echo.
     pause
     exit /b 1

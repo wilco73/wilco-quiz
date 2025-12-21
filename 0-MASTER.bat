@@ -1,44 +1,85 @@
 REM ===============================================
 REM 0-MASTER.bat
-REM Menu principal pour tout gérer
+REM Menu principal pour tout gerer
 REM ===============================================
 @echo off
 chcp 65001 >nul
 setlocal EnableDelayedExpansion
 
-REM Vérifier si Node.js est installé
-where node >nul 2>nul
-if errorlevel 1 (
+REM Verifier si Node.js est installe (plusieurs methodes)
+set "NODE_FOUND=0"
+set "NODE_VERSION="
+
+REM Methode 1: Essayer d executer node directement
+node -v >nul 2>nul
+if not errorlevel 1 (
+    set "NODE_FOUND=1"
+    for /f "tokens=*" %%i in ('node -v 2^>nul') do set "NODE_VERSION=%%i"
+)
+
+REM Methode 2: Chercher dans Program Files si methode 1 echoue
+if "%NODE_FOUND%"=="0" (
+    if exist "%ProgramFiles%\nodejs\node.exe" (
+        set "NODE_FOUND=1"
+        for /f "tokens=*" %%i in ('"%ProgramFiles%\nodejs\node.exe" -v 2^>nul') do set "NODE_VERSION=%%i"
+        set "PATH=%ProgramFiles%\nodejs;%PATH%"
+    )
+)
+
+REM Methode 3: Chercher dans Program Files x86
+if "%NODE_FOUND%"=="0" (
+    if exist "%ProgramFiles(x86)%\nodejs\node.exe" (
+        set "NODE_FOUND=1"
+        for /f "tokens=*" %%i in ('"%ProgramFiles(x86)%\nodejs\node.exe" -v 2^>nul') do set "NODE_VERSION=%%i"
+        set "PATH=%ProgramFiles(x86)%\nodejs;%PATH%"
+    )
+)
+
+REM Methode 4: Chercher dans AppData (nvm, etc.)
+if "%NODE_FOUND%"=="0" (
+    if exist "%APPDATA%\npm\node.exe" (
+        set "NODE_FOUND=1"
+        for /f "tokens=*" %%i in ('"%APPDATA%\npm\node.exe" -v 2^>nul') do set "NODE_VERSION=%%i"
+    )
+)
+
+REM Si Node.js n est toujours pas trouve
+if "%NODE_FOUND%"=="0" (
     cls
     echo.
     echo ================================================================
     echo.
-    echo    [ERREUR] Node.js n'est pas installe !
+    echo    [!] Node.js n a pas ete detecte
     echo.
     echo ================================================================
     echo.
     echo    Node.js est necessaire pour faire fonctionner Wilco Quiz.
     echo.
-    echo    Pour l'installer :
+    echo    Si Node.js est deja installe, vous devrez peut-etre :
+    echo    - Redemarrer votre ordinateur
+    echo    - Ou ajouter Node.js au PATH systeme
+    echo.
+    echo    Pour installer Node.js :
     echo.
     echo    1. Allez sur : https://nodejs.org/
-    echo    2. Telechargez la version LTS (recommandee)
+    echo    2. Telechargez la version LTS recommandee
     echo    3. Installez en suivant les instructions
     echo    4. IMPORTANT : Cochez "Automatically install necessary tools"
-    echo       lors de l'installation (pour bcrypt/SQLite)
     echo    5. Redemarrez votre ordinateur
     echo    6. Relancez ce script
     echo.
     echo ================================================================
     echo.
-    echo Appuyez sur une touche pour ouvrir nodejs.org...
-    pause >nul
-    start https://nodejs.org/
+    echo [O] Ouvrir nodejs.org
+    echo [C] Continuer quand meme si Node.js est installe
+    echo [Q] Quitter
+    echo.
+    set /p CHOICE="Votre choix: "
+    if /i "!CHOICE!"=="O" start https://nodejs.org/ & exit
+    if /i "!CHOICE!"=="Q" exit
+    if /i "!CHOICE!"=="C" goto MENU
     exit
 )
-
-REM Afficher la version de Node.js
-for /f "tokens=*" %%i in ('node -v') do set NODE_VERSION=%%i
 
 :MENU
 cls
@@ -46,9 +87,9 @@ echo.
 echo ================================================================
 echo.
 echo           WILCO QUIZ v4.0 - MENU PRINCIPAL
-echo           (SQLite + Avatars + Historique)
+echo           SQLite + Avatars + Historique
 echo.
-echo    Node.js %NODE_VERSION% detecte
+if defined NODE_VERSION echo    Node.js %NODE_VERSION% detecte
 echo.
 echo ================================================================
 echo.
