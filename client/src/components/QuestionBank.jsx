@@ -495,7 +495,7 @@ const QuestionBank = ({ questions, onSave }) => {
         '15',
         '', '', '', '', '', '',
         ''
-      ].join(delimiter)
+      ].join(delimiter),
       // ✅ NOUVEL EXEMPLE : QCM avec média audio
       [
         '',
