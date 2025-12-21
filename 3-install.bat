@@ -10,6 +10,26 @@ echo    INSTALLATION DES DEPENDANCES
 echo ================================================
 echo.
 
+REM Vérifier si Node.js est installé
+where node >nul 2>nul
+if errorlevel 1 (
+    echo [ERREUR] Node.js n'est pas installe !
+    echo.
+    echo Veuillez d'abord installer Node.js depuis :
+    echo    https://nodejs.org/
+    echo.
+    echo Conseil : Telechargez la version LTS
+    echo.
+    pause
+    exit /b 1
+)
+
+REM Afficher les versions
+echo Verification des outils...
+for /f "tokens=*" %%i in ('node -v') do echo    Node.js: %%i
+for /f "tokens=*" %%i in ('npm -v') do echo    npm: %%i
+echo.
+
 echo Installation des dependances du serveur...
 echo    (inclut SQLite et bcrypt pour la securite)
 cd server
