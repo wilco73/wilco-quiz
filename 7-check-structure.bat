@@ -47,6 +47,22 @@ if exist "client\src\utils" (
     set /a ERROR_COUNT+=1
 )
 
+REM Verifier client/src/contexts
+if exist "client\src\contexts" (
+    echo [OK] client\src\contexts
+) else (
+    echo [X] client\src\contexts MANQUANT
+    set /a ERROR_COUNT+=1
+)
+
+REM Verifier client/public/avatars
+if exist "client\public\avatars" (
+    echo [OK] client\public\avatars
+) else (
+    echo [X] client\public\avatars MANQUANT
+    set /a ERROR_COUNT+=1
+)
+
 REM Verifier server
 if exist "server" (
     echo [OK] server

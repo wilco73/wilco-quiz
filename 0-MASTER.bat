@@ -11,8 +11,8 @@ cls
 echo.
 echo ================================================================
 echo.
-echo           WILCO QUIZ v2.0 - MENU PRINCIPAL
-echo                   (SQLite Edition)
+echo           WILCO QUIZ v4.0 - MENU PRINCIPAL
+echo           (SQLite + Avatars + Historique)
 echo.
 echo ================================================================
 echo.

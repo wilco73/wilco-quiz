@@ -30,7 +30,7 @@ echo.
 echo Verification et deplacement des composants...
 
 REM Liste des composants a verifier/deplacer
-set COMPONENTS=AdminDashboard QuestionBank QuizEditor ParticipantManager LobbyManager LiveMonitoring ValidationView QuizResultsView ScoreboardView LoginView LobbyView LobbyViewList QuizView ReconnectingScreen ToastProvider DarkModeToggle
+set COMPONENTS=AdminDashboard QuestionBank QuizEditor ParticipantManager LobbyManager LiveMonitoring ValidationView QuizResultsView ScoreboardView LoginView LobbyView LobbyViewList QuizView ReconnectingScreen ToastProvider DarkModeToggle ProfileView HistoryView Avatar
 
 for %%C in (%COMPONENTS%) do (
     if exist "%%C.jsx" (
@@ -73,6 +73,12 @@ if exist "helpers.js" (
     move /Y "helpers.js" "utils\" >nul
 )
 echo    [OK] Utils verifies
+echo.
+
+REM Creer dossier contexts si necessaire
+echo Verification des contexts...
+if not exist "contexts" mkdir contexts
+echo    [OK] Dossier contexts verifie
 echo.
 
 cd ..\..
