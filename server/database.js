@@ -572,6 +572,55 @@ function saveAllQuestions(questions) {
   }
 }
 
+/**
+ * Fusionne des questions importées avec les existantes
+ * @param {Array} questions - Questions à importer
+ * @param {string} mode - 'update' (fusionner), 'add' (ajouter sans écraser), 'replace' (tout remplacer)
+ * @returns {Object} { added, updated }
+ */
+function mergeQuestions(questions, mode = 'update') {
+  let added = 0;
+  let updated = 0;
+  
+  if (mode === 'replace') {
+    // Mode REPLACE : supprimer tout et réimporter
+    run('DELETE FROM questions');
+    for (const q of questions) {
+      createQuestion(q);
+      added++;
+    }
+  } else {
+    // Mode UPDATE ou ADD - optimisé pour les gros imports
+    // 1. Récupérer tous les IDs existants en une seule requête
+    const existingIds = new Set(
+      query('SELECT id FROM questions').map(row => row.id)
+    );
+    
+    // 2. Traiter chaque question
+    for (const q of questions) {
+      const exists = q.id && existingIds.has(q.id);
+      
+      if (exists) {
+        if (mode === 'update') {
+          // Mode UPDATE : mettre à jour la question existante
+          updateQuestion(q.id, q);
+          updated++;
+        }
+        // Mode ADD : on ignore les doublons (on ne fait rien)
+      } else {
+        // Question n'existe pas : on l'ajoute
+        createQuestion(q);
+        added++;
+        // Ajouter l'ID au set pour éviter les doublons dans le même batch
+        if (q.id) existingIds.add(q.id);
+      }
+    }
+  }
+  
+  saveDatabase();
+  return { added, updated };
+}
+
 // ----- QUIZZES -----
 
 function getAllQuizzes() {
@@ -988,6 +1037,7 @@ module.exports = {
   updateQuestion,
   deleteQuestion,
   saveAllQuestions,
+  mergeQuestions,
   
   // Quizzes
   getAllQuizzes,

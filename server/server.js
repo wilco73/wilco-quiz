@@ -1039,6 +1039,18 @@ app.post('/api/questions/add', (req, res) => {
   res.json({ success: true, question: created });
 });
 
+app.post('/api/questions/merge', (req, res) => {
+  const { questions, mode } = req.body;
+  
+  if (!questions || !Array.isArray(questions)) {
+    return res.status(400).json({ success: false, error: 'Questions array required' });
+  }
+  
+  const stats = db.mergeQuestions(questions, mode || 'update');
+  broadcastGlobalState();
+  res.json({ success: true, stats });
+});
+
 app.put('/api/questions/:id', (req, res) => {
   const { id } = req.params;
   const question = req.body;
