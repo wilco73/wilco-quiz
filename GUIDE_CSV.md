@@ -14,41 +14,73 @@ Le système permet d'**importer** et **exporter** vos questions au format CSV po
 
 ### Format du fichier
 
-Votre fichier CSV doit contenir **14 colonnes** dans cet ordre :
+Votre fichier CSV doit contenir **17 colonnes** dans cet ordre :
 
 | # | Colonne | Description | Requis | Exemple |
 |---|---------|-------------|--------|---------|
-| 1 | Type | Type de question | ✅ Oui | `text`, `qcm`, `image`, `video`, `audio` |
-| 2 | Catégorie | Catégorie de la question | ❌ Non | `Géographie`, `Histoire`, `Sport` |
-| 3 | Question | Texte de la question | ✅ Oui | `Quelle est la capitale de la France ?` |
-| 4 | Réponse | Réponse correcte | ✅ Oui | `Paris` |
-| 5 | Média (URL) | URL du média (image/video/audio) | ❌ Non | `https://example.com/image.jpg` |
-| 6 | Points | Nombre de points | ✅ Oui | `1`, `2`, `5` |
-| 7 | Timer (secondes) | Temps limite (0 = illimité) | ✅ Oui | `30`, `0` |
-| 8 | Choix 1 | Premier choix (QCM uniquement) | ❌ Non | `Paris` |
-| 9 | Choix 2 | Deuxième choix (QCM uniquement) | ❌ Non | `Londres` |
-| 10 | Choix 3 | Troisième choix (QCM uniquement) | ❌ Non | `Berlin` |
-| 11 | Choix 4 | Quatrième choix (QCM uniquement) | ❌ Non | `Madrid` |
-| 12 | Choix 5 | Cinquième choix (optionnel) | ❌ Non | `Rome` |
-| 13 | Choix 6 | Sixième choix (optionnel) | ❌ Non | `Lisbonne` |
-| 14 | Index Réponse Correcte | Index du bon choix (QCM) | ❌ Non | `0` (= Choix 1) |
+| 1 | ID | Identifiant unique (auto-généré si vide) | ❌ Non | `q123456` |
+| 2 | Type | Type de question | ✅ Oui | `text`, `qcm`, `image`, `video`, `audio` |
+| 3 | Catégorie | Catégorie de la question | ❌ Non | `Géographie`, `Histoire`, `Sport` |
+| 4 | Tags | Tags séparés par `\|` | ❌ Non | `facile\|culture\|france` |
+| 5 | Question | Texte de la question | ✅ Oui | `Quelle est la capitale de la France ?` |
+| 6 | Réponse | Réponse correcte | ✅ Oui | `Paris` |
+| 7 | Média (URL) | URL du média (image/video/audio) | ❌ Non | `https://example.com/image.jpg` |
+| 8 | Type Média | Type du média pour QCM | ❌ Non | `image`, `video`, `audio` |
+| 9 | Points | Nombre de points | ✅ Oui | `1`, `2`, `5` |
+| 10 | Timer (secondes) | Temps limite (0 = illimité) | ✅ Oui | `30`, `0` |
+| 11 | Choix 1 | Premier choix (QCM uniquement) | ❌ Non | `Paris` |
+| 12 | Choix 2 | Deuxième choix (QCM uniquement) | ❌ Non | `Londres` |
+| 13 | Choix 3 | Troisième choix (QCM uniquement) | ❌ Non | `Berlin` |
+| 14 | Choix 4 | Quatrième choix (QCM uniquement) | ❌ Non | `Madrid` |
+| 15 | Choix 5 | Cinquième choix (optionnel) | ❌ Non | `Rome` |
+| 16 | Choix 6 | Sixième choix (optionnel) | ❌ Non | `Lisbonne` |
+| 17 | Index Réponse Correcte | Index du bon choix (QCM) | ❌ Non | `0` (= Choix 1) |
+
+---
+
+## 🏷️ **Système de Tags**
+
+### Qu'est-ce que les tags ?
+
+Les tags permettent de **classer et filtrer** vos questions de manière plus fine que les catégories :
+
+- **Catégorie** = Classification principale (ex: `Histoire`)
+- **Tags** = Attributs multiples (ex: `facile`, `XIXe siècle`, `France`)
+
+### Format des tags dans le CSV
+
+Les tags sont séparés par le caractère **pipe** `|` :
+
+```csv
+facile|culture|france
+difficile|sport|mondial
+blindtest|années80|rock
+```
+
+### Exemples d'utilisation
+
+| Catégorie | Tags | Utilisation |
+|-----------|------|-------------|
+| Histoire | `facile\|France\|Révolution` | Question facile sur la Révolution française |
+| Musique | `blindtest\|années80\|rock` | Blindtest rock des années 80 |
+| Sport | `difficile\|football\|coupe du monde` | Question difficile sur le foot mondial |
 
 ---
 
 ## 📝 **Exemples par type de question**
 
-### 1️⃣ Question Texte Simple
+### 1️⃣ Question Texte Simple avec Tags
 
 ```csv
-Type,Catégorie,Question,Réponse,Média (URL),Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
-text,Géographie,"Quelle est la capitale de la France ?","Paris",,1,30,,,,,,,
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,text,Géographie,facile|europe|capitales,"Quelle est la capitale de la France ?","Paris",,,1,30,,,,,,,
 ```
 
-### 2️⃣ Question QCM
+### 2️⃣ Question QCM avec Tags
 
 ```csv
-Type,Catégorie,Question,Réponse,Média (URL),Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
-qcm,Histoire,"En quelle année a eu lieu la Révolution française ?","1789",,2,20,"1789","1792","1804","1815",,,0
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,qcm,Histoire,moyen|révolution|dates,"En quelle année a eu lieu la Révolution française ?","1789",,,2,20,"1789","1792","1804","1815",,,0
 ```
 
 **Notes QCM** :
@@ -56,25 +88,25 @@ qcm,Histoire,"En quelle année a eu lieu la Révolution française ?","1789",,2,
 - Minimum 2 choix requis
 - La colonne `Réponse` sera automatiquement remplie avec le texte du bon choix
 
-### 3️⃣ Question avec Image
+### 3️⃣ Question avec Image et Tags
 
 ```csv
-Type,Catégorie,Question,Réponse,Média (URL),Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
-image,Art,"Qui a peint ce tableau ?","Leonardo da Vinci","https://example.com/mona-lisa.jpg",1,0,,,,,,,
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,image,Art,difficile|renaissance|peinture,"Qui a peint ce tableau ?","Leonardo da Vinci","https://example.com/mona-lisa.jpg",,1,0,,,,,,,
 ```
 
-### 4️⃣ Question Audio (Blindtest)
+### 4️⃣ Question Audio (Blindtest) avec Tags
 
 ```csv
-Type,Catégorie,Question,Réponse,Média (URL),Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
-audio,Musique,"Qui interprète cette chanson ?","The Beatles","https://example.com/song.mp3",1,15,,,,,,,
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,audio,Musique,blindtest|années60|rock,"Qui interprète cette chanson ?","The Beatles","https://example.com/song.mp3",,1,15,,,,,,,
 ```
 
-### 5️⃣ Question Vidéo
+### 5️⃣ Question Vidéo avec Tags
 
 ```csv
-Type,Catégorie,Question,Réponse,Média (URL),Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
-video,Cinéma,"De quel film est extraite cette scène ?","Star Wars","https://example.com/scene.mp4",2,0,,,,,,,
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,video,Cinéma,facile|sf|classique,"De quel film est extraite cette scène ?","Star Wars","https://example.com/scene.mp4",,2,0,,,,,,,
 ```
 
 ---
@@ -90,6 +122,7 @@ video,Cinéma,"De quel film est extraite cette scène ?","Star Wars","https://ex
 2. Remplissez une ligne par question
 3. Pour les guillemets dans le texte, doublez-les : `"Il a dit ""Bonjour"""`
 4. Laissez les cellules vides pour les colonnes optionnelles
+5. **Tags** : séparez par `|` (ex: `facile|culture|france`)
 
 ### Étape 3 : Sauvegarder
 1. **Fichier → Enregistrer sous**
@@ -100,8 +133,9 @@ video,Cinéma,"De quel film est extraite cette scène ?","Star Wars","https://ex
 1. Cliquez sur **"Importer CSV"** dans l'interface
 2. Sélectionnez votre fichier
 3. Choisissez le mode :
-   - **OK** = Ajouter aux questions existantes
-   - **Annuler** = Remplacer toutes les questions
+   - **FUSIONNER** = Met à jour les existantes + ajoute les nouvelles
+   - **AJOUTER** = Ajoute uniquement les nouvelles (ignore doublons)
+   - **REMPLACER** = Supprime tout et importe le CSV
 
 ---
 
@@ -119,6 +153,8 @@ video,Cinéma,"De quel film est extraite cette scène ?","Star Wars","https://ex
 1. Cliquez sur **"Exporter CSV"**
 2. Le fichier se télécharge automatiquement : `questions_AAAA-MM-JJ.csv`
 3. Ouvrez-le avec Excel pour l'éditer
+
+**Note** : Les tags seront exportés au format `tag1|tag2|tag3`
 
 ---
 
@@ -146,12 +182,17 @@ Si votre question contient des guillemets, doublez-les :
 - Maximum 6 choix
 - Index commence à 0 (0 = premier choix)
 
+### Tags
+- Séparés par `|` (pipe)
+- Pas de limite de nombre
+- Insensibles à la casse pour la recherche
+
 ---
 
 ## 🔧 **Dépannage**
 
 ### "Nombre de colonnes insuffisant"
-➡️ Votre fichier n'a pas 14 colonnes. Vérifiez qu'il y a bien toutes les colonnes même si elles sont vides.
+➡️ Votre fichier n'a pas 17 colonnes. Vérifiez qu'il y a bien toutes les colonnes même si elles sont vides.
 
 ### "Question vide"
 ➡️ La colonne "Question" est vide sur cette ligne.
@@ -179,13 +220,18 @@ Si votre question contient des guillemets, doublez-les :
 3. Modifiez en masse dans Excel
 4. Importez !
 
-### Catégoriser vos questions
-Utilisez la colonne "Catégorie" pour organiser :
-- `Histoire`
-- `Géographie`
-- `Sport`
-- `Musique`
-- Etc.
+### Organiser avec Catégories ET Tags
+- **Catégorie** = Le thème principal (1 seul par question)
+- **Tags** = Attributs supplémentaires (plusieurs possibles)
+
+Exemple :
+- Catégorie : `Histoire`
+- Tags : `facile|France|XXe siècle|Guerre`
+
+### Filtrer efficacement
+1. Utilisez le filtre "Catégorie" pour le thème
+2. Utilisez le filtre "Tag" pour affiner
+3. Utilisez la recherche pour trouver un mot-clé
 
 ### Sauvegardes régulières
 Exportez votre banque après chaque grosse session de création !
@@ -193,17 +239,18 @@ Exportez votre banque après chaque grosse session de création !
 ### Partage entre organisateurs
 1. Exportez vos questions
 2. Envoyez le CSV
-3. L'autre importe avec "Ajouter"
+3. L'autre importe avec "FUSIONNER" ou "AJOUTER"
 
 ---
 
 ## 📋 **Checklist avant import**
 
-- [ ] La première ligne contient les 14 en-têtes
+- [ ] La première ligne contient les 17 en-têtes
 - [ ] Chaque question a : Type, Question, Réponse, Points, Timer
 - [ ] Les QCM ont au moins 2 choix
 - [ ] Les index de réponses correctes sont valides (0-5)
 - [ ] Les URLs de médias sont complètes
+- [ ] Les tags sont séparés par `|`
 - [ ] Le fichier est en UTF-8
 - [ ] Pas de lignes vides au milieu
 

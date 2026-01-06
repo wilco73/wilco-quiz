@@ -8,6 +8,7 @@ const QuestionBank = ({ questions, onSave }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterTag, setFilterTag] = useState('');
   const [showPreview, setShowPreview] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [csvDelimiter, setCsvDelimiter] = useState(',');
@@ -24,6 +25,8 @@ const QuestionBank = ({ questions, onSave }) => {
     points: 1,
     timer: 0,
     category: '',
+    tags: [],
+    tagsInput: '',
     choices: ['', '', '', ''],
     correctChoice: 0
   });
@@ -38,6 +41,8 @@ const QuestionBank = ({ questions, onSave }) => {
       points: 1,
       timer: 0,
       category: '',
+      tags: [],
+      tagsInput: '',
       choices: ['', '', '', ''],
       correctChoice: 0
     });
@@ -56,6 +61,7 @@ const QuestionBank = ({ questions, onSave }) => {
       'ID',
       'Type',
       'Catégorie',
+      'Tags',
       'Question',
       'Réponse',
       'Média (URL)',
@@ -73,10 +79,12 @@ const QuestionBank = ({ questions, onSave }) => {
 
     const rows = localQuestions.map(q => {
       const choices = q.type === 'qcm' ? (q.choices || []) : [];
+      const tagsStr = (q.tags || []).join('|');
       return [
         q.id || '',
         q.type || 'text',
         q.category || '',
+        tagsStr,
         `"${(q.text || '').replace(/"/g, '""')}"`,
         `"${(q.answer || '').replace(/"/g, '""')}"`,
         q.media || '',
@@ -147,7 +155,7 @@ const QuestionBank = ({ questions, onSave }) => {
             }
 
             const [
-              id, type, category, text, answer, media, mediaType,
+              id, type, category, tagsStr, text, answer, media, mediaType,
               points, timer,
               choice1, choice2, choice3, choice4, choice5, choice6,
               correctChoiceIndex
@@ -158,10 +166,14 @@ const QuestionBank = ({ questions, onSave }) => {
               return;
             }
 
+            // Parser les tags (séparés par |)
+            const tags = tagsStr ? tagsStr.split('|').map(t => t.trim()).filter(Boolean) : [];
+
             const question = {
               id: id && id.trim() ? id.trim() : `import-${Date.now()}-${index}`,
               type: type || 'text',
               category: category || '',
+              tags: tags,
               text: text.trim(),
               answer: answer ?.trim() || '',
               media: media || '',
@@ -635,7 +647,9 @@ const QuestionBank = ({ questions, onSave }) => {
     setFormData({
       ...question,
       choices: question.choices || ['', '', '', ''],
-      correctChoice: question.correctChoice || 0
+      correctChoice: question.correctChoice || 0,
+      tags: question.tags || [],
+      tagsInput: ''
     });
   };
 
@@ -687,13 +701,16 @@ const QuestionBank = ({ questions, onSave }) => {
     });
   };
 
-  // ✅ FILTRAGE avec catégorie et type
+  // ✅ FILTRAGE avec catégorie, type et tags
   const filteredQuestions = localQuestions.filter(q => {
+    const qTags = q.tags || [];
     const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      q.category ?.toLowerCase().includes(searchTerm.toLowerCase());
+      q.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      qTags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = !filterCategory || q.category === filterCategory;
     const matchesType = !filterType || q.type === filterType;
-    return matchesSearch && matchesCategory && matchesType;
+    const matchesTag = !filterTag || qTags.includes(filterTag);
+    return matchesSearch && matchesCategory && matchesType && matchesTag;
   });
 
   // ✅ PAGINATION
@@ -704,7 +721,7 @@ const QuestionBank = ({ questions, onSave }) => {
   // Réinitialiser à la page 1 si on filtre
   useMemo(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterCategory, filterType]);
+  }, [searchTerm, filterCategory, filterType, filterTag]);
 
   // ✅ Pagination avec ellipsis
   const renderPagination = () => {
@@ -912,6 +929,9 @@ const QuestionBank = ({ questions, onSave }) => {
 
   // Obtenir les catégories uniques
   const categories = [...new Set(localQuestions.map(q => q.category).filter(Boolean))];
+  
+  // Obtenir les tags uniques
+  const allTags = [...new Set(localQuestions.flatMap(q => q.tags || []).filter(Boolean))].sort();
 
   return (
     <div className="space-y-6">
@@ -1003,6 +1023,76 @@ const QuestionBank = ({ questions, onSave }) => {
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             />
+
+            {/* Champ Tags */}
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Ajouter un tag (appuyez Entrée)"
+                  value={formData.tagsInput || ''}
+                  onChange={(e) => setFormData({ ...formData, tagsInput: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && formData.tagsInput?.trim()) {
+                      e.preventDefault();
+                      const newTag = formData.tagsInput.trim();
+                      if (!formData.tags.includes(newTag)) {
+                        setFormData({
+                          ...formData,
+                          tags: [...formData.tags, newTag],
+                          tagsInput: ''
+                        });
+                      } else {
+                        setFormData({ ...formData, tagsInput: '' });
+                      }
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (formData.tagsInput?.trim()) {
+                      const newTag = formData.tagsInput.trim();
+                      if (!formData.tags.includes(newTag)) {
+                        setFormData({
+                          ...formData,
+                          tags: [...formData.tags, newTag],
+                          tagsInput: ''
+                        });
+                      } else {
+                        setFormData({ ...formData, tagsInput: '' });
+                      }
+                    }
+                  }}
+                  className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                >
+                  +
+                </button>
+              </div>
+              {formData.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {formData.tags.map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 text-sm rounded"
+                    >
+                      #{tag}
+                      <button
+                        type="button"
+                        onClick={() => setFormData({
+                          ...formData,
+                          tags: formData.tags.filter((_, i) => i !== idx)
+                        })}
+                        className="text-green-500 hover:text-red-500 font-bold"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <textarea
               placeholder="Question"
@@ -1171,7 +1261,7 @@ const QuestionBank = ({ questions, onSave }) => {
       </div>
 
       {/* Filtres et recherche */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <input
           type="text"
           placeholder="Rechercher une question..."
@@ -1188,6 +1278,17 @@ const QuestionBank = ({ questions, onSave }) => {
           <option value="">Toutes les catégories</option>
           {categories.map(cat => (
             <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+
+        <select
+          value={filterTag}
+          onChange={(e) => setFilterTag(e.target.value)}
+          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+        >
+          <option value="">Tous les tags</option>
+          {allTags.map(tag => (
+            <option key={tag} value={tag}>{tag}</option>
           ))}
         </select>
 
@@ -1222,6 +1323,11 @@ const QuestionBank = ({ questions, onSave }) => {
                       {question.category}
                     </span>
                   )}
+                  {question.tags && question.tags.length > 0 && question.tags.map(tag => (
+                    <span key={tag} className="px-2 py-1 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 text-xs rounded">
+                      #{tag}
+                    </span>
+                  ))}
                   {question.type === 'qcm' && (
                     <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded">
                       QCM

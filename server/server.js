@@ -158,23 +158,29 @@ function stopTimer(lobbyId) {
 function handleTimerExpired(lobbyId, questionId) {
   stopTimer(lobbyId);
   
-  const lobby = db.getLobbyById(lobbyId);
-  if (!lobby) return;
-  
-  // Forcer toutes les reponses non soumises
-  lobby.participants.forEach(participant => {
-    if (!participant.hasAnswered) {
-      const finalAnswer = db.markTimeExpired(lobbyId, participant.participantId, questionId);
-      console.log(`[TIMER] Temps expire pour ${participant.pseudo}: reponse="${finalAnswer || '(vide)'}"`);
-    }
-  });
-  
-  // Notifier tout le monde
+  // Notifier immédiatement que le temps est écoulé (pour bloquer l'UI)
   io.to(`lobby:${lobbyId}`).emit('timer:expired', { lobbyId, questionId });
   
-  // Broadcast l'etat mis a jour
-  broadcastLobbyState(lobbyId);
-  broadcastGlobalState(); // Pour que l'admin voie la mise a jour
+  // Période de grâce de 500ms pour recevoir les derniers drafts
+  // Cela permet aux réponses envoyées à la dernière seconde d'arriver
+  console.log(`[TIMER] Expiration du timer pour lobby ${lobbyId}, période de grâce de 500ms...`);
+  
+  setTimeout(() => {
+    const lobby = db.getLobbyById(lobbyId);
+    if (!lobby) return;
+    
+    // Forcer toutes les réponses non soumises avec le dernier draft reçu
+    lobby.participants.forEach(participant => {
+      if (!participant.hasAnswered) {
+        const finalAnswer = db.markTimeExpired(lobbyId, participant.participantId, questionId);
+        console.log(`[TIMER] Temps expiré pour ${participant.pseudo}: réponse="${finalAnswer || '(vide)'}"`);
+      }
+    });
+    
+    // Broadcast l'état mis à jour après la période de grâce
+    broadcastLobbyState(lobbyId);
+    broadcastGlobalState(); // Pour que l'admin voie la mise à jour
+  }, 500); // 500ms de délai de grâce
 }
 
 // ==================== SOCKET.IO EVENTS ====================

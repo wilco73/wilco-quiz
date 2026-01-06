@@ -32,10 +32,42 @@ const App = () => {
   
   const hasReconnected = useRef(false);
   const draftTimeoutRef = useRef(null);
+  const lastSentDraftRef = useRef(''); // Pour éviter d'envoyer des doublons
+  const urgentSaveTriggeredRef = useRef(false); // Pour éviter les envois répétés en fin de timer
+  const myAnswerRef = useRef(''); // Ref pour avoir la valeur actuelle dans les event handlers
+  
+  // Synchroniser myAnswerRef avec myAnswer
+  useEffect(() => {
+    myAnswerRef.current = myAnswer;
+  }, [myAnswer]);
   
   // Raccourcis vers l'etat global Socket
   const { lobbies, teams, participants, quizzes, questions } = socket.globalState;
   const { timerState, isConnected, currentLobbyState, socketReady } = socket;
+
+  // ========== SAUVEGARDE URGENTE QUAND TIMER BAS ==========
+  // Envoyer immédiatement le brouillon quand il reste peu de temps
+  useEffect(() => {
+    if (!currentLobby || !currentUser || isAdmin || hasAnswered) return;
+    
+    const remaining = timerState?.remaining;
+    
+    // Quand il reste 3 secondes ou moins, envoyer immédiatement sans debounce
+    if (remaining !== undefined && remaining <= 3 && remaining > 0) {
+      // Éviter les envois répétés pour la même réponse
+      if (myAnswer !== lastSentDraftRef.current && !urgentSaveTriggeredRef.current) {
+        console.log(`[URGENT SAVE] Timer à ${remaining}s, envoi immédiat du brouillon: "${myAnswer}"`);
+        socket.saveDraft(currentLobby.id, currentUser.id, myAnswer);
+        lastSentDraftRef.current = myAnswer;
+        urgentSaveTriggeredRef.current = true;
+      }
+    }
+    
+    // Reset le flag quand le timer remonte (nouvelle question)
+    if (remaining > 5) {
+      urgentSaveTriggeredRef.current = false;
+    }
+  }, [timerState?.remaining, myAnswer, currentLobby, currentUser, isAdmin, hasAnswered, socket]);
 
   // Synchroniser le lobby actuel avec les mises a jour Socket
   useEffect(() => {
@@ -57,6 +89,9 @@ const App = () => {
         if (newIndex > oldIndex && !isAdmin) {
           setMyAnswer('');
           setHasAnswered(false);
+          // Reset les refs pour la nouvelle question
+          lastSentDraftRef.current = '';
+          urgentSaveTriggeredRef.current = false;
         }
         
         // Quiz demarre - passer en vue quiz
@@ -139,7 +174,12 @@ const App = () => {
     
     const handleTimerExpired = (data) => {
       console.log('[EVENT] timer:expired recu');
-      if (!isAdmin && !hasAnswered) {
+      if (!isAdmin && !hasAnswered && currentLobby && currentUser) {
+        // Envoyer immédiatement le dernier brouillon avant que le serveur ne finalise
+        // Utiliser la ref pour avoir la valeur la plus récente
+        const currentAnswer = myAnswerRef.current;
+        console.log(`[TIMER EXPIRED] Envoi urgent du brouillon: "${currentAnswer}"`);
+        socket.saveDraft(currentLobby.id, currentUser.id, currentAnswer);
         setHasAnswered(true);
       }
     };

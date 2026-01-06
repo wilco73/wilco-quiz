@@ -5,6 +5,7 @@ import { useToast } from './ToastProvider';
 const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
   const [title, setTitle] = useState(quiz?.title || '');
   const [description, setDescription] = useState(quiz?.description || '');
+  const [groupName, setGroupName] = useState(quiz?.groupName || '');
   const [selectedQuestions, setSelectedQuestions] = useState(quiz?.questions || []);
   const [showQuestionPicker, setShowQuestionPicker] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -83,6 +84,7 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
       id: quiz?.id,
       title,
       description,
+      groupName: groupName.trim() || null,
       questions: selectedQuestions
     });
   };
@@ -107,6 +109,13 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
           placeholder="Titre du quiz"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+        />
+        <input
+          type="text"
+          placeholder="Groupe / Thème (ex: Soirée Culture G, Spéciale Jeux Vidéo...)"
+          value={groupName}
+          onChange={(e) => setGroupName(e.target.value)}
           className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
         />
         <textarea

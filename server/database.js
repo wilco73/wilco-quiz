@@ -100,6 +100,7 @@ function createTables() {
       answer TEXT NOT NULL,
       type TEXT DEFAULT 'text',
       category TEXT,
+      tags TEXT,
       points INTEGER DEFAULT 1,
       timer INTEGER DEFAULT 0,
       media TEXT,
@@ -108,6 +109,13 @@ function createTables() {
       created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
     )
   `);
+  
+  // Migration: ajouter la colonne tags si elle n'existe pas
+  try {
+    db.run(`ALTER TABLE questions ADD COLUMN tags TEXT`);
+  } catch (e) {
+    // Colonne existe déjà
+  }
 
   db.run(`
     -- Table des quiz
@@ -115,9 +123,17 @@ function createTables() {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       description TEXT,
+      group_name TEXT,
       created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
     )
   `);
+  
+  // Migration: ajouter la colonne group_name si elle n'existe pas
+  try {
+    db.run(`ALTER TABLE quizzes ADD COLUMN group_name TEXT`);
+  } catch (e) {
+    // Colonne existe déjà
+  }
 
   db.run(`
     -- Table de liaison quiz-questions (ordre des questions dans un quiz)
@@ -474,25 +490,27 @@ function deleteParticipant(participantId) {
 
 function getAllQuestions() {
   const questions = query(`
-    SELECT id, text, answer, type, category, points, timer, media, media_type as mediaType, choices, created_at as createdAt
+    SELECT id, text, answer, type, category, tags, points, timer, media, media_type as mediaType, choices, created_at as createdAt
     FROM questions
     ORDER BY created_at DESC
   `);
   
   return questions.map(q => ({
     ...q,
-    choices: q.choices ? JSON.parse(q.choices) : null
+    choices: q.choices ? JSON.parse(q.choices) : null,
+    tags: q.tags ? JSON.parse(q.tags) : []
   }));
 }
 
 function getQuestionById(id) {
   const q = queryOne(`
-    SELECT id, text, answer, type, category, points, timer, media, media_type as mediaType, choices, created_at as createdAt
+    SELECT id, text, answer, type, category, tags, points, timer, media, media_type as mediaType, choices, created_at as createdAt
     FROM questions WHERE id = ?
   `, [id]);
   
-  if (q && q.choices) {
-    q.choices = JSON.parse(q.choices);
+  if (q) {
+    if (q.choices) q.choices = JSON.parse(q.choices);
+    q.tags = q.tags ? JSON.parse(q.tags) : [];
   }
   return q;
 }
@@ -500,16 +518,18 @@ function getQuestionById(id) {
 function createQuestion(question) {
   const id = question.id || `q${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const choices = question.choices ? JSON.stringify(question.choices) : null;
+  const tags = question.tags && question.tags.length > 0 ? JSON.stringify(question.tags) : null;
   
   run(`
-    INSERT INTO questions (id, text, answer, type, category, points, timer, media, media_type, choices)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO questions (id, text, answer, type, category, tags, points, timer, media, media_type, choices)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id,
     question.text,
     question.answer,
     question.type || 'text',
     question.category || null,
+    tags,
     question.points || 1,
     question.timer || 0,
     question.media || null,
@@ -522,16 +542,18 @@ function createQuestion(question) {
 
 function updateQuestion(id, question) {
   const choices = question.choices ? JSON.stringify(question.choices) : null;
+  const tags = question.tags && question.tags.length > 0 ? JSON.stringify(question.tags) : null;
   
   run(`
     UPDATE questions 
-    SET text = ?, answer = ?, type = ?, category = ?, points = ?, timer = ?, media = ?, media_type = ?, choices = ?
+    SET text = ?, answer = ?, type = ?, category = ?, tags = ?, points = ?, timer = ?, media = ?, media_type = ?, choices = ?
     WHERE id = ?
   `, [
     question.text,
     question.answer,
     question.type || 'text',
     question.category || null,
+    tags,
     question.points || 1,
     question.timer || 0,
     question.media || null,
@@ -554,15 +576,17 @@ function saveAllQuestions(questions) {
   // Insérer les nouvelles
   for (const q of questions) {
     const choices = q.choices ? JSON.stringify(q.choices) : null;
+    const tags = q.tags && q.tags.length > 0 ? JSON.stringify(q.tags) : null;
     run(`
-      INSERT INTO questions (id, text, answer, type, category, points, timer, media, media_type, choices)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO questions (id, text, answer, type, category, tags, points, timer, media, media_type, choices)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       q.id,
       q.text,
       q.answer,
       q.type || 'text',
       q.category || null,
+      tags,
       q.points || 1,
       q.timer || 0,
       q.media || null,
@@ -625,9 +649,9 @@ function mergeQuestions(questions, mode = 'update') {
 
 function getAllQuizzes() {
   const quizzes = query(`
-    SELECT id, title, description, created_at as createdAt
+    SELECT id, title, description, group_name as groupName, created_at as createdAt
     FROM quizzes
-    ORDER BY created_at DESC
+    ORDER BY group_name ASC, created_at DESC
   `);
   
   return quizzes.map(quiz => ({
@@ -638,7 +662,7 @@ function getAllQuizzes() {
 
 function getQuizById(id) {
   const quiz = queryOne(`
-    SELECT id, title, description, created_at as createdAt
+    SELECT id, title, description, group_name as groupName, created_at as createdAt
     FROM quizzes WHERE id = ?
   `, [id]);
   
@@ -666,8 +690,8 @@ function getQuizQuestions(quizId) {
 function createQuiz(quiz) {
   const id = quiz.id || Date.now().toString();
   
-  run('INSERT INTO quizzes (id, title, description) VALUES (?, ?, ?)',
-    [id, quiz.title, quiz.description || null]);
+  run('INSERT INTO quizzes (id, title, description, group_name) VALUES (?, ?, ?, ?)',
+    [id, quiz.title, quiz.description || null, quiz.groupName || null]);
   
   if (quiz.questions && quiz.questions.length > 0) {
     setQuizQuestions(id, quiz.questions);
@@ -677,8 +701,8 @@ function createQuiz(quiz) {
 }
 
 function updateQuiz(id, quiz) {
-  run('UPDATE quizzes SET title = ?, description = ? WHERE id = ?',
-    [quiz.title, quiz.description || null, id]);
+  run('UPDATE quizzes SET title = ?, description = ?, group_name = ? WHERE id = ?',
+    [quiz.title, quiz.description || null, quiz.groupName || null, id]);
   
   if (quiz.questions) {
     setQuizQuestions(id, quiz.questions);

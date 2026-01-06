@@ -1,11 +1,11 @@
-Type,Catégorie,Question,Réponse,Média (URL),Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
-text,Géographie,"Quelle est la capitale de la France ?","Paris",,1,30,,,,,,,
-qcm,Histoire,"En quelle année a eu lieu la Révolution française ?","1789",,2,20,"1789","1792","1804","1815",,,0
-image,Art,"Qui a peint ce tableau ?","Leonardo da Vinci","https://example.com/mona-lisa.jpg",1,0,,,,,,,
-audio,Musique,"Qui interprète cette chanson ?","The Beatles","https://example.com/song.mp3",1,15,,,,,,,
-video,Cinéma,"De quel film est extraite cette scène ?","Star Wars","https://example.com/scene.mp4",2,0,,,,,,,
-text,Science,"Quelle est la formule chimique de l'eau ?","H2O",,1,20,,,,,,,
-qcm,Sport,"Combien de joueurs y a-t-il dans une équipe de football ?","11",,1,15,"9","10","11","12",,,2
-text,Littérature,"Qui a écrit 'Les Misérables' ?","Victor Hugo",,1,25,,,,,,,
-qcm,Technologie,"Quel est le système d'exploitation de Apple ?","macOS",,1,20,"Windows","Linux","macOS","Android",,,2
-text,Culture,"Quel est le plus grand océan du monde ?","Océan Pacifique",,1,30,,,,,,,
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,text,Géographie,facile|europe|capitales,"Quelle est la capitale de la France ?","Paris",,,1,30,,,,,,,
+,qcm,Histoire,moyen|révolution|dates,"En quelle année a eu lieu la Révolution française ?","1789",,,2,20,"1789","1792","1804","1815",,,0
+,image,Art,difficile|renaissance|peinture,"Qui a peint ce tableau ?","Leonardo da Vinci","https://example.com/mona-lisa.jpg",,1,0,,,,,,,
+,audio,Musique,blindtest|années60|rock,"Qui interprète cette chanson ?","The Beatles","https://example.com/song.mp3",,1,15,,,,,,,
+,video,Cinéma,facile|sf|classique,"De quel film est extraite cette scène ?","Star Wars","https://example.com/scene.mp4",,2,0,,,,,,,
+,text,Science,facile|chimie,"Quelle est la formule chimique de l'eau ?","H2O",,,1,20,,,,,,,
+,qcm,Sport,facile|football,"Combien de joueurs y a-t-il dans une équipe de football ?","11",,,1,15,"9","10","11","12",,,2
+,text,Littérature,moyen|classique|france,"Qui a écrit 'Les Misérables' ?","Victor Hugo",,,1,25,,,,,,,
+,qcm,Technologie,facile|apple|systèmes,"Quel est le système d'exploitation de Apple ?","macOS",,,1,20,"Windows","Linux","macOS","Android",,,2
+,text,Culture,facile|géographie|océans,"Quel est le plus grand océan du monde ?","Océan Pacifique",,,1,30,,,,,,,
