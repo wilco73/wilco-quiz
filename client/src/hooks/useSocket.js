@@ -191,6 +191,12 @@ export function useSocket() {
     }
   }, []);
   
+  const reportPaste = useCallback((lobbyId, odId, questionId, pastedText) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('answer:paste', { lobbyId, odId, questionId, pastedText });
+    }
+  }, []);
+  
   const submitAnswer = useCallback((lobbyId, odId, questionId, answer) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
@@ -224,6 +230,42 @@ export function useSocket() {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
       socketRef.current.emit('admin:resetScores', resolve);
     });
+  }, []);
+  
+  // Pictionary
+  const startPictionary = useCallback((lobbyId, config, teams, words) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('pictionary:start', { lobbyId, config, teams, words }, resolve);
+    });
+  }, []);
+  
+  const pictionaryGuess = useCallback((lobbyId, odId, teamName, guess) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('pictionary:guess', { lobbyId, odId, teamName, guess }, resolve);
+    });
+  }, []);
+  
+  const pictionaryNextRound = useCallback((lobbyId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('pictionary:nextRound', { lobbyId }, resolve);
+    });
+  }, []);
+  
+  const pictionaryEnd = useCallback((lobbyId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('pictionary:end', { lobbyId }, resolve);
+    });
+  }, []);
+  
+  // Emit générique pour le dessin
+  const emit = useCallback((event, data) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit(event, data);
+    }
   }, []);
   
   // Event listeners - accede directement au socket
@@ -262,12 +304,20 @@ export function useSocket() {
     nextQuestion,
     // Answers
     saveDraft,
+    reportPaste,
     submitAnswer,
     validateAnswer,
     // Admin
     joinMonitoring,
     leaveMonitoring,
     resetScores,
+    // Pictionary
+    startPictionary,
+    pictionaryGuess,
+    pictionaryNextRound,
+    pictionaryEnd,
+    // Generic
+    emit,
     // Events
     on,
     off

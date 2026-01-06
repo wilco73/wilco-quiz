@@ -197,11 +197,129 @@ function createTables() {
       answer TEXT,
       validation INTEGER,
       qcm_team_scored INTEGER DEFAULT 0,
+      has_pasted INTEGER DEFAULT 0,
       created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
       FOREIGN KEY (lobby_id) REFERENCES lobbies(id) ON DELETE CASCADE,
       FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE,
       FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
       UNIQUE(lobby_id, participant_id, question_id)
+    )
+  `);
+  
+  // Migration: ajouter la colonne has_pasted si elle n'existe pas
+  try {
+    db.run(`ALTER TABLE lobby_answers ADD COLUMN has_pasted INTEGER DEFAULT 0`);
+  } catch (e) {
+    // Colonne existe déjà
+  }
+
+  // ==================== TABLES JEUX DE DESSIN ====================
+  
+  // Banque de mots/thèmes pour Pictionary
+  db.run(`
+    CREATE TABLE IF NOT EXISTS drawing_words (
+      id TEXT PRIMARY KEY,
+      word TEXT NOT NULL,
+      category TEXT,
+      difficulty TEXT DEFAULT 'moyen',
+      tags TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
+    )
+  `);
+  
+  // Banque d'images de référence pour Téléphone Arabe
+  db.run(`
+    CREATE TABLE IF NOT EXISTS drawing_references (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      image_url TEXT NOT NULL,
+      category TEXT,
+      tags TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
+    )
+  `);
+  
+  // Configuration des parties de dessin (type de jeu)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS drawing_games (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      game_type TEXT NOT NULL,
+      config TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
+    )
+  `);
+  
+  // Mots personnalisés pour une partie spécifique
+  db.run(`
+    CREATE TABLE IF NOT EXISTS drawing_game_words (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_id TEXT NOT NULL,
+      word_id TEXT,
+      custom_word TEXT,
+      proposed_by TEXT,
+      approved INTEGER DEFAULT 1,
+      FOREIGN KEY (game_id) REFERENCES drawing_games(id) ON DELETE CASCADE
+    )
+  `);
+  
+  // Lobbies de dessin (étend le concept de lobby)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS drawing_lobbies (
+      id TEXT PRIMARY KEY,
+      game_id TEXT NOT NULL,
+      status TEXT DEFAULT 'waiting',
+      current_round INTEGER DEFAULT 0,
+      current_drawer_index INTEGER DEFAULT 0,
+      current_word TEXT,
+      round_start_time INTEGER,
+      drawer_rotation_order TEXT,
+      config TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+      FOREIGN KEY (game_id) REFERENCES drawing_games(id)
+    )
+  `);
+  
+  // Participants dans un lobby de dessin
+  db.run(`
+    CREATE TABLE IF NOT EXISTS drawing_lobby_participants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lobby_id TEXT NOT NULL,
+      participant_id TEXT NOT NULL,
+      team_name TEXT,
+      is_drawing INTEGER DEFAULT 0,
+      FOREIGN KEY (lobby_id) REFERENCES drawing_lobbies(id) ON DELETE CASCADE,
+      FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE,
+      UNIQUE(lobby_id, participant_id)
+    )
+  `);
+  
+  // Dessins sauvegardés (canvas final de chaque round)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS drawings (
+      id TEXT PRIMARY KEY,
+      lobby_id TEXT NOT NULL,
+      round INTEGER NOT NULL,
+      team_id TEXT,
+      image_data TEXT,
+      word_or_reference TEXT,
+      source_drawing_id TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+      FOREIGN KEY (lobby_id) REFERENCES drawing_lobbies(id) ON DELETE CASCADE
+    )
+  `);
+  
+  // Scores des jeux de dessin
+  db.run(`
+    CREATE TABLE IF NOT EXISTS drawing_scores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lobby_id TEXT NOT NULL,
+      team_name TEXT NOT NULL,
+      round INTEGER,
+      points INTEGER DEFAULT 0,
+      reason TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+      FOREIGN KEY (lobby_id) REFERENCES drawing_lobbies(id) ON DELETE CASCADE
     )
   `);
 
@@ -210,6 +328,8 @@ function createTables() {
   db.run(`CREATE INDEX IF NOT EXISTS idx_lobby_participants_lobby ON lobby_participants(lobby_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_lobby_answers_lobby ON lobby_answers(lobby_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_quiz_questions_quiz ON quiz_questions(quiz_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_drawing_words_category ON drawing_words(category)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_drawing_references_category ON drawing_references(category)`);
 }
 
 /**
@@ -796,7 +916,7 @@ function getLobbyParticipants(lobbyId) {
   
   return participants.map(p => {
     const answers = query(`
-      SELECT question_id, answer, validation, qcm_team_scored
+      SELECT question_id, answer, validation, qcm_team_scored, has_pasted
       FROM lobby_answers
       WHERE lobby_id = ? AND participant_id = ?
     `, [lobbyId, p.participantId]);
@@ -804,11 +924,13 @@ function getLobbyParticipants(lobbyId) {
     const answersByQuestionId = {};
     const validationsByQuestionId = {};
     const qcmTeamScored = {};
+    const pastedByQuestionId = {};
     
     answers.forEach(a => {
       if (a.answer !== null) answersByQuestionId[a.question_id] = a.answer;
       if (a.validation !== null) validationsByQuestionId[a.question_id] = a.validation === 1;
       if (a.qcm_team_scored) qcmTeamScored[a.question_id] = true;
+      if (a.has_pasted) pastedByQuestionId[a.question_id] = true;
     });
     
     return {
@@ -816,7 +938,8 @@ function getLobbyParticipants(lobbyId) {
       hasAnswered: p.hasAnswered === 1,
       answersByQuestionId,
       validationsByQuestionId,
-      qcmTeamScored
+      qcmTeamScored,
+      pastedByQuestionId
     };
   });
 }
@@ -1004,9 +1127,25 @@ function markQcmTeamScored(lobbyId, participantId, questionId) {
   `, [lobbyId, participantId, questionId]);
 }
 
+function markAnswerPasted(lobbyId, participantId, questionId) {
+  // Vérifier si une réponse existe déjà
+  const existing = queryOne(`
+    SELECT id FROM lobby_answers WHERE lobby_id = ? AND participant_id = ? AND question_id = ?
+  `, [lobbyId, participantId, questionId]);
+  
+  if (existing) {
+    run(`UPDATE lobby_answers SET has_pasted = 1 WHERE id = ?`, [existing.id]);
+  } else {
+    run(`
+      INSERT INTO lobby_answers (lobby_id, participant_id, question_id, has_pasted)
+      VALUES (?, ?, ?, 1)
+    `, [lobbyId, participantId, questionId]);
+  }
+}
+
 function getParticipantValidation(lobbyId, participantId, questionId) {
   return queryOne(`
-    SELECT validation, qcm_team_scored FROM lobby_answers
+    SELECT validation, qcm_team_scored, has_pasted as hasPasted FROM lobby_answers
     WHERE lobby_id = ? AND participant_id = ? AND question_id = ?
   `, [lobbyId, participantId, questionId]);
 }
@@ -1016,6 +1155,221 @@ function updateLobbyParticipantTeam(lobbyId, participantId, teamName) {
   run(`
     UPDATE lobby_participants SET team_name = ? WHERE lobby_id = ? AND participant_id = ?
   `, [normalizedTeamName, lobbyId, participantId]);
+}
+
+// ==================== DRAWING WORDS (Banque de mots Pictionary) ====================
+
+function getAllDrawingWords() {
+  return query(`
+    SELECT id, word, category, difficulty, tags, created_at as createdAt
+    FROM drawing_words
+    ORDER BY category ASC, word ASC
+  `).map(w => ({
+    ...w,
+    tags: w.tags ? JSON.parse(w.tags) : []
+  }));
+}
+
+function getDrawingWordById(id) {
+  const word = queryOne(`
+    SELECT id, word, category, difficulty, tags, created_at as createdAt
+    FROM drawing_words WHERE id = ?
+  `, [id]);
+  
+  if (word) {
+    word.tags = word.tags ? JSON.parse(word.tags) : [];
+  }
+  return word;
+}
+
+function createDrawingWord(wordData) {
+  const id = wordData.id || Date.now().toString();
+  run(`
+    INSERT INTO drawing_words (id, word, category, difficulty, tags)
+    VALUES (?, ?, ?, ?, ?)
+  `, [
+    id,
+    wordData.word,
+    wordData.category || null,
+    wordData.difficulty || 'moyen',
+    wordData.tags ? JSON.stringify(wordData.tags) : null
+  ]);
+  return getDrawingWordById(id);
+}
+
+function updateDrawingWord(id, wordData) {
+  run(`
+    UPDATE drawing_words 
+    SET word = ?, category = ?, difficulty = ?, tags = ?
+    WHERE id = ?
+  `, [
+    wordData.word,
+    wordData.category || null,
+    wordData.difficulty || 'moyen',
+    wordData.tags ? JSON.stringify(wordData.tags) : null,
+    id
+  ]);
+  return getDrawingWordById(id);
+}
+
+function deleteDrawingWord(id) {
+  run(`DELETE FROM drawing_words WHERE id = ?`, [id]);
+}
+
+function getRandomDrawingWords(count, category = null, difficulty = null) {
+  let sql = `SELECT id, word, category, difficulty, tags FROM drawing_words WHERE 1=1`;
+  const params = [];
+  
+  if (category) {
+    sql += ` AND category = ?`;
+    params.push(category);
+  }
+  if (difficulty) {
+    sql += ` AND difficulty = ?`;
+    params.push(difficulty);
+  }
+  
+  sql += ` ORDER BY RANDOM() LIMIT ?`;
+  params.push(count);
+  
+  return query(sql, params).map(w => ({
+    ...w,
+    tags: w.tags ? JSON.parse(w.tags) : []
+  }));
+}
+
+// ==================== DRAWING REFERENCES (Images de référence Téléphone Arabe) ====================
+
+function getAllDrawingReferences() {
+  return query(`
+    SELECT id, name, image_url as imageUrl, category, tags, created_at as createdAt
+    FROM drawing_references
+    ORDER BY category ASC, name ASC
+  `).map(r => ({
+    ...r,
+    tags: r.tags ? JSON.parse(r.tags) : []
+  }));
+}
+
+function getDrawingReferenceById(id) {
+  const ref = queryOne(`
+    SELECT id, name, image_url as imageUrl, category, tags, created_at as createdAt
+    FROM drawing_references WHERE id = ?
+  `, [id]);
+  
+  if (ref) {
+    ref.tags = ref.tags ? JSON.parse(ref.tags) : [];
+  }
+  return ref;
+}
+
+function createDrawingReference(refData) {
+  const id = refData.id || Date.now().toString();
+  run(`
+    INSERT INTO drawing_references (id, name, image_url, category, tags)
+    VALUES (?, ?, ?, ?, ?)
+  `, [
+    id,
+    refData.name,
+    refData.imageUrl,
+    refData.category || null,
+    refData.tags ? JSON.stringify(refData.tags) : null
+  ]);
+  return getDrawingReferenceById(id);
+}
+
+function updateDrawingReference(id, refData) {
+  run(`
+    UPDATE drawing_references 
+    SET name = ?, image_url = ?, category = ?, tags = ?
+    WHERE id = ?
+  `, [
+    refData.name,
+    refData.imageUrl,
+    refData.category || null,
+    refData.tags ? JSON.stringify(refData.tags) : null,
+    id
+  ]);
+  return getDrawingReferenceById(id);
+}
+
+function deleteDrawingReference(id) {
+  run(`DELETE FROM drawing_references WHERE id = ?`, [id]);
+}
+
+function getRandomDrawingReferences(count, category = null) {
+  let sql = `SELECT id, name, image_url as imageUrl, category, tags FROM drawing_references WHERE 1=1`;
+  const params = [];
+  
+  if (category) {
+    sql += ` AND category = ?`;
+    params.push(category);
+  }
+  
+  sql += ` ORDER BY RANDOM() LIMIT ?`;
+  params.push(count);
+  
+  return query(sql, params).map(r => ({
+    ...r,
+    tags: r.tags ? JSON.parse(r.tags) : []
+  }));
+}
+
+// ==================== DRAWING GAMES (Configuration des jeux) ====================
+
+function getAllDrawingGames() {
+  return query(`
+    SELECT id, title, game_type as gameType, config, created_at as createdAt
+    FROM drawing_games
+    ORDER BY created_at DESC
+  `).map(g => ({
+    ...g,
+    config: g.config ? JSON.parse(g.config) : {}
+  }));
+}
+
+function getDrawingGameById(id) {
+  const game = queryOne(`
+    SELECT id, title, game_type as gameType, config, created_at as createdAt
+    FROM drawing_games WHERE id = ?
+  `, [id]);
+  
+  if (game) {
+    game.config = game.config ? JSON.parse(game.config) : {};
+  }
+  return game;
+}
+
+function createDrawingGame(gameData) {
+  const id = gameData.id || Date.now().toString();
+  run(`
+    INSERT INTO drawing_games (id, title, game_type, config)
+    VALUES (?, ?, ?, ?)
+  `, [
+    id,
+    gameData.title,
+    gameData.gameType,
+    JSON.stringify(gameData.config || {})
+  ]);
+  return getDrawingGameById(id);
+}
+
+function updateDrawingGame(id, gameData) {
+  run(`
+    UPDATE drawing_games 
+    SET title = ?, game_type = ?, config = ?
+    WHERE id = ?
+  `, [
+    gameData.title,
+    gameData.gameType,
+    JSON.stringify(gameData.config || {}),
+    id
+  ]);
+  return getDrawingGameById(id);
+}
+
+function deleteDrawingGame(id) {
+  run(`DELETE FROM drawing_games WHERE id = ?`, [id]);
 }
 
 module.exports = {
@@ -1092,6 +1446,30 @@ module.exports = {
   markTimeExpired,
   validateAnswer,
   markQcmTeamScored,
+  markAnswerPasted,
   getParticipantValidation,
-  updateLobbyParticipantTeam
+  updateLobbyParticipantTeam,
+  
+  // Drawing Words (Pictionary)
+  getAllDrawingWords,
+  getDrawingWordById,
+  createDrawingWord,
+  updateDrawingWord,
+  deleteDrawingWord,
+  getRandomDrawingWords,
+  
+  // Drawing References (Téléphone Arabe)
+  getAllDrawingReferences,
+  getDrawingReferenceById,
+  createDrawingReference,
+  updateDrawingReference,
+  deleteDrawingReference,
+  getRandomDrawingReferences,
+  
+  // Drawing Games
+  getAllDrawingGames,
+  getDrawingGameById,
+  createDrawingGame,
+  updateDrawingGame,
+  deleteDrawingGame
 };

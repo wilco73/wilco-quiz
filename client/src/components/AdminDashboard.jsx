@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, RotateCcw, Monitor, Check, BookOpen, Trash, Trophy, FileQuestion, Play, Edit, Trash2, Users, Shuffle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, FolderOpen, Clock } from 'lucide-react';
+import { LogOut, RotateCcw, Monitor, Check, BookOpen, Trash, Trophy, FileQuestion, Play, Edit, Trash2, Users, Shuffle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, FolderOpen, Clock, Palette } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import * as api from '../services/api';
 import QuestionBank from './QuestionBank';
@@ -9,6 +9,11 @@ import LiveMonitoring from './LiveMonitoring';
 import ValidationView from './ValidationView';
 import ParticipantManager from './ParticipantManager';
 import DarkModeToggle from './DarkModeToggle';
+import DrawingWordBank from './DrawingWordBank';
+import DrawingReferenceBank from './DrawingReferenceBank';
+import DrawingCanvas from './DrawingCanvas';
+import DrawingLobbyManager from './DrawingLobbyManager';
+import { PictionaryConfig } from './PictionaryGame';
 
 // Composant de pagination réutilisable
 const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, totalItems }) => {
@@ -154,6 +159,92 @@ const WaitingRoomModal = ({ lobby, quiz, onStart, onClose, onDelete }) => {
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+// Composant pour l'onglet Dessin
+const DrawingTab = ({ socket, teams, participants }) => {
+  const [subTab, setSubTab] = useState('pictionary'); // pictionary, canvas, words, references
+  
+  return (
+    <div className="space-y-6">
+      {/* Sous-navigation */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setSubTab('pictionary')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              subTab === 'pictionary'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            🎯 Pictionary
+          </button>
+          <button
+            onClick={() => setSubTab('words')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              subTab === 'words'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            📝 Mots
+          </button>
+          <button
+            onClick={() => setSubTab('references')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              subTab === 'references'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            🖼️ Images
+          </button>
+          <button
+            onClick={() => setSubTab('canvas')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              subTab === 'canvas'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            🎨 Test Canvas
+          </button>
+        </div>
+      </div>
+      
+      {/* Contenu */}
+      {subTab === 'pictionary' && (
+        <DrawingLobbyManager
+          socket={socket}
+          teams={teams}
+          participants={participants}
+        />
+      )}
+      
+      {subTab === 'words' && <DrawingWordBank />}
+      
+      {subTab === 'references' && <DrawingReferenceBank />}
+      
+      {subTab === 'canvas' && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <h2 className="text-2xl font-bold dark:text-white mb-4">🎨 Test du Canvas</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            Testez les outils : crayon, gomme, pot de peinture, couleurs et transparence.
+          </p>
+          <div className="flex justify-center">
+            <DrawingCanvas
+              width={800}
+              height={500}
+              canDraw={true}
+              showTools={true}
+              collaborative={false}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -364,6 +455,7 @@ const AdminDashboard = ({
     { id: 'dashboard', label: 'Tableau de bord', icon: Trophy },
     { id: 'participants', label: 'Participants', icon: Users },
     { id: 'questions', label: 'Banque de Questions', icon: FileQuestion },
+    { id: 'drawing', label: 'Jeux de Dessin', icon: Palette },
     { id: 'lobbies', label: 'Gérer Lobbies', icon: Trash },
     { id: 'monitoring', label: 'Suivi Direct', icon: Monitor },
     { id: 'validation', label: 'Validation', icon: Check }
@@ -717,6 +809,10 @@ const AdminDashboard = ({
               questions={questions}
               onSave={onSaveQuestions}
             />
+          )}
+
+          {activeTab === 'drawing' && (
+            <DrawingTab socket={socket} teams={teams} participants={participants} />
           )}
 
           {activeTab === 'lobbies' && (

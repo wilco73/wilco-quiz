@@ -44,6 +44,103 @@ const connectedParticipants = new Map(); // socketId -> { odId, odId, odId }
 // Sockets par participant
 const participantSockets = new Map(); // odId -> Set<socketId>
 
+// Parties de Pictionary en cours
+const pictionaryGames = new Map(); // lobbyId -> gameState
+
+// Timers Pictionary
+const pictionaryTimers = new Map(); // lobbyId -> intervalId
+
+// ==================== PICTIONARY FUNCTIONS ====================
+
+function startPictionaryTimer(lobbyId) {
+  // Arrêter tout timer existant
+  if (pictionaryTimers.has(lobbyId)) {
+    clearInterval(pictionaryTimers.get(lobbyId));
+  }
+  
+  const intervalId = setInterval(() => {
+    const gameState = pictionaryGames.get(lobbyId);
+    if (!gameState || gameState.status !== 'playing') {
+      clearInterval(intervalId);
+      pictionaryTimers.delete(lobbyId);
+      return;
+    }
+    
+    // Décrémenter le temps
+    gameState.timeRemaining--;
+    
+    // Gérer la rotation des dessinateurs
+    if (gameState.config.timePerDrawer > 0) {
+      gameState.drawerRotationTime--;
+      
+      if (gameState.drawerRotationTime <= 0) {
+        // Passer au dessinateur suivant
+        gameState.currentDrawerIndex++;
+        gameState.drawerRotationTime = gameState.config.timePerDrawer;
+        
+        io.to(`lobby:${lobbyId}`).emit('pictionary:drawerRotation', {
+          newDrawerIndex: gameState.currentDrawerIndex
+        });
+      }
+    }
+    
+    // Broadcaster le temps restant
+    io.to(`lobby:${lobbyId}`).emit('pictionary:timerTick', {
+      timeRemaining: gameState.timeRemaining,
+      drawerRotationTime: gameState.drawerRotationTime
+    });
+    
+    // Temps écoulé pour ce tour
+    if (gameState.timeRemaining <= 0) {
+      // Révéler le mot
+      io.to(`lobby:${lobbyId}`).emit('pictionary:timeUp', {
+        word: gameState.currentWord,
+        teamsFound: gameState.teamsFound
+      });
+      
+      // Si c'est le dernier tour, terminer
+      if (gameState.currentRound >= gameState.config.rounds - 1) {
+        setTimeout(() => endPictionaryGame(lobbyId), 3000);
+      }
+    }
+  }, 1000);
+  
+  pictionaryTimers.set(lobbyId, intervalId);
+}
+
+function endPictionaryGame(lobbyId) {
+  const gameState = pictionaryGames.get(lobbyId);
+  if (!gameState) return;
+  
+  gameState.status = 'finished';
+  
+  // Arrêter le timer
+  if (pictionaryTimers.has(lobbyId)) {
+    clearInterval(pictionaryTimers.get(lobbyId));
+    pictionaryTimers.delete(lobbyId);
+  }
+  
+  // Calculer le classement final
+  const ranking = Object.entries(gameState.scores)
+    .sort(([,a], [,b]) => b - a)
+    .map(([team, score], index) => ({ team, score, rank: index + 1 }));
+  
+  console.log(`[PICTIONARY] Partie terminée - Lobby: ${lobbyId}`);
+  console.log('[PICTIONARY] Classement:', ranking);
+  
+  // Broadcaster la fin de partie
+  io.to(`lobby:${lobbyId}`).emit('pictionary:ended', {
+    scores: gameState.scores,
+    ranking,
+    totalRounds: gameState.config.rounds
+  });
+  
+  // Nettoyer après un délai
+  setTimeout(() => {
+    pictionaryGames.delete(lobbyId);
+  }, 60000);
+}
+
 // ==================== HELPERS ====================
 
 function shuffleArray(array) {
@@ -555,6 +652,22 @@ io.on('connection', (socket) => {
     });
   });
   
+  socket.on('answer:paste', (data) => {
+    const { lobbyId, odId, questionId, pastedText } = data;
+    
+    console.log(`[PASTE] ${odId} a fait un copier-coller: "${pastedText?.substring(0, 50)}..."`);
+    
+    // Marquer que la réponse contient un copier-coller
+    db.markAnswerPasted(lobbyId, odId, questionId);
+    
+    // Notifier l'admin discrètement
+    io.to(`lobby:${lobbyId}`).emit('answer:pasteDetected', {
+      odId,
+      questionId,
+      timestamp: Date.now()
+    });
+  });
+  
   socket.on('answer:submit', (data, callback) => {
     const { lobbyId, odId, questionId, answer } = data;
     
@@ -675,6 +788,266 @@ io.on('connection', (socket) => {
     db.resetAllTeamScores();
     console.log('[ADMIN] Scores reinitialises');
     broadcastGlobalState();
+    callback({ success: true });
+  });
+  
+  // ==================== DESSIN COLLABORATIF ====================
+  
+  // Recevoir et broadcaster un trait de dessin
+  socket.on('drawing:stroke', (data) => {
+    const { lobbyId, teamId, odId, points, color, width, opacity, complete } = data;
+    
+    // Broadcaster à tous les autres dans le lobby
+    socket.to(`lobby:${lobbyId}`).emit('drawing:stroke', {
+      lobbyId,
+      teamId,
+      odId,
+      points,
+      color,
+      width,
+      opacity,
+      complete,
+      timestamp: Date.now()
+    });
+  });
+  
+  // Recevoir et broadcaster un remplissage
+  socket.on('drawing:fill', (data) => {
+    const { lobbyId, teamId, odId, x, y, color, opacity } = data;
+    
+    socket.to(`lobby:${lobbyId}`).emit('drawing:fill', {
+      lobbyId,
+      teamId,
+      odId,
+      x,
+      y,
+      color,
+      opacity,
+      timestamp: Date.now()
+    });
+  });
+  
+  // Recevoir et broadcaster un effacement du canvas
+  socket.on('drawing:clear', (data) => {
+    const { lobbyId, teamId, odId } = data;
+    
+    socket.to(`lobby:${lobbyId}`).emit('drawing:clear', {
+      lobbyId,
+      teamId,
+      odId,
+      timestamp: Date.now()
+    });
+  });
+  
+  // ==================== PICTIONARY GAME ====================
+  
+  // Proposition de réponse Pictionary
+  socket.on('pictionary:guess', (data, callback) => {
+    const { lobbyId, odId, teamName, guess } = data;
+    
+    // Récupérer l'état du jeu depuis la mémoire
+    const gameState = pictionaryGames.get(lobbyId);
+    if (!gameState) {
+      callback({ success: false, message: 'Partie non trouvée' });
+      return;
+    }
+    
+    // Vérifier si l'équipe qui devine n'est pas celle qui dessine
+    if (teamName === gameState.drawingTeam) {
+      callback({ success: false, message: 'Votre équipe dessine !' });
+      return;
+    }
+    
+    // Vérifier si l'équipe a déjà trouvé
+    if (gameState.teamsFound.includes(teamName)) {
+      callback({ success: false, message: 'Vous avez déjà trouvé !' });
+      return;
+    }
+    
+    // Normaliser et comparer
+    const normalizedGuess = guess.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const normalizedWord = gameState.currentWord.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    
+    const isCorrect = normalizedGuess === normalizedWord;
+    
+    // Enregistrer la proposition
+    const guessRecord = {
+      odId,
+      teamName,
+      guess,
+      correct: isCorrect,
+      timestamp: Date.now()
+    };
+    gameState.guesses.push(guessRecord);
+    
+    // Broadcaster la proposition à tous
+    io.to(`lobby:${lobbyId}`).emit('pictionary:guessResult', {
+      odId,
+      teamName,
+      guess,
+      correct: isCorrect
+    });
+    
+    if (isCorrect) {
+      // Calculer les points
+      const isFirst = gameState.teamsFound.length === 0;
+      const points = isFirst ? gameState.config.pointsFirstGuess : gameState.config.pointsOtherGuess;
+      
+      // Ajouter les points à l'équipe
+      gameState.scores[teamName] = (gameState.scores[teamName] || 0) + points;
+      gameState.teamsFound.push(teamName);
+      
+      // Si c'est la première équipe à trouver, l'équipe qui dessine gagne aussi des points
+      if (isFirst && gameState.config.pointsDrawingTeam > 0) {
+        gameState.scores[gameState.drawingTeam] = (gameState.scores[gameState.drawingTeam] || 0) + gameState.config.pointsDrawingTeam;
+      }
+      
+      console.log(`[PICTIONARY] ${teamName} a trouvé "${gameState.currentWord}" ! (+${points} pts)`);
+      
+      // Broadcaster la mise à jour des scores
+      io.to(`lobby:${lobbyId}`).emit('pictionary:scoreUpdate', {
+        scores: gameState.scores,
+        teamsFound: gameState.teamsFound
+      });
+    }
+    
+    callback({ success: true, correct: isCorrect });
+  });
+  
+  // Démarrer une partie de Pictionary
+  socket.on('pictionary:start', (data, callback) => {
+    const { lobbyId, config, teams, words } = data;
+    
+    // Mélanger les équipes pour l'ordre de passage
+    const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
+    
+    // Sélectionner des mots aléatoires
+    const selectedWords = [...words].sort(() => Math.random() - 0.5).slice(0, config.rounds);
+    
+    // Créer l'état du jeu
+    const gameState = {
+      lobbyId,
+      config,
+      teams: shuffledTeams,
+      words: selectedWords,
+      currentRound: 0,
+      currentWord: selectedWords[0]?.word || '',
+      drawingTeam: shuffledTeams[0],
+      drawingTeamIndex: 0,
+      currentDrawerIndex: 0,
+      scores: {},
+      teamsFound: [],
+      guesses: [],
+      timeRemaining: config.timePerRound,
+      drawerRotationTime: config.timePerDrawer,
+      status: 'playing',
+      startedAt: Date.now()
+    };
+    
+    // Initialiser les scores
+    shuffledTeams.forEach(team => {
+      gameState.scores[team] = 0;
+    });
+    
+    // Stocker l'état
+    pictionaryGames.set(lobbyId, gameState);
+    
+    console.log(`[PICTIONARY] Partie démarrée - Lobby: ${lobbyId}, ${config.rounds} tours, Équipes: ${shuffledTeams.join(', ')}`);
+    
+    // D'abord, broadcaster l'invitation à TOUS les clients connectés
+    // Les participants des équipes concernées rejoindront automatiquement
+    io.emit('pictionary:invite', {
+      lobbyId,
+      teams: shuffledTeams,
+      config
+    });
+    
+    // Attendre un peu que les clients rejoignent le room
+    setTimeout(() => {
+      // Démarrer le timer
+      startPictionaryTimer(lobbyId);
+      
+      // Broadcaster le démarrage à ceux qui ont rejoint le lobby
+      io.to(`lobby:${lobbyId}`).emit('pictionary:started', {
+        lobbyId,
+        config,
+        teams: shuffledTeams,
+        currentRound: 0,
+        totalRounds: config.rounds,
+        drawingTeam: shuffledTeams[0],
+        timeRemaining: config.timePerRound,
+        scores: gameState.scores,
+        teamsFound: []
+      });
+      
+      // Envoyer le mot à l'équipe qui dessine
+      io.to(`lobby:${lobbyId}`).emit('pictionary:wordReveal', {
+        word: selectedWords[0]?.word,
+        forTeam: shuffledTeams[0]
+      });
+      
+      console.log(`[PICTIONARY] Événements envoyés au lobby:${lobbyId}`);
+    }, 500);
+    
+    callback({ success: true, lobbyId });
+  });
+  
+  // Passer au tour suivant
+  socket.on('pictionary:nextRound', (data, callback) => {
+    const { lobbyId } = data;
+    
+    const gameState = pictionaryGames.get(lobbyId);
+    if (!gameState) {
+      callback({ success: false, message: 'Partie non trouvée' });
+      return;
+    }
+    
+    // Passer au tour suivant
+    gameState.currentRound++;
+    
+    if (gameState.currentRound >= gameState.config.rounds) {
+      // Fin de la partie
+      endPictionaryGame(lobbyId);
+      callback({ success: true, ended: true });
+      return;
+    }
+    
+    // Équipe suivante qui dessine
+    gameState.drawingTeamIndex = (gameState.drawingTeamIndex + 1) % gameState.teams.length;
+    gameState.drawingTeam = gameState.teams[gameState.drawingTeamIndex];
+    gameState.currentWord = gameState.words[gameState.currentRound]?.word || '';
+    gameState.currentDrawerIndex = 0;
+    gameState.teamsFound = [];
+    gameState.timeRemaining = gameState.config.timePerRound;
+    gameState.drawerRotationTime = gameState.config.timePerDrawer;
+    
+    // Broadcaster le nouveau tour
+    io.to(`lobby:${lobbyId}`).emit('pictionary:newRound', {
+      currentRound: gameState.currentRound + 1,
+      totalRounds: gameState.config.rounds,
+      drawingTeam: gameState.drawingTeam,
+      timeRemaining: gameState.config.timePerRound
+    });
+    
+    // Envoyer le nouveau mot à l'équipe qui dessine
+    io.to(`lobby:${lobbyId}`).emit('pictionary:wordReveal', {
+      word: gameState.currentWord,
+      forTeam: gameState.drawingTeam
+    });
+    
+    // Effacer le canvas
+    io.to(`lobby:${lobbyId}`).emit('drawing:clear', {
+      lobbyId,
+      fromServer: true
+    });
+    
+    callback({ success: true, ended: false });
+  });
+  
+  // Terminer la partie
+  socket.on('pictionary:end', (data, callback) => {
+    const { lobbyId } = data;
+    endPictionaryGame(lobbyId);
     callback({ success: true });
   });
   
@@ -1090,6 +1463,149 @@ app.put('/api/lobbies/:id/archive', (req, res) => {
   const updatedLobby = db.archiveLobby(id, archived);
   broadcastGlobalState();
   res.json({ success: true, lobby: getLobbyWithTimer(updatedLobby) });
+});
+
+// ==================== DRAWING WORDS API ====================
+
+app.get('/api/drawing-words', (req, res) => {
+  res.json(db.getAllDrawingWords());
+});
+
+app.post('/api/drawing-words', (req, res) => {
+  const word = db.createDrawingWord(req.body);
+  broadcastGlobalState();
+  res.json({ success: true, word });
+});
+
+app.put('/api/drawing-words/:id', (req, res) => {
+  const word = db.updateDrawingWord(req.params.id, req.body);
+  broadcastGlobalState();
+  res.json({ success: true, word });
+});
+
+app.delete('/api/drawing-words/:id', (req, res) => {
+  db.deleteDrawingWord(req.params.id);
+  broadcastGlobalState();
+  res.json({ success: true });
+});
+
+// Import/Export mots de dessin
+app.post('/api/drawing-words/import', (req, res) => {
+  const { words, mode = 'add' } = req.body;
+  
+  if (!Array.isArray(words)) {
+    return res.json({ success: false, message: 'Format invalide' });
+  }
+  
+  let added = 0, updated = 0;
+  
+  if (mode === 'replace') {
+    // Supprimer tous les mots existants
+    const existing = db.getAllDrawingWords();
+    existing.forEach(w => db.deleteDrawingWord(w.id));
+  }
+  
+  words.forEach(word => {
+    if (word.id && mode === 'update') {
+      const existing = db.getDrawingWordById(word.id);
+      if (existing) {
+        db.updateDrawingWord(word.id, word);
+        updated++;
+      } else {
+        db.createDrawingWord(word);
+        added++;
+      }
+    } else {
+      db.createDrawingWord({ ...word, id: word.id || Date.now().toString() + Math.random().toString(36).substr(2, 9) });
+      added++;
+    }
+  });
+  
+  broadcastGlobalState();
+  res.json({ success: true, added, updated, total: db.getAllDrawingWords().length });
+});
+
+// ==================== DRAWING REFERENCES API ====================
+
+app.get('/api/drawing-references', (req, res) => {
+  res.json(db.getAllDrawingReferences());
+});
+
+app.post('/api/drawing-references', (req, res) => {
+  const ref = db.createDrawingReference(req.body);
+  broadcastGlobalState();
+  res.json({ success: true, reference: ref });
+});
+
+app.put('/api/drawing-references/:id', (req, res) => {
+  const ref = db.updateDrawingReference(req.params.id, req.body);
+  broadcastGlobalState();
+  res.json({ success: true, reference: ref });
+});
+
+app.delete('/api/drawing-references/:id', (req, res) => {
+  db.deleteDrawingReference(req.params.id);
+  broadcastGlobalState();
+  res.json({ success: true });
+});
+
+// Import/Export images de référence
+app.post('/api/drawing-references/import', (req, res) => {
+  const { references, mode = 'add' } = req.body;
+  
+  if (!Array.isArray(references)) {
+    return res.json({ success: false, message: 'Format invalide' });
+  }
+  
+  let added = 0, updated = 0;
+  
+  if (mode === 'replace') {
+    const existing = db.getAllDrawingReferences();
+    existing.forEach(r => db.deleteDrawingReference(r.id));
+  }
+  
+  references.forEach(ref => {
+    if (ref.id && mode === 'update') {
+      const existing = db.getDrawingReferenceById(ref.id);
+      if (existing) {
+        db.updateDrawingReference(ref.id, ref);
+        updated++;
+      } else {
+        db.createDrawingReference(ref);
+        added++;
+      }
+    } else {
+      db.createDrawingReference({ ...ref, id: ref.id || Date.now().toString() + Math.random().toString(36).substr(2, 9) });
+      added++;
+    }
+  });
+  
+  broadcastGlobalState();
+  res.json({ success: true, added, updated, total: db.getAllDrawingReferences().length });
+});
+
+// ==================== DRAWING GAMES API ====================
+
+app.get('/api/drawing-games', (req, res) => {
+  res.json(db.getAllDrawingGames());
+});
+
+app.post('/api/drawing-games', (req, res) => {
+  const game = db.createDrawingGame(req.body);
+  broadcastGlobalState();
+  res.json({ success: true, game });
+});
+
+app.put('/api/drawing-games/:id', (req, res) => {
+  const game = db.updateDrawingGame(req.params.id, req.body);
+  broadcastGlobalState();
+  res.json({ success: true, game });
+});
+
+app.delete('/api/drawing-games/:id', (req, res) => {
+  db.deleteDrawingGame(req.params.id);
+  broadcastGlobalState();
+  res.json({ success: true });
 });
 
 // Production: servir le client React

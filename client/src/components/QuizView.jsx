@@ -10,7 +10,8 @@ const QuizView = ({
   currentUser,
   onAnswerChange,
   onSubmitAnswer,
-  onLeaveLobby
+  onLeaveLobby,
+  onPaste
 }) => {
   const inputRef = useRef(null);
   const videoRef = useRef(null);
@@ -37,6 +38,15 @@ const QuizView = ({
   // Handler pour QCM
   const handleQCMChoice = (choice) => {
     onAnswerChange(choice);
+  };
+  
+  // Handler pour détecter le copier-coller
+  const handlePaste = (e) => {
+    const pastedText = e.clipboardData?.getData('text') || '';
+    if (pastedText && onPaste && question) {
+      console.log('[PASTE DETECTED]', pastedText.substring(0, 50));
+      onPaste(question.id, pastedText);
+    }
   };
 
   // Volume à 30%
@@ -290,6 +300,7 @@ const QuizView = ({
               type="text"
               value={myAnswer}
               onChange={handleAnswerChange}
+              onPaste={handlePaste}
               placeholder="Votre réponse..."
               className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none mb-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
               onKeyPress={(e) => e.key === 'Enter' && !hasAnswered && !isTimeExpired && onSubmitAnswer()}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trophy, Check, XCircle, Users, ChevronDown, ChevronUp, AlertCircle, RotateCcw, ChevronLeft, ChevronRight, Image as ImageIcon, Video as VideoIcon, Music, Archive } from 'lucide-react';
+import { Trophy, Check, XCircle, Users, ChevronDown, ChevronUp, AlertCircle, RotateCcw, ChevronLeft, ChevronRight, Image as ImageIcon, Video as VideoIcon, Music, Archive, Clipboard } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -402,6 +402,7 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                                 const answer = participant.answersByQuestionId?.[question.id] || '';
                                 const validation = participant.validationsByQuestionId?.[question.id];
                                 const isCorrectAnswer = answer.toLowerCase().trim() === question.answer.toLowerCase().trim();
+                                const hasPasted = participant.pastedByQuestionId?.[question.id];
 
                                 return (
                                   <div key={participant.participantId} className={`p-2 rounded flex justify-between items-center ${
@@ -409,7 +410,7 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                                     : validation === false ? 'bg-red-50 dark:bg-red-900/20'
                                     : 'bg-gray-50 dark:bg-gray-700'
                                   }`}>
-                                    <div>
+                                    <div className="flex items-center gap-1">
                                       <span className="font-semibold dark:text-white">{participant.pseudo}</span>
                                       {participant.teamName && (
                                         <span className="ml-2 text-xs text-purple-600 dark:text-purple-400">({participant.teamName})</span>
@@ -417,6 +418,13 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                                       <span className={`ml-2 ${isCorrectAnswer ? 'text-green-600 dark:text-green-400' : 'dark:text-gray-300'}`}>
                                         : {answer || '(vide)'}
                                       </span>
+                                      {/* Indicateur de copier-coller */}
+                                      {hasPasted && (
+                                        <Clipboard 
+                                          className="w-4 h-4 text-orange-500 dark:text-orange-400 ml-1" 
+                                          title="Copier-coller détecté"
+                                        />
+                                      )}
                                     </div>
                                     
                                     {validation !== undefined ? (

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Eye, Check, Clock, SkipForward, Users, Trophy, EyeOff, Image as ImageIcon, Video as VideoIcon, Music, StopCircle } from 'lucide-react';
+import { Eye, Check, Clock, SkipForward, Users, Trophy, EyeOff, Image as ImageIcon, Video as VideoIcon, Music, StopCircle, Clipboard } from 'lucide-react';
 
 const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }) => {
   const activeLobby = lobbies.find(l => l.status === 'playing');
@@ -9,6 +9,7 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
   const [localTimeRemaining, setLocalTimeRemaining] = useState(null);
   const [showAnswers, setShowAnswers] = useState(false);
   const joinedLobbyRef = useRef(null);
+  const [pastedParticipants, setPastedParticipants] = useState({}); // { odId: { questionId: true } }
 
   // Rejoindre la room du lobby actif pour recevoir les events timer
   useEffect(() => {
@@ -60,6 +61,25 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
       socket.off('timer:expired', handleTimerExpired);
     };
   }, [socket, activeLobby?.id]);
+
+  // Écouter les événements de copier-coller
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handlePasteDetected = (data) => {
+      const { odId, questionId } = data;
+      setPastedParticipants(prev => ({
+        ...prev,
+        [odId]: { ...prev[odId], [questionId]: true }
+      }));
+    };
+    
+    socket.on('answer:pasteDetected', handlePasteDetected);
+    
+    return () => {
+      socket.off('answer:pasteDetected', handlePasteDetected);
+    };
+  }, [socket]);
 
   useEffect(() => {
     if (activeLobby) {
@@ -357,7 +377,18 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
                 <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
                   {showAnswers ? (
                     <div className="bg-white dark:bg-gray-700 rounded p-2 border border-green-300 dark:border-green-600">
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Réponse :</p>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-xs text-gray-600 dark:text-gray-400">Réponse :</p>
+                        {/* Indicateur de copier-coller */}
+                        {pastedParticipants[p.participantId]?.[currentQuestion?.id] && (
+                          <span 
+                            className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400" 
+                            title="Copier-coller détecté"
+                          >
+                            <Clipboard className="w-3 h-3" />
+                          </span>
+                        )}
+                      </div>
                       <p className="font-bold text-green-700 dark:text-green-400 break-words text-sm">
                         {p.currentAnswer || '(vide)'}
                       </p>
@@ -367,6 +398,10 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
                       <p className="text-xs text-orange-700 dark:text-orange-400 flex items-center gap-1">
                         <EyeOff className="w-3 h-3" />
                         Réponse masquée
+                        {/* Indicateur de copier-coller même quand masqué */}
+                        {pastedParticipants[p.participantId]?.[currentQuestion?.id] && (
+                          <Clipboard className="w-3 h-3 ml-2" title="Copier-coller détecté" />
+                        )}
                       </p>
                     </div>
                   )}

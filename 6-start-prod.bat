@@ -20,6 +20,16 @@ if not exist "client\build\index.html" (
     exit /b 1
 )
 
+REM Verifier que node_modules existe dans server
+if not exist "server\node_modules" (
+    echo [ERREUR] Les dependances du serveur ne sont pas installees
+    echo.
+    echo Executez d'abord: 3-install.bat
+    echo.
+    pause
+    exit /b 1
+)
+
 echo Demarrage du serveur en mode production...
 echo.
 echo Le serveur servira:
@@ -38,3 +48,11 @@ echo.
 cd server
 set NODE_ENV=production
 node server.js
+
+REM Si on arrive ici, c'est que le serveur s'est arrete
+echo.
+echo ================================================
+echo [ERREUR] Le serveur s'est arrete de maniere inattendue
+echo ================================================
+echo.
+pause

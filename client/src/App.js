@@ -12,6 +12,7 @@ import AdminDashboard from './components/AdminDashboard';
 import ReconnectingScreen from './components/ReconnectingScreen';
 import ProfileView from './components/ProfileView';
 import HistoryView from './components/HistoryView';
+import PictionaryPlayerView from './components/PictionaryPlayerView';
 import { useToast } from './components/ToastProvider';
 import './App.css';
 
@@ -29,6 +30,7 @@ const App = () => {
   const [myAnswer, setMyAnswer] = useState('');
   const [hasAnswered, setHasAnswered] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [pictionaryGameState, setPictionaryGameState] = useState(null);
   
   const hasReconnected = useRef(false);
   const draftTimeoutRef = useRef(null);
@@ -218,6 +220,90 @@ const App = () => {
     socket.on('lobby:deleted', handleLobbyDeleted);
     socket.on('lobby:stopped', handleLobbyStopped);
     
+    // Listeners Pictionary pour les joueurs
+    const handlePictionaryInvite = (data) => {
+      console.log('[APP] Pictionary invite received:', data);
+      // Vérifier si le joueur fait partie d'une équipe invitée
+      if (currentUser?.teamName && data.teams.includes(currentUser.teamName)) {
+        console.log('[APP] Joining Pictionary lobby:', data.lobbyId);
+        // Rejoindre le room Socket.IO du lobby
+        socket.joinLobby(data.lobbyId, currentUser.id, currentUser.pseudo, currentUser.teamName);
+      }
+    };
+    
+    const handlePictionaryStarted = (data) => {
+      console.log('[APP] Pictionary started:', data);
+      // Vérifier si le joueur fait partie du jeu
+      if (currentUser?.teamName && data.teams.includes(currentUser.teamName)) {
+        setPictionaryGameState(prev => ({
+          ...prev,
+          ...data,
+          status: 'playing'
+        }));
+        setView('pictionary');
+      }
+    };
+    
+    const handlePictionaryTimerTick = (data) => {
+      setPictionaryGameState(prev => prev ? {
+        ...prev,
+        timeRemaining: data.timeRemaining,
+        drawerRotationTime: data.drawerRotationTime
+      } : null);
+    };
+    
+    const handlePictionaryWordReveal = (data) => {
+      if (currentUser?.teamName === data.forTeam) {
+        setPictionaryGameState(prev => prev ? {
+          ...prev,
+          currentWord: data.word
+        } : null);
+      }
+    };
+    
+    const handlePictionaryScoreUpdate = (data) => {
+      setPictionaryGameState(prev => prev ? {
+        ...prev,
+        scores: data.scores,
+        teamsFound: data.teamsFound
+      } : null);
+    };
+    
+    const handlePictionaryNewRound = (data) => {
+      setPictionaryGameState(prev => prev ? {
+        ...prev,
+        currentRound: data.currentRound - 1,
+        drawingTeam: data.drawingTeam,
+        timeRemaining: data.timeRemaining,
+        teamsFound: [],
+        currentWord: currentUser?.teamName === data.drawingTeam ? null : undefined
+      } : null);
+    };
+    
+    const handlePictionaryEnded = (data) => {
+      setPictionaryGameState(prev => prev ? {
+        ...prev,
+        status: 'finished',
+        ranking: data.ranking
+      } : null);
+    };
+    
+    const handleDrawerRotation = (data) => {
+      setPictionaryGameState(prev => prev ? {
+        ...prev,
+        currentDrawerIndex: data.newDrawerIndex
+      } : null);
+    };
+    
+    socket.on('pictionary:invite', handlePictionaryInvite);
+    socket.on('pictionary:started', handlePictionaryStarted);
+    socket.on('pictionary:timerTick', handlePictionaryTimerTick);
+    socket.on('pictionary:wordReveal', handlePictionaryWordReveal);
+    socket.on('pictionary:scoreUpdate', handlePictionaryScoreUpdate);
+    socket.on('pictionary:newRound', handlePictionaryNewRound);
+    socket.on('pictionary:ended', handlePictionaryEnded);
+    socket.on('pictionary:drawerRotation', handleDrawerRotation);
+    
     return () => {
       console.log('[APP] Nettoyage des event listeners');
       socket.off('quiz:started', handleQuizStarted);
@@ -226,8 +312,16 @@ const App = () => {
       socket.off('timer:expired', handleTimerExpired);
       socket.off('lobby:deleted', handleLobbyDeleted);
       socket.off('lobby:stopped', handleLobbyStopped);
+      socket.off('pictionary:invite', handlePictionaryInvite);
+      socket.off('pictionary:started', handlePictionaryStarted);
+      socket.off('pictionary:timerTick', handlePictionaryTimerTick);
+      socket.off('pictionary:wordReveal', handlePictionaryWordReveal);
+      socket.off('pictionary:scoreUpdate', handlePictionaryScoreUpdate);
+      socket.off('pictionary:newRound', handlePictionaryNewRound);
+      socket.off('pictionary:ended', handlePictionaryEnded);
+      socket.off('pictionary:drawerRotation', handleDrawerRotation);
     };
-  }, [socketReady, isAdmin, hasAnswered, toast, currentLobby?.id, currentQuiz, socket]);
+  }, [socketReady, isAdmin, hasAnswered, toast, currentLobby?.id, currentQuiz, socket, currentUser?.teamName]);
 
   // Restaurer la session
   useEffect(() => {
@@ -444,6 +538,13 @@ const App = () => {
     }
   };
 
+  // Handler pour détecter le copier-coller
+  const handlePaste = (questionId, pastedText) => {
+    if (currentLobby && currentUser && questionId) {
+      socket.reportPaste(currentLobby.id, currentUser.id, questionId, pastedText);
+    }
+  };
+
   const handleLogout = () => {
     if (currentLobby && currentUser) {
       socket.leaveLobby(currentLobby.id, currentUser.id);
@@ -565,6 +666,7 @@ const App = () => {
           onAnswerChange={handleAnswerChange}
           onSubmitAnswer={handleSubmitAnswer}
           onLeaveLobby={handleLeaveLobby}
+          onPaste={handlePaste}
         />
       )}
       
@@ -598,6 +700,18 @@ const App = () => {
           teams={teams}
           currentUser={currentUser}
           onBack={() => setView(currentLobby ? 'results' : 'lobby-list')}
+        />
+      )}
+      
+      {view === 'pictionary' && pictionaryGameState && (
+        <PictionaryPlayerView
+          gameState={pictionaryGameState}
+          currentUser={currentUser}
+          socket={socket}
+          onLeave={() => {
+            setPictionaryGameState(null);
+            setView('lobby-list');
+          }}
         />
       )}
       
