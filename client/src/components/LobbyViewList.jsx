@@ -10,6 +10,26 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
   const userTeam = teams.find(t => t.name === currentUser.teamName);
   const [drawingLobbies, setDrawingLobbies] = useState([]);
   
+  // Charger les lobbies de dessin
+  useEffect(() => {
+    const fetchDrawingLobbies = async () => {
+      try {
+        const res = await fetch(`${API_URL}/drawing-lobbies`);
+        const data = await res.json();
+        // Filtrer pour n'afficher que les lobbies en attente ou en cours
+        setDrawingLobbies(data.filter(l => l.status === 'waiting' || l.status === 'playing'));
+      } catch (error) {
+        console.error('Erreur chargement drawing lobbies:', error);
+      }
+    };
+    
+    fetchDrawingLobbies();
+    
+    // Rafraîchir toutes les 5 secondes
+    const interval = setInterval(fetchDrawingLobbies, 5000);
+    return () => clearInterval(interval);
+  }, []);
+  
   // Compter les lobbies terminés pour le badge
   const myFinishedLobbiesCount = lobbies.filter(l => 
     l.status === 'finished' && 

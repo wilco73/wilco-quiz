@@ -27,10 +27,19 @@ const DrawingCanvas = ({
   onStroke = null,
   onClear = null,
   externalStrokes = [],
-  backgroundColor = '#FFFFFF'
+  backgroundColor = '#FFFFFF',
+  externalCanvasRef = null, // Ref externe pour permettre l'export de l'image
+  clearSignal = 0 // Incrémenter pour forcer l'effacement
 }) => {
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
+  
+  // Exposer le canvas via la ref externe
+  useEffect(() => {
+    if (externalCanvasRef && canvasRef.current) {
+      externalCanvasRef.current = canvasRef.current;
+    }
+  }, [externalCanvasRef]);
   
   // États du canvas
   const [isDrawing, setIsDrawing] = useState(false);
@@ -97,15 +106,104 @@ const DrawingCanvas = ({
     }
   }, [color, brushSize, tool, backgroundColor, opacity]);
   
-  // Écouter les strokes externes (mode collaboratif)
+  // Écouter les strokes et fills externes (mode collaboratif)
   useEffect(() => {
     if (externalStrokes.length > 0 && contextRef.current) {
       const lastStroke = externalStrokes[externalStrokes.length - 1];
       if (lastStroke && lastStroke.odId !== odId) {
-        drawStroke(lastStroke);
+        if (lastStroke.type === 'fill') {
+          // Appliquer un fill externe
+          applyExternalFill(lastStroke);
+        } else {
+          // Dessiner un trait externe
+          drawStroke(lastStroke);
+        }
       }
     }
   }, [externalStrokes, odId]);
+  
+  // Appliquer un fill reçu de l'extérieur
+  const applyExternalFill = useCallback((fillData) => {
+    const canvas = canvasRef.current;
+    const ctx = contextRef.current;
+    if (!ctx || !canvas) return;
+    
+    const { x, y, color, opacity: fillOpacity } = fillData;
+    
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    // Convertir la couleur de remplissage en RGBA
+    const fillR = parseInt(color.slice(1, 3), 16);
+    const fillG = parseInt(color.slice(3, 5), 16);
+    const fillB = parseInt(color.slice(5, 7), 16);
+    const fillA = Math.round(((fillOpacity || 100) / 100) * 255);
+    
+    // Obtenir la couleur du pixel de départ
+    const startPos = (Math.floor(y) * canvas.width + Math.floor(x)) * 4;
+    const startR = data[startPos];
+    const startG = data[startPos + 1];
+    const startB = data[startPos + 2];
+    const startA = data[startPos + 3];
+    
+    // Si la couleur de départ est la même que la couleur de remplissage, ne rien faire
+    if (startR === fillR && startG === fillG && startB === fillB && startA === fillA) {
+      return;
+    }
+    
+    // Tolérance pour la comparaison des couleurs
+    const tolerance = 32;
+    
+    const matchColor = (pos) => {
+      return Math.abs(data[pos] - startR) <= tolerance &&
+             Math.abs(data[pos + 1] - startG) <= tolerance &&
+             Math.abs(data[pos + 2] - startB) <= tolerance &&
+             Math.abs(data[pos + 3] - startA) <= tolerance;
+    };
+    
+    const setColor = (pos) => {
+      data[pos] = fillR;
+      data[pos + 1] = fillG;
+      data[pos + 2] = fillB;
+      data[pos + 3] = fillA;
+    };
+    
+    // Algorithme de flood fill
+    const stack = [[Math.floor(x), Math.floor(y)]];
+    const visited = new Set();
+    
+    while (stack.length > 0) {
+      const [px, py] = stack.pop();
+      const key = `${px},${py}`;
+      
+      if (visited.has(key)) continue;
+      if (px < 0 || px >= canvas.width || py < 0 || py >= canvas.height) continue;
+      
+      const pos = (py * canvas.width + px) * 4;
+      
+      if (!matchColor(pos)) continue;
+      
+      visited.add(key);
+      setColor(pos);
+      
+      stack.push([px + 1, py]);
+      stack.push([px - 1, py]);
+      stack.push([px, py + 1]);
+      stack.push([px, py - 1]);
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+  }, []);
+  
+  // Effacer le canvas quand clearSignal change
+  useEffect(() => {
+    if (clearSignal > 0 && contextRef.current && canvasRef.current) {
+      const ctx = contextRef.current;
+      ctx.fillStyle = backgroundColor;
+      ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      console.log('[CANVAS] Effacement reçu, clearSignal:', clearSignal);
+    }
+  }, [clearSignal, backgroundColor]);
   
   // Sauvegarder dans l'historique
   const saveToHistory = useCallback(() => {
@@ -587,26 +685,30 @@ const DrawingCanvas = ({
           {/* Séparateur */}
           <div className="border-l border-gray-300 dark:border-gray-600 h-8" />
           
-          {/* Undo / Redo */}
-          <button
-            onClick={undo}
-            disabled={historyIndex <= 0}
-            className="p-2 rounded-lg bg-white dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed dark:text-white"
-            title="Annuler"
-          >
-            <Undo className="w-5 h-5" />
-          </button>
-          <button
-            onClick={redo}
-            disabled={historyIndex >= history.length - 1}
-            className="p-2 rounded-lg bg-white dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed dark:text-white"
-            title="Refaire"
-          >
-            <Redo className="w-5 h-5" />
-          </button>
-          
-          {/* Séparateur */}
-          <div className="border-l border-gray-300 dark:border-gray-600 h-8" />
+          {/* Undo / Redo - Désactivé en mode collaboratif */}
+          {!collaborative ? (
+            <>
+              <button
+                onClick={undo}
+                disabled={historyIndex <= 0}
+                className="p-2 rounded-lg bg-white dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed dark:text-white"
+                title="Annuler"
+              >
+                <Undo className="w-5 h-5" />
+              </button>
+              <button
+                onClick={redo}
+                disabled={historyIndex >= history.length - 1}
+                className="p-2 rounded-lg bg-white dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed dark:text-white"
+                title="Refaire"
+              >
+                <Redo className="w-5 h-5" />
+              </button>
+              
+              {/* Séparateur */}
+              <div className="border-l border-gray-300 dark:border-gray-600 h-8" />
+            </>
+          ) : null}
           
           {/* Effacer tout */}
           <button

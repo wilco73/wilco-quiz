@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, Users, Clock, Trash2, Eye, Settings,
   Palette, AlertCircle, Check, X, Plus,
-  SkipForward, StopCircle, Trophy, EyeOff, RefreshCw
+  SkipForward, StopCircle, Trophy, EyeOff, RefreshCw,
+  Archive, History
 } from 'lucide-react';
 import { PictionaryConfig } from './PictionaryGame';
+import PictionaryResults from './PictionaryResults';
 import { useToast } from './ToastProvider';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -20,10 +22,14 @@ const DrawingLobbyManager = ({
   const [selectedLobby, setSelectedLobby] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showResults, setShowResults] = useState(false);
   const [gameState, setGameState] = useState(null);
   const [showWord, setShowWord] = useState(false);
   const [allGuesses, setAllGuesses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showAllTeamsPopup, setShowAllTeamsPopup] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const canvasRef = useRef(null);
   const toast = useToast();
   
   // Charger les données
@@ -136,6 +142,20 @@ const DrawingLobbyManager = ({
       fetchData(); // Refresh lobbies
     };
     
+    const handleAllTeamsFound = (data) => {
+      // Afficher la popup
+      setShowAllTeamsPopup({
+        word: data.word,
+        teamsFound: data.teamsFound,
+        scores: data.scores
+      });
+      
+      // Masquer après 4 secondes (avant le passage auto de 5s)
+      setTimeout(() => {
+        setShowAllTeamsPopup(null);
+      }, 4500);
+    };
+    
     socket.on('drawingLobby:updated', handleLobbyUpdated);
     socket.on('drawingLobby:deleted', handleLobbyDeleted);
     socket.on('pictionary:started', handleStarted);
@@ -146,6 +166,7 @@ const DrawingLobbyManager = ({
     socket.on('pictionary:wordReveal', handleWordReveal);
     socket.on('pictionary:timeUp', handleTimeUp);
     socket.on('pictionary:ended', handleEnded);
+    socket.on('pictionary:allTeamsFound', handleAllTeamsFound);
     
     return () => {
       socket.off('drawingLobby:updated', handleLobbyUpdated);
@@ -158,6 +179,7 @@ const DrawingLobbyManager = ({
       socket.off('pictionary:wordReveal', handleWordReveal);
       socket.off('pictionary:timeUp', handleTimeUp);
       socket.off('pictionary:ended', handleEnded);
+      socket.off('pictionary:allTeamsFound', handleAllTeamsFound);
     };
   }, [socket, selectedLobby?.id, toast]);
   
@@ -270,13 +292,24 @@ const DrawingLobbyManager = ({
     setSelectedLobby(null);
     setGameState(null);
     setAllGuesses([]);
+    setShowResults(false);
     fetchData();
+  };
+  
+  // Voir les résultats d'un lobby terminé
+  const handleViewResults = (lobby) => {
+    setSelectedLobby(lobby);
+    setShowResults(true);
   };
   
   // Équipes dans le lobby sélectionné
   const lobbyTeams = selectedLobby?.participants 
     ? [...new Set(selectedLobby.participants.map(p => p.team_name).filter(Boolean))]
     : [];
+  
+  // Séparer les lobbies actifs et terminés/archivés
+  const activeLobbies = drawingLobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
+  const finishedLobbies = drawingLobbies.filter(l => l.status === 'finished' || l.status === 'archived');
   
   // ==================== RENDU ====================
   
@@ -288,10 +321,52 @@ const DrawingLobbyManager = ({
     );
   }
   
+  // Vue résultats
+  if (showResults && selectedLobby) {
+    return (
+      <PictionaryResults
+        lobbyId={selectedLobby.id}
+        onBack={handleBack}
+        onArchive={() => {
+          toast.success('Lobby archivé');
+          handleBack();
+        }}
+      />
+    );
+  }
+  
   // Vue partie en cours
   if (selectedLobby && gameState && gameState.status === 'playing') {
     return (
       <div className="space-y-4">
+        {/* Popup toutes les équipes ont trouvé */}
+        {showAllTeamsPopup && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-md animate-bounce-in">
+              <div className="text-center">
+                <div className="text-6xl mb-4">🎉</div>
+                <h3 className="text-2xl font-bold dark:text-white mb-2">
+                  Tout le monde a trouvé !
+                </h3>
+                <p className="text-lg text-purple-600 dark:text-purple-400 font-bold mb-4">
+                  Le mot était : {showAllTeamsPopup.word}
+                </p>
+                <div className="space-y-2 mb-4">
+                  {showAllTeamsPopup.teamsFound.map((team, idx) => (
+                    <div key={team} className="flex items-center justify-center gap-2">
+                      <span className="text-xl">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '✓'}</span>
+                      <span className="font-medium dark:text-white">{team}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Passage au tour suivant...
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center">
@@ -633,11 +708,22 @@ const DrawingLobbyManager = ({
               Lobbies Pictionary
             </h2>
             <p className="text-gray-600 dark:text-gray-400">
-              {drawingLobbies.length} lobby(s) • {drawingWords.length} mots disponibles
+              {activeLobbies.length} actif(s) • {finishedLobbies.length} terminé(s) • {drawingWords.length} mots
             </p>
           </div>
           
           <div className="flex gap-2">
+            <button
+              onClick={() => setShowArchived(!showArchived)}
+              className={`p-2 rounded-lg flex items-center gap-2 ${
+                showArchived 
+                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' 
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+              title="Voir les lobbies terminés"
+            >
+              <History className="w-5 h-5" />
+            </button>
             <button
               onClick={fetchData}
               className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
@@ -654,22 +740,23 @@ const DrawingLobbyManager = ({
           </div>
         </div>
         
-        {drawingLobbies.length === 0 ? (
+        {/* Lobbies actifs */}
+        {activeLobbies.length === 0 && !showArchived ? (
           <div className="text-center py-12">
             <Palette className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
             <p className="text-gray-500 dark:text-gray-400 mb-4">
-              Aucun lobby Pictionary
+              Aucun lobby Pictionary actif
             </p>
             <button
               onClick={handleCreateLobby}
               className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
             >
-              Créer le premier lobby
+              Créer un lobby
             </button>
           </div>
         ) : (
           <div className="space-y-3">
-            {drawingLobbies.map(lobby => (
+            {activeLobbies.map(lobby => (
               <div 
                 key={lobby.id}
                 className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:border-purple-400 dark:hover:border-purple-400 transition cursor-pointer"
@@ -706,6 +793,61 @@ const DrawingLobbyManager = ({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        
+        {/* Lobbies terminés */}
+        {showArchived && finishedLobbies.length > 0 && (
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
+            <h3 className="text-lg font-bold dark:text-white mb-4 flex items-center gap-2">
+              <Archive className="w-5 h-5 text-gray-500" />
+              Lobbies terminés ({finishedLobbies.length})
+            </h3>
+            <div className="space-y-3">
+              {finishedLobbies.map(lobby => (
+                <div 
+                  key={lobby.id}
+                  className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:border-purple-400 dark:hover:border-purple-400 transition cursor-pointer bg-gray-50 dark:bg-gray-700/50"
+                  onClick={() => handleViewResults(lobby)}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          lobby.status === 'archived' 
+                            ? 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                        }`}>
+                          {lobby.status === 'archived' ? 'Archivé' : 'Terminé'}
+                        </span>
+                        <span className="text-gray-500 dark:text-gray-400 text-sm font-mono">
+                          {lobby.id.slice(0, 20)}...
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        Cliquez pour voir les résultats
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleViewResults(lobby); }}
+                        className="p-2 text-purple-500 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-lg"
+                        title="Voir les résultats"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteLobby(lobby.id); }}
+                        className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

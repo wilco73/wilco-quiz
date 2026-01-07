@@ -1673,6 +1673,74 @@ function addDrawingScore(lobbyId, teamName, points, reason, round) {
   saveDatabase();
 }
 
+// ==================== DRAWINGS (Sauvegarde des dessins) ====================
+
+function saveDrawing(lobbyId, round, teamName, word, imageData) {
+  const id = `drawing-${lobbyId}-${round}-${Date.now()}`;
+  run(`
+    INSERT INTO drawings (id, lobby_id, round, team_id, word_or_reference, image_data)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `, [id, lobbyId, round, teamName, word, imageData]);
+  saveDatabase();
+  return id;
+}
+
+function getDrawingsByLobby(lobbyId) {
+  return query(`
+    SELECT id, lobby_id, round, team_id as team_name, word_or_reference as word, image_data, created_at
+    FROM drawings
+    WHERE lobby_id = ?
+    ORDER BY round ASC
+  `, [lobbyId]);
+}
+
+function getDrawingById(id) {
+  return queryOne(`
+    SELECT id, lobby_id, round, team_id as team_name, word_or_reference as word, image_data, created_at
+    FROM drawings
+    WHERE id = ?
+  `, [id]);
+}
+
+function getDrawingScoresByLobby(lobbyId) {
+  return query(`
+    SELECT team_name, SUM(points) as total_points, 
+           GROUP_CONCAT(round || ':' || points || ':' || reason) as details
+    FROM drawing_scores
+    WHERE lobby_id = ?
+    GROUP BY team_name
+    ORDER BY total_points DESC
+  `, [lobbyId]);
+}
+
+function archiveDrawingLobby(lobbyId) {
+  run(`UPDATE drawing_lobbies SET status = 'archived' WHERE id = ?`, [lobbyId]);
+  saveDatabase();
+  return getDrawingLobbyById(lobbyId);
+}
+
+function getDrawingLobbyResults(lobbyId) {
+  const lobby = getDrawingLobbyById(lobbyId);
+  if (!lobby) return null;
+  
+  const drawings = getDrawingsByLobby(lobbyId);
+  const scores = getDrawingScoresByLobby(lobbyId);
+  
+  // Calculer le classement
+  const ranking = scores.map((s, idx) => ({
+    rank: idx + 1,
+    team: s.team_name,
+    score: s.total_points || 0
+  }));
+  
+  return {
+    lobby,
+    drawings,
+    scores,
+    ranking
+  };
+}
+
 module.exports = {
   initDatabase,
   getDatabase,
@@ -1785,5 +1853,13 @@ module.exports = {
   finishDrawingLobby,
   deleteDrawingLobby,
   getDrawingLobbyParticipants,
-  addDrawingScore
+  addDrawingScore,
+  archiveDrawingLobby,
+  getDrawingLobbyResults,
+  
+  // Drawings (Dessins sauvegardés)
+  saveDrawing,
+  getDrawingsByLobby,
+  getDrawingById,
+  getDrawingScoresByLobby
 };

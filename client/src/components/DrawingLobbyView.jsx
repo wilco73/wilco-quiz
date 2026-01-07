@@ -8,25 +8,70 @@ import DrawingCanvas from './DrawingCanvas';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
 const DrawingLobbyView = ({
-  lobby,
+  lobby: initialLobby,
   currentUser,
   socket,
   onLeave
 }) => {
+  const [lobby, setLobby] = useState(initialLobby);
   const [gameState, setGameState] = useState(null);
   const [guess, setGuess] = useState('');
   const [myGuesses, setMyGuesses] = useState([]);
   const [hasFoundWord, setHasFoundWord] = useState(false);
   const [externalStrokes, setExternalStrokes] = useState([]);
+  const [showAllTeamsPopup, setShowAllTeamsPopup] = useState(null);
+  const [clearSignal, setClearSignal] = useState(0);
   const inputRef = useRef(null);
+  const canvasRef = useRef(null);
   
   // Propriétés du joueur
   const myTeam = currentUser?.teamName;
   const isDrawingTeam = myTeam === gameState?.drawingTeam;
   
+  // Déterminer si c'est mon tour de dessiner (rotation)
+  const getDrawingTeamMembers = () => {
+    if (!lobby?.participants || !gameState?.drawingTeam) return [];
+    return lobby.participants.filter(p => p.team_name === gameState.drawingTeam);
+  };
+  
+  const drawingTeamMembers = getDrawingTeamMembers();
+  const currentDrawerIndex = gameState?.currentDrawerIndex || 0;
+  const currentDrawer = drawingTeamMembers[currentDrawerIndex % drawingTeamMembers.length];
+  const isMyTurnToDraw = isDrawingTeam && currentDrawer?.participant_id === currentUser?.id;
+  
+  // Si rotation = 0, tout le monde dans l'équipe peut dessiner
+  const hasRotation = gameState?.config?.timePerDrawer > 0;
+  const canActuallyDraw = isDrawingTeam && (hasRotation ? isMyTurnToDraw : true);
+  
+  // Mettre à jour le lobby si la prop change
+  useEffect(() => {
+    setLobby(initialLobby);
+  }, [initialLobby]);
+  
   // Écouter les événements Socket
   useEffect(() => {
     if (!socket || !lobby) return;
+    
+    // Mise à jour du lobby (nouveaux participants, etc.)
+    const handleLobbyUpdated = (data) => {
+      if (data.lobby && data.lobby.id === lobby.id) {
+        console.log('[DRAWING] Lobby mis à jour:', data.lobby.participants?.length, 'participants');
+        setLobby(data.lobby);
+      }
+    };
+    
+    // Nouveau participant rejoint
+    const handleParticipantJoined = (data) => {
+      console.log('[DRAWING] Participant rejoint:', data.pseudo);
+      // Rafraîchir le lobby depuis l'API pour avoir la liste complète
+      fetchLobby();
+    };
+    
+    // Participant quitte
+    const handleParticipantLeft = (data) => {
+      console.log('[DRAWING] Participant parti:', data.odId);
+      fetchLobby();
+    };
     
     // Recevoir les traits de dessin
     const handleStroke = (data) => {
@@ -45,6 +90,8 @@ const DrawingLobbyView = ({
     const handleClear = (data) => {
       if (data.lobbyId === lobby.id) {
         setExternalStrokes([]);
+        setClearSignal(prev => prev + 1);
+        console.log('[DRAWING] Clear reçu');
       }
     };
     
@@ -54,9 +101,11 @@ const DrawingLobbyView = ({
         setGameState({
           ...data,
           status: 'playing',
-          currentWord: null
+          currentWord: null,
+          currentDrawerIndex: 0
         });
         setExternalStrokes([]);
+        setClearSignal(0); // Reset le signal
         setMyGuesses([]);
         setHasFoundWord(false);
       }
@@ -105,12 +154,23 @@ const DrawingLobbyView = ({
         drawingTeam: data.drawingTeam,
         timeRemaining: data.timeRemaining,
         teamsFound: [],
-        currentWord: null
+        currentWord: null,
+        currentDrawerIndex: 0 // Reset l'index du dessinateur
       } : null);
       setExternalStrokes([]);
+      setClearSignal(prev => prev + 1); // Effacer le canvas
       setMyGuesses([]);
       setHasFoundWord(false);
       setGuess('');
+    };
+    
+    // Rotation du dessinateur
+    const handleDrawerRotation = (data) => {
+      setGameState(prev => prev ? {
+        ...prev,
+        currentDrawerIndex: data.newDrawerIndex,
+        drawerRotationTime: prev.config?.timePerDrawer || 0
+      } : null);
     };
     
     // Temps écoulé
@@ -127,12 +187,18 @@ const DrawingLobbyView = ({
       } : null);
     };
     
-    // Rotation dessinateur
-    const handleDrawerRotation = (data) => {
-      setGameState(prev => prev ? {
-        ...prev,
-        currentDrawerIndex: data.newDrawerIndex
-      } : null);
+    // Toutes les équipes ont trouvé
+    const handleAllTeamsFound = (data) => {
+      setShowAllTeamsPopup({
+        word: data.word,
+        teamsFound: data.teamsFound,
+        scores: data.scores
+      });
+      
+      // Masquer après 4.5 secondes
+      setTimeout(() => {
+        setShowAllTeamsPopup(null);
+      }, 4500);
     };
     
     socket.on('drawing:stroke', handleStroke);
@@ -147,6 +213,10 @@ const DrawingLobbyView = ({
     socket.on('pictionary:timeUp', handleTimeUp);
     socket.on('pictionary:ended', handleEnded);
     socket.on('pictionary:drawerRotation', handleDrawerRotation);
+    socket.on('pictionary:allTeamsFound', handleAllTeamsFound);
+    socket.on('drawingLobby:updated', handleLobbyUpdated);
+    socket.on('drawingLobby:participantJoined', handleParticipantJoined);
+    socket.on('drawingLobby:participantLeft', handleParticipantLeft);
     
     return () => {
       socket.off('drawing:stroke', handleStroke);
@@ -161,8 +231,25 @@ const DrawingLobbyView = ({
       socket.off('pictionary:timeUp', handleTimeUp);
       socket.off('pictionary:ended', handleEnded);
       socket.off('pictionary:drawerRotation', handleDrawerRotation);
+      socket.off('pictionary:allTeamsFound', handleAllTeamsFound);
+      socket.off('drawingLobby:updated', handleLobbyUpdated);
+      socket.off('drawingLobby:participantJoined', handleParticipantJoined);
+      socket.off('drawingLobby:participantLeft', handleParticipantLeft);
     };
   }, [socket, lobby?.id, myTeam]);
+  
+  // Fonction pour rafraîchir le lobby depuis l'API
+  const fetchLobby = async () => {
+    try {
+      const res = await fetch(`${API_URL}/drawing-lobbies/${lobby.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLobby(data);
+      }
+    } catch (error) {
+      console.error('Erreur fetch lobby:', error);
+    }
+  };
   
   // Soumettre une proposition
   const handleSubmitGuess = async () => {
@@ -315,6 +402,36 @@ const DrawingLobbyView = ({
   // Vue jeu en cours
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+      {/* Popup toutes les équipes ont trouvé */}
+      {showAllTeamsPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-md animate-pulse">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              <h3 className="text-2xl font-bold dark:text-white mb-2">
+                Tout le monde a trouvé !
+              </h3>
+              <p className="text-lg text-purple-600 dark:text-purple-400 font-bold mb-4">
+                Le mot était : {showAllTeamsPopup.word}
+              </p>
+              <div className="space-y-2 mb-4">
+                {showAllTeamsPopup.teamsFound.map((team, idx) => (
+                  <div key={team} className="flex items-center justify-center gap-2">
+                    <span className="text-xl">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '✓'}</span>
+                    <span className={`font-medium ${team === myTeam ? 'text-purple-600 dark:text-purple-400' : 'dark:text-white'}`}>
+                      {team} {team === myTeam && '(vous)'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Passage au tour suivant...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 mb-4">
@@ -393,17 +510,48 @@ const DrawingLobbyView = ({
                   </p>
                 </div>
                 
+                {/* Info rotation dessinateur */}
+                {hasRotation && (
+                  <div className={`mb-4 p-3 rounded-lg text-center ${
+                    canActuallyDraw 
+                      ? 'bg-green-100 dark:bg-green-900/30 border border-green-400'
+                      : 'bg-orange-100 dark:bg-orange-900/30 border border-orange-400'
+                  }`}>
+                    {canActuallyDraw ? (
+                      <p className="text-green-700 dark:text-green-300 font-bold">
+                        ✏️ C'est votre tour de dessiner !
+                      </p>
+                    ) : (
+                      <p className="text-orange-700 dark:text-orange-300">
+                        👀 C'est au tour de <strong>{currentDrawer?.pseudo || '...'}</strong> de dessiner
+                        {gameState.drawerRotationTime > 0 && (
+                          <span className="ml-2">({gameState.drawerRotationTime}s)</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )}
+                
+                {!hasRotation && (
+                  <div className="mb-4 p-3 rounded-lg text-center bg-blue-100 dark:bg-blue-900/30 border border-blue-400">
+                    <p className="text-blue-700 dark:text-blue-300">
+                      🎨 Toute l'équipe peut dessiner en même temps !
+                    </p>
+                  </div>
+                )}
+                
                 <DrawingCanvas
                   width={700}
                   height={450}
-                  canDraw={true}
-                  showTools={true}
+                  canDraw={canActuallyDraw}
+                  showTools={canActuallyDraw}
                   collaborative={true}
                   socket={socket}
                   lobbyId={lobby.id}
                   odId={currentUser?.id}
                   teamId={myTeam}
                   externalStrokes={externalStrokes}
+                  clearSignal={clearSignal}
                 />
               </div>
             ) : (
@@ -415,6 +563,7 @@ const DrawingLobbyView = ({
                   canDraw={false}
                   showTools={false}
                   externalStrokes={externalStrokes}
+                  clearSignal={clearSignal}
                 />
                 
                 {/* Zone de réponse */}

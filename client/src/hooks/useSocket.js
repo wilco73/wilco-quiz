@@ -281,6 +281,13 @@ export function useSocket() {
     });
   }, []);
   
+  const pictionarySaveDrawing = useCallback((lobbyId, round, teamName, word, imageData) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('pictionary:saveDrawing', { lobbyId, round, teamName, word, imageData }, resolve);
+    });
+  }, []);
+  
   // Emit générique pour le dessin
   const emit = useCallback((event, data) => {
     if (socketRef.current?.connected) {
@@ -339,6 +346,7 @@ export function useSocket() {
     pictionaryGuess,
     pictionaryNextRound,
     pictionaryEnd,
+    pictionarySaveDrawing,
     // Generic
     emit,
     // Events

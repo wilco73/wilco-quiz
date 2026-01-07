@@ -144,6 +144,60 @@ function endPictionaryGame(lobbyId) {
   }, 60000);
 }
 
+// Fonction pour passer au tour suivant automatiquement
+function triggerNextRound(lobbyId) {
+  const gameState = pictionaryGames.get(lobbyId);
+  if (!gameState || gameState.status !== 'playing') return;
+  
+  // Incrémenter le tour
+  gameState.currentRound++;
+  
+  if (gameState.currentRound >= gameState.config.rounds) {
+    // Fin de la partie
+    endPictionaryGame(lobbyId);
+    return;
+  }
+  
+  // Équipe suivante qui dessine
+  gameState.drawingTeamIndex = (gameState.drawingTeamIndex + 1) % gameState.teams.length;
+  gameState.drawingTeam = gameState.teams[gameState.drawingTeamIndex];
+  gameState.currentWord = gameState.words[gameState.currentRound]?.word || '';
+  gameState.currentDrawerIndex = 0;
+  gameState.teamsFound = [];
+  gameState.guesses = [];
+  gameState.timeRemaining = gameState.config.timePerRound;
+  gameState.drawerRotationTime = gameState.config.timePerDrawer || 0;
+  
+  // Mettre à jour en DB
+  db.updateDrawingLobbyState(lobbyId, {
+    currentRound: gameState.currentRound,
+    currentWord: gameState.currentWord,
+    roundStartTime: Date.now()
+  });
+  
+  // Broadcaster le nouveau tour
+  io.to(`drawing:${lobbyId}`).emit('pictionary:newRound', {
+    currentRound: gameState.currentRound,
+    totalRounds: gameState.config.rounds,
+    drawingTeam: gameState.drawingTeam,
+    timeRemaining: gameState.config.timePerRound
+  });
+  
+  // Envoyer le nouveau mot à l'équipe qui dessine
+  io.to(`drawing:${lobbyId}`).emit('pictionary:wordReveal', {
+    word: gameState.currentWord,
+    forTeam: gameState.drawingTeam
+  });
+  
+  // Effacer le canvas
+  io.to(`drawing:${lobbyId}`).emit('drawing:clear', {
+    lobbyId,
+    fromServer: true
+  });
+  
+  console.log(`[PICTIONARY] Passage automatique au tour ${gameState.currentRound + 1}/${gameState.config.rounds}`);
+}
+
 // ==================== HELPERS ====================
 
 function shuffleArray(array) {
@@ -1068,6 +1122,26 @@ io.on('connection', (socket) => {
         scores: gameState.scores,
         teamsFound: gameState.teamsFound
       });
+      
+      // Vérifier si toutes les équipes (sauf celle qui dessine) ont trouvé
+      const guessingTeams = gameState.teams.filter(t => t !== gameState.drawingTeam);
+      const allFound = guessingTeams.every(t => gameState.teamsFound.includes(t));
+      
+      if (allFound) {
+        console.log(`[PICTIONARY] Toutes les équipes ont trouvé ! Passage automatique au tour suivant.`);
+        
+        // Broadcaster l'événement "toutes les équipes ont trouvé"
+        io.to(`drawing:${lobbyId}`).emit('pictionary:allTeamsFound', {
+          word: gameState.currentWord,
+          teamsFound: gameState.teamsFound,
+          scores: gameState.scores
+        });
+        
+        // Attendre 5 secondes puis passer au tour suivant automatiquement
+        setTimeout(() => {
+          triggerNextRound(lobbyId);
+        }, 5000);
+      }
     }
     
     callback({ success: true, correct: isCorrect });
@@ -1138,6 +1212,25 @@ io.on('connection', (socket) => {
     const { lobbyId } = data;
     endPictionaryGame(lobbyId);
     callback({ success: true });
+  });
+  
+  // Sauvegarder un dessin (envoyé par le client avant de passer au tour suivant)
+  socket.on('pictionary:saveDrawing', (data, callback) => {
+    const { lobbyId, round, teamName, word, imageData } = data;
+    
+    if (!imageData || !lobbyId) {
+      callback && callback({ success: false, message: 'Données manquantes' });
+      return;
+    }
+    
+    try {
+      const drawingId = db.saveDrawing(lobbyId, round, teamName, word, imageData);
+      console.log(`[PICTIONARY] Dessin sauvegardé: ${drawingId} (${teamName}, round ${round})`);
+      callback && callback({ success: true, drawingId });
+    } catch (error) {
+      console.error('[PICTIONARY] Erreur sauvegarde dessin:', error);
+      callback && callback({ success: false, message: error.message });
+    }
   });
   
   // ==================== DECONNEXION ====================
@@ -1733,6 +1826,43 @@ app.delete('/api/drawing-lobbies/:id', (req, res) => {
   io.to(`drawing:${req.params.id}`).emit('drawingLobby:deleted', { lobbyId: req.params.id });
   
   res.json({ success: true });
+});
+
+// Archiver un lobby terminé
+app.post('/api/drawing-lobbies/:id/archive', (req, res) => {
+  const lobby = db.archiveDrawingLobby(req.params.id);
+  if (lobby) {
+    broadcastGlobalState();
+    res.json({ success: true, lobby });
+  } else {
+    res.status(404).json({ success: false, message: 'Lobby non trouvé' });
+  }
+});
+
+// Récupérer les résultats d'un lobby (dessins, scores, classement)
+app.get('/api/drawing-lobbies/:id/results', (req, res) => {
+  const results = db.getDrawingLobbyResults(req.params.id);
+  if (results) {
+    res.json(results);
+  } else {
+    res.status(404).json({ success: false, message: 'Lobby non trouvé' });
+  }
+});
+
+// Récupérer les dessins d'un lobby
+app.get('/api/drawing-lobbies/:id/drawings', (req, res) => {
+  const drawings = db.getDrawingsByLobby(req.params.id);
+  res.json(drawings);
+});
+
+// Récupérer un dessin spécifique
+app.get('/api/drawings/:id', (req, res) => {
+  const drawing = db.getDrawingById(req.params.id);
+  if (drawing) {
+    res.json(drawing);
+  } else {
+    res.status(404).json({ success: false, message: 'Dessin non trouvé' });
+  }
 });
 
 // Production: servir le client React

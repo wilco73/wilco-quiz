@@ -14,9 +14,9 @@ export const PictionaryConfig = ({
   onCancel 
 }) => {
   const [config, setConfig] = useState({
-    rounds: 3,
-    timePerRound: 180, // secondes
-    timePerDrawer: 30, // rotation toutes les X secondes
+    rounds: 2, // Tours complets (chaque équipe dessine une fois par tour)
+    timePerRound: 180, // secondes par mot
+    timePerDrawer: 0, // rotation toutes les X secondes (0 = pas de rotation)
     pointsFirstGuess: 3,
     pointsOtherGuess: 1,
     pointsDrawingTeam: 2, // si quelqu'un trouve
@@ -28,6 +28,9 @@ export const PictionaryConfig = ({
   // Catégories et difficultés disponibles
   const categories = [...new Set(words.map(w => w.category).filter(Boolean))].sort();
   const difficulties = ['facile', 'moyen', 'difficile'];
+  
+  // Nombre de mots nécessaires = tours × équipes
+  const wordsNeeded = config.rounds * teams.length;
   
   // Filtrer les mots selon les critères
   const filteredWordsCount = words.filter(w => {
@@ -54,7 +57,17 @@ export const PictionaryConfig = ({
     }));
   };
   
-  const canStart = teams.length >= 2 && filteredWordsCount >= config.rounds;
+  const canStart = teams.length >= 2 && filteredWordsCount >= wordsNeeded;
+  
+  // Transformer la config pour le serveur (rounds interne = tours × équipes)
+  const handleStart = () => {
+    const serverConfig = {
+      ...config,
+      rounds: config.rounds * teams.length, // Nombre total de passages
+      actualRounds: config.rounds // Garder le vrai nombre de tours pour l'affichage
+    };
+    onStart(serverConfig);
+  };
   
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-2xl mx-auto">
@@ -63,7 +76,7 @@ export const PictionaryConfig = ({
       </h2>
       
       {/* Statistiques */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 text-center">
           <Users className="w-8 h-8 mx-auto text-purple-600 dark:text-purple-400 mb-2" />
           <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{teams.length}</p>
@@ -73,6 +86,11 @@ export const PictionaryConfig = ({
           <Shuffle className="w-8 h-8 mx-auto text-blue-600 dark:text-blue-400 mb-2" />
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{filteredWordsCount}</p>
           <p className="text-sm text-gray-600 dark:text-gray-400">Mots disponibles</p>
+        </div>
+        <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center">
+          <Clock className="w-8 h-8 mx-auto text-green-600 dark:text-green-400 mb-2" />
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{wordsNeeded}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Mots requis</p>
         </div>
       </div>
       
@@ -91,10 +109,13 @@ export const PictionaryConfig = ({
               onChange={(e) => setConfig(prev => ({ ...prev, rounds: parseInt(e.target.value) || 1 }))}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white"
             />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              1 tour = chaque équipe dessine 1 fois ({config.rounds} tour{config.rounds > 1 ? 's' : ''} × {teams.length} équipes = {wordsNeeded} mots)
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Temps par tour (sec)
+              Temps par mot (sec)
             </label>
             <input
               type="number"
@@ -227,11 +248,11 @@ export const PictionaryConfig = ({
         </div>
       )}
       
-      {filteredWordsCount < config.rounds && (
+      {filteredWordsCount < wordsNeeded && (
         <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-600 rounded-lg p-3 mb-4 flex items-center gap-2">
           <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
           <span className="text-orange-700 dark:text-orange-300 text-sm">
-            Pas assez de mots disponibles ({filteredWordsCount}) pour {config.rounds} tours
+            Pas assez de mots disponibles ({filteredWordsCount}) pour {config.rounds} tour(s) × {teams.length} équipes = {wordsNeeded} mots requis
           </span>
         </div>
       )}
@@ -245,7 +266,7 @@ export const PictionaryConfig = ({
           Annuler
         </button>
         <button
-          onClick={() => onStart(config)}
+          onClick={handleStart}
           disabled={!canStart}
           className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
