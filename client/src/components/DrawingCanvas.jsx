@@ -49,6 +49,7 @@ const DrawingCanvas = ({
   
   // Points du trait en cours
   const currentStrokeRef = useRef([]);
+  const lastPointRef = useRef({ x: 0, y: 0 });
   
   // Initialisation du canvas
   useEffect(() => {
@@ -71,6 +72,14 @@ const DrawingCanvas = ({
     saveToHistory();
   }, [width, height, backgroundColor]);
   
+  // Convertir couleur hex en rgba
+  const hexToRgba = (hex, alpha) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+  
   // Mettre à jour le contexte quand les outils changent
   useEffect(() => {
     if (contextRef.current) {
@@ -80,8 +89,9 @@ const DrawingCanvas = ({
         contextRef.current.strokeStyle = backgroundColor;
         contextRef.current.lineWidth = brushSize * 3;
       } else {
-        contextRef.current.globalAlpha = alphaValue;
-        contextRef.current.strokeStyle = color;
+        // Utiliser rgba pour la transparence plutôt que globalAlpha
+        contextRef.current.globalAlpha = 1;
+        contextRef.current.strokeStyle = hexToRgba(color, alphaValue);
         contextRef.current.lineWidth = brushSize;
       }
     }
@@ -246,10 +256,9 @@ const DrawingCanvas = ({
       return;
     }
     
-    contextRef.current.beginPath();
-    contextRef.current.moveTo(x, y);
-    
+    // Stocker le point de départ
     currentStrokeRef.current = [{ x, y }];
+    lastPointRef.current = { x, y };
     setIsDrawing(true);
   };
   
@@ -259,10 +268,16 @@ const DrawingCanvas = ({
     e.preventDefault();
     
     const { x, y } = getCoordinates(e);
+    const ctx = contextRef.current;
     
-    contextRef.current.lineTo(x, y);
-    contextRef.current.stroke();
+    // Dessiner un segment du dernier point au nouveau point
+    ctx.beginPath();
+    ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
+    ctx.lineTo(x, y);
+    ctx.stroke();
     
+    // Mettre à jour le dernier point
+    lastPointRef.current = { x, y };
     currentStrokeRef.current.push({ x, y });
     
     // Envoyer en temps réel si collaboratif

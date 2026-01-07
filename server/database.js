@@ -1372,6 +1372,173 @@ function deleteDrawingGame(id) {
   run(`DELETE FROM drawing_games WHERE id = ?`, [id]);
 }
 
+// ==================== DRAWING LOBBIES ====================
+
+function getAllDrawingLobbies() {
+  const lobbies = queryAll(`
+    SELECT dl.*, dg.title as game_title, dg.game_type
+    FROM drawing_lobbies dl
+    LEFT JOIN drawing_games dg ON dl.game_id = dg.id
+    ORDER BY dl.created_at DESC
+  `);
+  
+  return lobbies.map(lobby => ({
+    ...lobby,
+    config: lobby.config ? JSON.parse(lobby.config) : null,
+    drawer_rotation_order: lobby.drawer_rotation_order ? JSON.parse(lobby.drawer_rotation_order) : null,
+    participants: getDrawingLobbyParticipants(lobby.id)
+  }));
+}
+
+function getDrawingLobbyById(id) {
+  const lobby = queryOne(`
+    SELECT dl.*, dg.title as game_title, dg.game_type
+    FROM drawing_lobbies dl
+    LEFT JOIN drawing_games dg ON dl.game_id = dg.id
+    WHERE dl.id = ?
+  `, [id]);
+  
+  if (!lobby) return null;
+  
+  return {
+    ...lobby,
+    config: lobby.config ? JSON.parse(lobby.config) : null,
+    drawer_rotation_order: lobby.drawer_rotation_order ? JSON.parse(lobby.drawer_rotation_order) : null,
+    participants: getDrawingLobbyParticipants(lobby.id)
+  };
+}
+
+function createDrawingLobby(data) {
+  const id = data.id || `drawing-lobby-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
+  run(`
+    INSERT INTO drawing_lobbies (id, game_id, status, config)
+    VALUES (?, ?, 'waiting', ?)
+  `, [id, data.game_id || null, JSON.stringify(data.config || {})]);
+  
+  saveDatabase();
+  return getDrawingLobbyById(id);
+}
+
+function getDrawingLobbyParticipants(lobbyId) {
+  return queryAll(`
+    SELECT dlp.*, p.pseudo, p.avatar
+    FROM drawing_lobby_participants dlp
+    JOIN participants p ON dlp.participant_id = p.id
+    WHERE dlp.lobby_id = ?
+  `, [lobbyId]);
+}
+
+function joinDrawingLobby(lobbyId, participantId, teamName) {
+  // Vérifier si déjà présent
+  const existing = queryOne(`
+    SELECT * FROM drawing_lobby_participants 
+    WHERE lobby_id = ? AND participant_id = ?
+  `, [lobbyId, participantId]);
+  
+  if (existing) {
+    // Mettre à jour l'équipe si changée
+    run(`UPDATE drawing_lobby_participants SET team_name = ? WHERE lobby_id = ? AND participant_id = ?`,
+      [teamName, lobbyId, participantId]);
+  } else {
+    run(`
+      INSERT INTO drawing_lobby_participants (lobby_id, participant_id, team_name)
+      VALUES (?, ?, ?)
+    `, [lobbyId, participantId, teamName]);
+  }
+  
+  saveDatabase();
+  return getDrawingLobbyById(lobbyId);
+}
+
+function leaveDrawingLobby(lobbyId, participantId) {
+  run(`DELETE FROM drawing_lobby_participants WHERE lobby_id = ? AND participant_id = ?`,
+    [lobbyId, participantId]);
+  saveDatabase();
+  return getDrawingLobbyById(lobbyId);
+}
+
+function startDrawingLobby(lobbyId, gameState) {
+  run(`
+    UPDATE drawing_lobbies 
+    SET status = 'playing',
+        current_round = ?,
+        current_word = ?,
+        current_drawer_index = ?,
+        drawer_rotation_order = ?,
+        round_start_time = ?,
+        config = ?
+    WHERE id = ?
+  `, [
+    gameState.currentRound || 0,
+    gameState.currentWord || '',
+    gameState.currentDrawerIndex || 0,
+    JSON.stringify(gameState.drawerRotationOrder || []),
+    Date.now(),
+    JSON.stringify(gameState.config || {}),
+    lobbyId
+  ]);
+  
+  saveDatabase();
+  return getDrawingLobbyById(lobbyId);
+}
+
+function updateDrawingLobbyState(lobbyId, updates) {
+  const setClauses = [];
+  const values = [];
+  
+  if (updates.status !== undefined) {
+    setClauses.push('status = ?');
+    values.push(updates.status);
+  }
+  if (updates.currentRound !== undefined) {
+    setClauses.push('current_round = ?');
+    values.push(updates.currentRound);
+  }
+  if (updates.currentWord !== undefined) {
+    setClauses.push('current_word = ?');
+    values.push(updates.currentWord);
+  }
+  if (updates.currentDrawerIndex !== undefined) {
+    setClauses.push('current_drawer_index = ?');
+    values.push(updates.currentDrawerIndex);
+  }
+  if (updates.roundStartTime !== undefined) {
+    setClauses.push('round_start_time = ?');
+    values.push(updates.roundStartTime);
+  }
+  
+  if (setClauses.length > 0) {
+    values.push(lobbyId);
+    run(`UPDATE drawing_lobbies SET ${setClauses.join(', ')} WHERE id = ?`, values);
+    saveDatabase();
+  }
+  
+  return getDrawingLobbyById(lobbyId);
+}
+
+function finishDrawingLobby(lobbyId) {
+  run(`UPDATE drawing_lobbies SET status = 'finished' WHERE id = ?`, [lobbyId]);
+  saveDatabase();
+  return getDrawingLobbyById(lobbyId);
+}
+
+function deleteDrawingLobby(id) {
+  run(`DELETE FROM drawing_lobby_participants WHERE lobby_id = ?`, [id]);
+  run(`DELETE FROM drawing_scores WHERE lobby_id = ?`, [id]);
+  run(`DELETE FROM drawings WHERE lobby_id = ?`, [id]);
+  run(`DELETE FROM drawing_lobbies WHERE id = ?`, [id]);
+  saveDatabase();
+}
+
+function addDrawingScore(lobbyId, teamName, points, reason, round) {
+  run(`
+    INSERT INTO drawing_scores (lobby_id, team_name, points, reason, round)
+    VALUES (?, ?, ?, ?, ?)
+  `, [lobbyId, teamName, points, reason, round]);
+  saveDatabase();
+}
+
 module.exports = {
   initDatabase,
   getDatabase,
@@ -1471,5 +1638,18 @@ module.exports = {
   getDrawingGameById,
   createDrawingGame,
   updateDrawingGame,
-  deleteDrawingGame
+  deleteDrawingGame,
+  
+  // Drawing Lobbies (Pictionary/Téléphone)
+  getAllDrawingLobbies,
+  getDrawingLobbyById,
+  createDrawingLobby,
+  joinDrawingLobby,
+  leaveDrawingLobby,
+  startDrawingLobby,
+  updateDrawingLobbyState,
+  finishDrawingLobby,
+  deleteDrawingLobby,
+  getDrawingLobbyParticipants,
+  addDrawingScore
 };

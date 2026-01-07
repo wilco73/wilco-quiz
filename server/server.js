@@ -78,14 +78,14 @@ function startPictionaryTimer(lobbyId) {
         gameState.currentDrawerIndex++;
         gameState.drawerRotationTime = gameState.config.timePerDrawer;
         
-        io.to(`lobby:${lobbyId}`).emit('pictionary:drawerRotation', {
+        io.to(`drawing:${lobbyId}`).emit('pictionary:drawerRotation', {
           newDrawerIndex: gameState.currentDrawerIndex
         });
       }
     }
     
     // Broadcaster le temps restant
-    io.to(`lobby:${lobbyId}`).emit('pictionary:timerTick', {
+    io.to(`drawing:${lobbyId}`).emit('pictionary:timerTick', {
       timeRemaining: gameState.timeRemaining,
       drawerRotationTime: gameState.drawerRotationTime
     });
@@ -93,7 +93,7 @@ function startPictionaryTimer(lobbyId) {
     // Temps écoulé pour ce tour
     if (gameState.timeRemaining <= 0) {
       // Révéler le mot
-      io.to(`lobby:${lobbyId}`).emit('pictionary:timeUp', {
+      io.to(`drawing:${lobbyId}`).emit('pictionary:timeUp', {
         word: gameState.currentWord,
         teamsFound: gameState.teamsFound
       });
@@ -128,8 +128,11 @@ function endPictionaryGame(lobbyId) {
   console.log(`[PICTIONARY] Partie terminée - Lobby: ${lobbyId}`);
   console.log('[PICTIONARY] Classement:', ranking);
   
+  // Mettre à jour en DB
+  db.finishDrawingLobby(lobbyId);
+  
   // Broadcaster la fin de partie
-  io.to(`lobby:${lobbyId}`).emit('pictionary:ended', {
+  io.to(`drawing:${lobbyId}`).emit('pictionary:ended', {
     scores: gameState.scores,
     ranking,
     totalRounds: gameState.config.rounds
@@ -797,8 +800,8 @@ io.on('connection', (socket) => {
   socket.on('drawing:stroke', (data) => {
     const { lobbyId, teamId, odId, points, color, width, opacity, complete } = data;
     
-    // Broadcaster à tous les autres dans le lobby
-    socket.to(`lobby:${lobbyId}`).emit('drawing:stroke', {
+    // Broadcaster à tous les autres dans le lobby (drawing: ou lobby:)
+    socket.to(`drawing:${lobbyId}`).emit('drawing:stroke', {
       lobbyId,
       teamId,
       odId,
@@ -815,7 +818,7 @@ io.on('connection', (socket) => {
   socket.on('drawing:fill', (data) => {
     const { lobbyId, teamId, odId, x, y, color, opacity } = data;
     
-    socket.to(`lobby:${lobbyId}`).emit('drawing:fill', {
+    socket.to(`drawing:${lobbyId}`).emit('drawing:fill', {
       lobbyId,
       teamId,
       odId,
@@ -831,7 +834,7 @@ io.on('connection', (socket) => {
   socket.on('drawing:clear', (data) => {
     const { lobbyId, teamId, odId } = data;
     
-    socket.to(`lobby:${lobbyId}`).emit('drawing:clear', {
+    socket.to(`drawing:${lobbyId}`).emit('drawing:clear', {
       lobbyId,
       teamId,
       odId,
@@ -839,7 +842,158 @@ io.on('connection', (socket) => {
     });
   });
   
+  // ==================== DRAWING LOBBY SYSTEM ====================
+  
+  // Rejoindre un lobby de dessin
+  socket.on('drawingLobby:join', (data, callback) => {
+    const { lobbyId, odId, pseudo, teamName } = data;
+    
+    // Rejoindre la room Socket
+    socket.join(`drawing:${lobbyId}`);
+    socket.drawingLobbyId = lobbyId;
+    socket.odId = odId;
+    
+    // Enregistrer dans la DB
+    const lobby = db.joinDrawingLobby(lobbyId, odId, teamName);
+    
+    if (!lobby) {
+      callback({ success: false, message: 'Lobby non trouvé' });
+      return;
+    }
+    
+    console.log(`[DRAWING] ${pseudo} (${teamName}) a rejoint le lobby ${lobbyId}`);
+    
+    // Notifier les autres
+    socket.to(`drawing:${lobbyId}`).emit('drawingLobby:participantJoined', {
+      odId,
+      pseudo,
+      teamName
+    });
+    
+    // Récupérer l'état du jeu en cours si existe
+    const gameState = pictionaryGames.get(lobbyId);
+    
+    callback({ 
+      success: true, 
+      lobby,
+      gameState: gameState ? {
+        status: gameState.status,
+        currentRound: gameState.currentRound,
+        totalRounds: gameState.config?.rounds,
+        drawingTeam: gameState.drawingTeam,
+        timeRemaining: gameState.timeRemaining,
+        scores: gameState.scores,
+        teamsFound: gameState.teamsFound,
+        currentWord: teamName === gameState.drawingTeam ? gameState.currentWord : null
+      } : null
+    });
+    
+    // Broadcaster l'état du lobby
+    io.to(`drawing:${lobbyId}`).emit('drawingLobby:updated', { lobby });
+  });
+  
+  // Quitter un lobby de dessin
+  socket.on('drawingLobby:leave', (data, callback) => {
+    const { lobbyId, odId } = data;
+    
+    socket.leave(`drawing:${lobbyId}`);
+    const lobby = db.leaveDrawingLobby(lobbyId, odId);
+    
+    socket.to(`drawing:${lobbyId}`).emit('drawingLobby:participantLeft', { odId });
+    io.to(`drawing:${lobbyId}`).emit('drawingLobby:updated', { lobby });
+    
+    callback({ success: true });
+  });
+  
   // ==================== PICTIONARY GAME ====================
+  
+  // Démarrer une partie de Pictionary (admin)
+  socket.on('pictionary:start', (data, callback) => {
+    const { lobbyId, config, words } = data;
+    
+    // Récupérer le lobby et ses participants
+    const lobby = db.getDrawingLobbyById(lobbyId);
+    if (!lobby) {
+      callback({ success: false, message: 'Lobby non trouvé' });
+      return;
+    }
+    
+    // Obtenir les équipes uniques
+    const teams = [...new Set(lobby.participants.map(p => p.team_name).filter(Boolean))];
+    
+    if (teams.length < 2) {
+      callback({ success: false, message: 'Il faut au moins 2 équipes' });
+      return;
+    }
+    
+    // Mélanger les équipes pour l'ordre de passage
+    const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
+    
+    // Sélectionner des mots aléatoires
+    const selectedWords = [...words].sort(() => Math.random() - 0.5).slice(0, config.rounds);
+    
+    if (selectedWords.length < config.rounds) {
+      callback({ success: false, message: `Pas assez de mots (${selectedWords.length}/${config.rounds})` });
+      return;
+    }
+    
+    // Créer l'état du jeu
+    const gameState = {
+      lobbyId,
+      config,
+      teams: shuffledTeams,
+      words: selectedWords,
+      currentRound: 0,
+      currentWord: selectedWords[0]?.word || '',
+      drawingTeam: shuffledTeams[0],
+      drawingTeamIndex: 0,
+      currentDrawerIndex: 0,
+      scores: {},
+      teamsFound: [],
+      guesses: [],
+      timeRemaining: config.timePerRound,
+      drawerRotationTime: config.timePerDrawer || 0,
+      status: 'playing',
+      startedAt: Date.now()
+    };
+    
+    // Initialiser les scores
+    shuffledTeams.forEach(team => {
+      gameState.scores[team] = 0;
+    });
+    
+    // Stocker l'état
+    pictionaryGames.set(lobbyId, gameState);
+    
+    // Mettre à jour le lobby en DB
+    db.startDrawingLobby(lobbyId, gameState);
+    
+    // Démarrer le timer
+    startPictionaryTimer(lobbyId);
+    
+    console.log(`[PICTIONARY] Partie démarrée - Lobby: ${lobbyId}, ${config.rounds} tours, Équipes: ${shuffledTeams.join(', ')}`);
+    
+    // Broadcaster le démarrage à tous dans le lobby
+    io.to(`drawing:${lobbyId}`).emit('pictionary:started', {
+      lobbyId,
+      config,
+      teams: shuffledTeams,
+      currentRound: 0,
+      totalRounds: config.rounds,
+      drawingTeam: shuffledTeams[0],
+      timeRemaining: config.timePerRound,
+      scores: gameState.scores,
+      teamsFound: []
+    });
+    
+    // Envoyer le mot à l'équipe qui dessine
+    io.to(`drawing:${lobbyId}`).emit('pictionary:wordReveal', {
+      word: selectedWords[0]?.word,
+      forTeam: shuffledTeams[0]
+    });
+    
+    callback({ success: true, lobbyId });
+  });
   
   // Proposition de réponse Pictionary
   socket.on('pictionary:guess', (data, callback) => {
@@ -871,17 +1025,16 @@ io.on('connection', (socket) => {
     const isCorrect = normalizedGuess === normalizedWord;
     
     // Enregistrer la proposition
-    const guessRecord = {
+    gameState.guesses.push({
       odId,
       teamName,
       guess,
       correct: isCorrect,
       timestamp: Date.now()
-    };
-    gameState.guesses.push(guessRecord);
+    });
     
     // Broadcaster la proposition à tous
-    io.to(`lobby:${lobbyId}`).emit('pictionary:guessResult', {
+    io.to(`drawing:${lobbyId}`).emit('pictionary:guessResult', {
       odId,
       teamName,
       guess,
@@ -904,8 +1057,14 @@ io.on('connection', (socket) => {
       
       console.log(`[PICTIONARY] ${teamName} a trouvé "${gameState.currentWord}" ! (+${points} pts)`);
       
+      // Sauvegarder en DB
+      db.addDrawingScore(lobbyId, teamName, points, 'guess', gameState.currentRound);
+      if (isFirst && gameState.config.pointsDrawingTeam > 0) {
+        db.addDrawingScore(lobbyId, gameState.drawingTeam, gameState.config.pointsDrawingTeam, 'drawing', gameState.currentRound);
+      }
+      
       // Broadcaster la mise à jour des scores
-      io.to(`lobby:${lobbyId}`).emit('pictionary:scoreUpdate', {
+      io.to(`drawing:${lobbyId}`).emit('pictionary:scoreUpdate', {
         scores: gameState.scores,
         teamsFound: gameState.teamsFound
       });
@@ -914,85 +1073,7 @@ io.on('connection', (socket) => {
     callback({ success: true, correct: isCorrect });
   });
   
-  // Démarrer une partie de Pictionary
-  socket.on('pictionary:start', (data, callback) => {
-    const { lobbyId, config, teams, words } = data;
-    
-    // Mélanger les équipes pour l'ordre de passage
-    const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
-    
-    // Sélectionner des mots aléatoires
-    const selectedWords = [...words].sort(() => Math.random() - 0.5).slice(0, config.rounds);
-    
-    // Créer l'état du jeu
-    const gameState = {
-      lobbyId,
-      config,
-      teams: shuffledTeams,
-      words: selectedWords,
-      currentRound: 0,
-      currentWord: selectedWords[0]?.word || '',
-      drawingTeam: shuffledTeams[0],
-      drawingTeamIndex: 0,
-      currentDrawerIndex: 0,
-      scores: {},
-      teamsFound: [],
-      guesses: [],
-      timeRemaining: config.timePerRound,
-      drawerRotationTime: config.timePerDrawer,
-      status: 'playing',
-      startedAt: Date.now()
-    };
-    
-    // Initialiser les scores
-    shuffledTeams.forEach(team => {
-      gameState.scores[team] = 0;
-    });
-    
-    // Stocker l'état
-    pictionaryGames.set(lobbyId, gameState);
-    
-    console.log(`[PICTIONARY] Partie démarrée - Lobby: ${lobbyId}, ${config.rounds} tours, Équipes: ${shuffledTeams.join(', ')}`);
-    
-    // D'abord, broadcaster l'invitation à TOUS les clients connectés
-    // Les participants des équipes concernées rejoindront automatiquement
-    io.emit('pictionary:invite', {
-      lobbyId,
-      teams: shuffledTeams,
-      config
-    });
-    
-    // Attendre un peu que les clients rejoignent le room
-    setTimeout(() => {
-      // Démarrer le timer
-      startPictionaryTimer(lobbyId);
-      
-      // Broadcaster le démarrage à ceux qui ont rejoint le lobby
-      io.to(`lobby:${lobbyId}`).emit('pictionary:started', {
-        lobbyId,
-        config,
-        teams: shuffledTeams,
-        currentRound: 0,
-        totalRounds: config.rounds,
-        drawingTeam: shuffledTeams[0],
-        timeRemaining: config.timePerRound,
-        scores: gameState.scores,
-        teamsFound: []
-      });
-      
-      // Envoyer le mot à l'équipe qui dessine
-      io.to(`lobby:${lobbyId}`).emit('pictionary:wordReveal', {
-        word: selectedWords[0]?.word,
-        forTeam: shuffledTeams[0]
-      });
-      
-      console.log(`[PICTIONARY] Événements envoyés au lobby:${lobbyId}`);
-    }, 500);
-    
-    callback({ success: true, lobbyId });
-  });
-  
-  // Passer au tour suivant
+  // Passer au tour suivant (admin)
   socket.on('pictionary:nextRound', (data, callback) => {
     const { lobbyId } = data;
     
@@ -1018,25 +1099,33 @@ io.on('connection', (socket) => {
     gameState.currentWord = gameState.words[gameState.currentRound]?.word || '';
     gameState.currentDrawerIndex = 0;
     gameState.teamsFound = [];
+    gameState.guesses = [];
     gameState.timeRemaining = gameState.config.timePerRound;
-    gameState.drawerRotationTime = gameState.config.timePerDrawer;
+    gameState.drawerRotationTime = gameState.config.timePerDrawer || 0;
+    
+    // Mettre à jour en DB
+    db.updateDrawingLobbyState(lobbyId, {
+      currentRound: gameState.currentRound,
+      currentWord: gameState.currentWord,
+      roundStartTime: Date.now()
+    });
     
     // Broadcaster le nouveau tour
-    io.to(`lobby:${lobbyId}`).emit('pictionary:newRound', {
-      currentRound: gameState.currentRound + 1,
+    io.to(`drawing:${lobbyId}`).emit('pictionary:newRound', {
+      currentRound: gameState.currentRound,
       totalRounds: gameState.config.rounds,
       drawingTeam: gameState.drawingTeam,
       timeRemaining: gameState.config.timePerRound
     });
     
     // Envoyer le nouveau mot à l'équipe qui dessine
-    io.to(`lobby:${lobbyId}`).emit('pictionary:wordReveal', {
+    io.to(`drawing:${lobbyId}`).emit('pictionary:wordReveal', {
       word: gameState.currentWord,
       forTeam: gameState.drawingTeam
     });
     
     // Effacer le canvas
-    io.to(`lobby:${lobbyId}`).emit('drawing:clear', {
+    io.to(`drawing:${lobbyId}`).emit('drawing:clear', {
       lobbyId,
       fromServer: true
     });
@@ -1044,7 +1133,7 @@ io.on('connection', (socket) => {
     callback({ success: true, ended: false });
   });
   
-  // Terminer la partie
+  // Terminer la partie (admin)
   socket.on('pictionary:end', (data, callback) => {
     const { lobbyId } = data;
     endPictionaryGame(lobbyId);
@@ -1605,6 +1694,44 @@ app.put('/api/drawing-games/:id', (req, res) => {
 app.delete('/api/drawing-games/:id', (req, res) => {
   db.deleteDrawingGame(req.params.id);
   broadcastGlobalState();
+  res.json({ success: true });
+});
+
+// ==================== DRAWING LOBBIES API ====================
+
+app.get('/api/drawing-lobbies', (req, res) => {
+  res.json(db.getAllDrawingLobbies());
+});
+
+app.get('/api/drawing-lobbies/:id', (req, res) => {
+  const lobby = db.getDrawingLobbyById(req.params.id);
+  if (lobby) {
+    res.json(lobby);
+  } else {
+    res.status(404).json({ success: false, message: 'Lobby non trouvé' });
+  }
+});
+
+app.post('/api/drawing-lobbies', (req, res) => {
+  const lobby = db.createDrawingLobby(req.body);
+  broadcastGlobalState();
+  res.json({ success: true, lobby });
+});
+
+app.delete('/api/drawing-lobbies/:id', (req, res) => {
+  // Arrêter le timer si en cours
+  if (pictionaryTimers.has(req.params.id)) {
+    clearInterval(pictionaryTimers.get(req.params.id));
+    pictionaryTimers.delete(req.params.id);
+  }
+  pictionaryGames.delete(req.params.id);
+  
+  db.deleteDrawingLobby(req.params.id);
+  broadcastGlobalState();
+  
+  // Notifier tous les participants
+  io.to(`drawing:${req.params.id}`).emit('drawingLobby:deleted', { lobbyId: req.params.id });
+  
   res.json({ success: true });
 });
 

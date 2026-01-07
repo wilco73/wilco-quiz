@@ -232,11 +232,31 @@ export function useSocket() {
     });
   }, []);
   
-  // Pictionary
-  const startPictionary = useCallback((lobbyId, config, teams, words) => {
+  // ==================== DRAWING LOBBY ====================
+  
+  const joinDrawingLobby = useCallback((lobbyId, odId, pseudo, teamName) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { 
+        resolve({ success: false, message: 'Socket non connecté' }); 
+        return; 
+      }
+      socketRef.current.emit('drawingLobby:join', { lobbyId, odId, pseudo, teamName }, resolve);
+    });
+  }, []);
+  
+  const leaveDrawingLobby = useCallback((lobbyId, odId) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
-      socketRef.current.emit('pictionary:start', { lobbyId, config, teams, words }, resolve);
+      socketRef.current.emit('drawingLobby:leave', { lobbyId, odId }, resolve);
+    });
+  }, []);
+  
+  // ==================== PICTIONARY ====================
+  
+  const startPictionary = useCallback((lobbyId, config, words) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('pictionary:start', { lobbyId, config, words }, resolve);
     });
   }, []);
   
@@ -311,6 +331,9 @@ export function useSocket() {
     joinMonitoring,
     leaveMonitoring,
     resetScores,
+    // Drawing Lobby
+    joinDrawingLobby,
+    leaveDrawingLobby,
     // Pictionary
     startPictionary,
     pictionaryGuess,

@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { LogOut, UserPlus, Trophy, Users, Star, User, History } from 'lucide-react';
+import { LogOut, UserPlus, Trophy, Users, Star, User, History, Palette } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 import Avatar from './Avatar';
 
-const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJoinLobby, onViewScoreboard, onViewProfile, onViewHistory, onLogout }) => {
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+
+const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJoinLobby, onJoinDrawingLobby, onViewScoreboard, onViewProfile, onViewHistory, onLogout }) => {
   const availableLobbies = lobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
   const userTeam = teams.find(t => t.name === currentUser.teamName);
+  const [drawingLobbies, setDrawingLobbies] = useState([]);
   
   // Compter les lobbies terminés pour le badge
   const myFinishedLobbiesCount = lobbies.filter(l => 
@@ -225,13 +228,78 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
           {availableLobbies.length === 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-12 text-center">
               <Trophy className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-              <p className="text-xl text-gray-600 dark:text-gray-400">Aucune salle disponible</p>
+              <p className="text-xl text-gray-600 dark:text-gray-400">Aucune salle de quiz disponible</p>
               <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
                 Revenez plus tard ou contactez l'administrateur
               </p>
             </div>
           )}
         </div>
+        
+        {/* Section Jeux de Dessin */}
+        {drawingLobbies.length > 0 && (
+          <>
+            <h3 className="text-xl font-bold mb-4 mt-8 dark:text-white flex items-center gap-2">
+              <Palette className="w-6 h-6 text-purple-500" />
+              Jeux de Dessin
+            </h3>
+            <div className="grid gap-4">
+              {drawingLobbies.map(lobby => {
+                const isPlaying = lobby.status === 'playing';
+                const participantCount = lobby.participants?.length || 0;
+                
+                return (
+                  <div 
+                    key={lobby.id} 
+                    className={`bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition ${
+                      isPlaying ? 'border-2 border-green-400 dark:border-green-500' : 'border-2 border-purple-200 dark:border-purple-700'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                        🎨 Pictionary
+                      </h4>
+                      <span className={`px-3 py-1 text-sm rounded-full font-semibold ${
+                        isPlaying 
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 animate-pulse'
+                          : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                      }`}>
+                        {isPlaying ? '🔴 En cours' : '⏳ En attente'}
+                      </span>
+                    </div>
+                    
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                      Dessinez pour faire deviner des mots à votre équipe !
+                    </p>
+                    
+                    <div className="flex justify-between items-center">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className="flex items-center gap-1">
+                          <Users className="w-4 h-4" />
+                          {participantCount} participant(s)
+                        </p>
+                      </div>
+                      
+                      {currentUser.teamName ? (
+                        <button
+                          onClick={() => onJoinDrawingLobby && onJoinDrawingLobby(lobby)}
+                          className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          {isPlaying ? 'Rejoindre' : 'Entrer'}
+                        </button>
+                      ) : (
+                        <p className="text-orange-600 dark:text-orange-400 text-sm">
+                          Rejoignez une équipe d'abord
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
