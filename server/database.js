@@ -267,7 +267,7 @@ function createTables() {
   db.run(`
     CREATE TABLE IF NOT EXISTS drawing_lobbies (
       id TEXT PRIMARY KEY,
-      game_id TEXT NOT NULL,
+      game_id TEXT,
       status TEXT DEFAULT 'waiting',
       current_round INTEGER DEFAULT 0,
       current_drawer_index INTEGER DEFAULT 0,
@@ -330,6 +330,140 @@ function createTables() {
   db.run(`CREATE INDEX IF NOT EXISTS idx_quiz_questions_quiz ON quiz_questions(quiz_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_drawing_words_category ON drawing_words(category)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_drawing_references_category ON drawing_references(category)`);
+  
+  // Migration: Corriger la table drawing_lobbies si game_id est NOT NULL
+  migrateDrawingLobbies();
+}
+
+/**
+ * Migration pour rendre game_id nullable dans drawing_lobbies
+ */
+function migrateDrawingLobbies() {
+  try {
+    // Vérifier si la migration est nécessaire en essayant d'insérer un NULL
+    // Si ça échoue, on fait la migration
+    const testId = '_migration_test_' + Date.now();
+    try {
+      db.run(`INSERT INTO drawing_lobbies (id, game_id, status) VALUES (?, NULL, 'test')`, [testId]);
+      // Ça a marché, supprimer la ligne de test
+      db.run(`DELETE FROM drawing_lobbies WHERE id = ?`, [testId]);
+      console.log('[OK] Table drawing_lobbies OK (game_id nullable)');
+    } catch (e) {
+      if (e.message && e.message.includes('NOT NULL constraint failed')) {
+        console.log('[MIGRATION] Mise à jour de drawing_lobbies pour rendre game_id nullable...');
+        
+        // Sauvegarder les données existantes
+        const existingData = [];
+        try {
+          const stmt = db.prepare('SELECT * FROM drawing_lobbies');
+          while (stmt.step()) {
+            existingData.push(stmt.getAsObject());
+          }
+          stmt.free();
+        } catch (err) {
+          // Table vide ou inexistante
+        }
+        
+        // Sauvegarder les participants
+        const existingParticipants = [];
+        try {
+          const stmt2 = db.prepare('SELECT * FROM drawing_lobby_participants');
+          while (stmt2.step()) {
+            existingParticipants.push(stmt2.getAsObject());
+          }
+          stmt2.free();
+        } catch (err) {
+          // Table vide ou inexistante
+        }
+        
+        // Supprimer les tables liées (dans l'ordre des dépendances)
+        db.run('DROP TABLE IF EXISTS drawing_scores');
+        db.run('DROP TABLE IF EXISTS drawings');
+        db.run('DROP TABLE IF EXISTS drawing_lobby_participants');
+        db.run('DROP TABLE IF EXISTS drawing_lobbies');
+        
+        // Recréer la table avec game_id nullable
+        db.run(`
+          CREATE TABLE drawing_lobbies (
+            id TEXT PRIMARY KEY,
+            game_id TEXT,
+            status TEXT DEFAULT 'waiting',
+            current_round INTEGER DEFAULT 0,
+            current_drawer_index INTEGER DEFAULT 0,
+            current_word TEXT,
+            round_start_time INTEGER,
+            drawer_rotation_order TEXT,
+            config TEXT,
+            created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+            FOREIGN KEY (game_id) REFERENCES drawing_games(id)
+          )
+        `);
+        
+        // Recréer drawing_lobby_participants
+        db.run(`
+          CREATE TABLE drawing_lobby_participants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lobby_id TEXT NOT NULL,
+            participant_id TEXT NOT NULL,
+            team_name TEXT,
+            is_drawing INTEGER DEFAULT 0,
+            FOREIGN KEY (lobby_id) REFERENCES drawing_lobbies(id) ON DELETE CASCADE,
+            FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE,
+            UNIQUE(lobby_id, participant_id)
+          )
+        `);
+        
+        // Recréer drawings
+        db.run(`
+          CREATE TABLE drawings (
+            id TEXT PRIMARY KEY,
+            lobby_id TEXT NOT NULL,
+            round INTEGER NOT NULL,
+            team_id TEXT,
+            image_data TEXT,
+            word_or_reference TEXT,
+            source_drawing_id TEXT,
+            created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+            FOREIGN KEY (lobby_id) REFERENCES drawing_lobbies(id) ON DELETE CASCADE
+          )
+        `);
+        
+        // Recréer drawing_scores
+        db.run(`
+          CREATE TABLE drawing_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lobby_id TEXT NOT NULL,
+            team_name TEXT NOT NULL,
+            round INTEGER,
+            points INTEGER DEFAULT 0,
+            reason TEXT,
+            created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+            FOREIGN KEY (lobby_id) REFERENCES drawing_lobbies(id) ON DELETE CASCADE
+          )
+        `);
+        
+        // Restaurer les données si il y en avait
+        for (const lobby of existingData) {
+          db.run(`
+            INSERT INTO drawing_lobbies (id, game_id, status, current_round, current_drawer_index, current_word, round_start_time, drawer_rotation_order, config, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [lobby.id, lobby.game_id, lobby.status, lobby.current_round, lobby.current_drawer_index, lobby.current_word, lobby.round_start_time, lobby.drawer_rotation_order, lobby.config, lobby.created_at]);
+        }
+        
+        for (const participant of existingParticipants) {
+          db.run(`
+            INSERT INTO drawing_lobby_participants (lobby_id, participant_id, team_name, is_drawing)
+            VALUES (?, ?, ?, ?)
+          `, [participant.lobby_id, participant.participant_id, participant.team_name, participant.is_drawing]);
+        }
+        
+        saveDatabase();
+        console.log('[OK] Migration drawing_lobbies terminee');
+      }
+    }
+  } catch (e) {
+    console.error('[ERREUR] Migration drawing_lobbies:', e.message);
+  }
 }
 
 /**
@@ -1375,7 +1509,7 @@ function deleteDrawingGame(id) {
 // ==================== DRAWING LOBBIES ====================
 
 function getAllDrawingLobbies() {
-  const lobbies = queryAll(`
+  const lobbies = query(`
     SELECT dl.*, dg.title as game_title, dg.game_type
     FROM drawing_lobbies dl
     LEFT JOIN drawing_games dg ON dl.game_id = dg.id
@@ -1421,7 +1555,7 @@ function createDrawingLobby(data) {
 }
 
 function getDrawingLobbyParticipants(lobbyId) {
-  return queryAll(`
+  return query(`
     SELECT dlp.*, p.pseudo, p.avatar
     FROM drawing_lobby_participants dlp
     JOIN participants p ON dlp.participant_id = p.id
