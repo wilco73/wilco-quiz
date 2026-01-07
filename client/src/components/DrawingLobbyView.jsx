@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Clock, Trophy, Send, Check, Users, Crown, LogOut,
-  AlertCircle, Palette
+  AlertCircle, Palette, ChevronLeft, ChevronRight, Download, Image
 } from 'lucide-react';
 import DrawingCanvas from './DrawingCanvas';
 
@@ -20,6 +20,7 @@ const DrawingLobbyView = ({
   const [hasFoundWord, setHasFoundWord] = useState(false);
   const [externalStrokes, setExternalStrokes] = useState([]);
   const [showAllTeamsPopup, setShowAllTeamsPopup] = useState(null);
+  const [showTimeUpPopup, setShowTimeUpPopup] = useState(null);
   const [clearSignal, setClearSignal] = useState(0);
   const inputRef = useRef(null);
   const canvasRef = useRef(null);
@@ -175,7 +176,20 @@ const DrawingLobbyView = ({
     
     // Temps écoulé
     const handleTimeUp = (data) => {
-      // Le mot sera révélé
+      console.log('[DRAWING] TimeUp reçu:', data);
+      // Sauvegarder le dessin si c'est notre équipe qui dessine
+      saveCurrentDrawing(data.word, data.drawingTeam);
+      
+      setShowTimeUpPopup({
+        word: data.word,
+        teamsFound: data.teamsFound || [],
+        scores: data.scores || {}
+      });
+      
+      // Masquer après 4.5 secondes
+      setTimeout(() => {
+        setShowTimeUpPopup(null);
+      }, 4500);
     };
     
     // Fin de partie
@@ -189,6 +203,10 @@ const DrawingLobbyView = ({
     
     // Toutes les équipes ont trouvé
     const handleAllTeamsFound = (data) => {
+      console.log('[DRAWING] AllTeamsFound reçu:', data);
+      // Sauvegarder le dessin si c'est notre équipe qui dessine
+      saveCurrentDrawing(data.word, data.drawingTeam);
+      
       setShowAllTeamsPopup({
         word: data.word,
         teamsFound: data.teamsFound,
@@ -251,6 +269,70 @@ const DrawingLobbyView = ({
     }
   };
   
+  // Sauvegarder le dessin actuel (appelé par l'équipe qui dessine)
+  const saveCurrentDrawing = async (word, drawingTeam) => {
+    console.log('[DRAWING] === DEBUT SAUVEGARDE ===');
+    console.log('[DRAWING] myTeam:', myTeam);
+    console.log('[DRAWING] drawingTeam:', drawingTeam);
+    console.log('[DRAWING] currentUser:', currentUser?.pseudo);
+    console.log('[DRAWING] lobby.id:', lobby?.id);
+    
+    // Seule l'équipe qui dessine sauvegarde
+    if (myTeam !== drawingTeam) {
+      console.log('[DRAWING] Pas mon équipe qui dessine, skip');
+      return;
+    }
+    
+    // Pour éviter les doublons, seul le premier membre de l'équipe qui dessine sauvegarde
+    const teamMembers = lobby?.participants?.filter(p => p.team_name === drawingTeam) || [];
+    console.log('[DRAWING] Membres équipe:', teamMembers.map(m => m.pseudo));
+    
+    const firstDrawer = teamMembers[0];
+    console.log('[DRAWING] Premier dessinateur:', firstDrawer?.pseudo, '- participant_id:', firstDrawer?.participant_id);
+    console.log('[DRAWING] Mon id:', currentUser?.id);
+    
+    if (!firstDrawer || firstDrawer.participant_id !== currentUser?.id) {
+      console.log('[DRAWING] Je ne suis pas le premier dessinateur, skip');
+      return;
+    }
+    
+    // Récupérer le canvas
+    console.log('[DRAWING] canvasRef.current:', canvasRef.current ? 'EXISTS' : 'NULL');
+    if (!canvasRef.current) {
+      console.log('[DRAWING] Pas de canvas ref pour sauvegarder');
+      return;
+    }
+    
+    try {
+      const imageData = canvasRef.current.toDataURL('image/png');
+      console.log('[DRAWING] Image générée, taille:', imageData.length);
+      
+      if (!socket?.pictionarySaveDrawing) {
+        console.error('[DRAWING] socket.pictionarySaveDrawing non disponible !');
+        return;
+      }
+      
+      const result = await socket.pictionarySaveDrawing(
+        lobby.id,
+        gameState?.currentRound || 0,
+        myTeam,
+        word,
+        imageData
+      );
+      
+      console.log('[DRAWING] Résultat sauvegarde:', result);
+      
+      if (result?.success) {
+        console.log('[DRAWING] ✅ Dessin sauvegardé:', result.drawingId);
+      } else {
+        console.error('[DRAWING] ❌ Erreur sauvegarde:', result?.message);
+      }
+    } catch (error) {
+      console.error('[DRAWING] ❌ Exception sauvegarde dessin:', error);
+    }
+    console.log('[DRAWING] === FIN SAUVEGARDE ===');
+  };
+  
   // Soumettre une proposition
   const handleSubmitGuess = async () => {
     if (!guess.trim() || hasFoundWord || isDrawingTeam || !gameState) return;
@@ -284,45 +366,183 @@ const DrawingLobbyView = ({
   
   // ==================== RENDUS ====================
   
+  // État pour les dessins de la partie terminée
+  const [finishedDrawings, setFinishedDrawings] = useState([]);
+  const [currentDrawingIndex, setCurrentDrawingIndex] = useState(0);
+  
+  // Charger les dessins quand la partie est terminée
+  useEffect(() => {
+    if (gameState?.status === 'finished' && lobby?.id) {
+      fetch(`${API_URL}/drawing-lobbies/${lobby.id}/drawings`)
+        .then(res => res.json())
+        .then(data => setFinishedDrawings(data || []))
+        .catch(err => console.error('Erreur chargement dessins:', err));
+    }
+  }, [gameState?.status, lobby?.id]);
+  
+  // Télécharger un dessin
+  const handleDownloadDrawing = (drawing) => {
+    if (!drawing?.image_data) return;
+    const link = document.createElement('a');
+    link.href = drawing.image_data;
+    link.download = `dessin-${drawing.team_name}-${drawing.word}.png`;
+    link.click();
+  };
+  
   // Afficher les résultats finaux
   if (gameState?.status === 'finished') {
+    const currentDrawing = finishedDrawings[currentDrawingIndex];
+    
     return (
-      <div className="min-h-screen bg-gradient-to-b from-purple-600 to-blue-600 p-4 flex items-center justify-center">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-lg w-full">
-          <h2 className="text-3xl font-bold text-center mb-6 dark:text-white">
-            🏆 Partie terminée !
-          </h2>
-          
-          <div className="space-y-3 mb-6">
-            {gameState.ranking?.map((entry, idx) => (
-              <div 
-                key={entry.team}
-                className={`flex items-center justify-between p-4 rounded-lg ${
-                  idx === 0 ? 'bg-yellow-100 dark:bg-yellow-900/30 border-2 border-yellow-400' :
-                  idx === 1 ? 'bg-gray-100 dark:bg-gray-700 border-2 border-gray-400' :
-                  idx === 2 ? 'bg-orange-100 dark:bg-orange-900/30 border-2 border-orange-400' :
-                  'bg-gray-50 dark:bg-gray-700/50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">
-                    {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}
-                  </span>
-                  <span className={`font-bold ${entry.team === myTeam ? 'text-purple-600 dark:text-purple-400' : 'dark:text-white'}`}>
-                    {entry.team}
-                    {entry.team === myTeam && ' (vous)'}
-                  </span>
-                </div>
-                <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
-                  {entry.score} pts
-                </span>
-              </div>
-            ))}
+      <div className="min-h-screen bg-gradient-to-b from-purple-600 to-blue-600 p-4">
+        <div className="max-w-4xl mx-auto">
+          {/* Titre */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 mb-6 text-center">
+            <h2 className="text-3xl font-bold dark:text-white flex items-center justify-center gap-3">
+              <Trophy className="w-8 h-8 text-yellow-500" />
+              Partie terminée !
+            </h2>
           </div>
           
+          {/* Classement */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 mb-6">
+            <h3 className="text-xl font-bold dark:text-white mb-4 flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-yellow-500" />
+              Classement
+            </h3>
+            <div className="space-y-3">
+              {gameState.ranking?.map((entry, idx) => (
+                <div 
+                  key={entry.team}
+                  className={`flex items-center justify-between p-4 rounded-lg ${
+                    idx === 0 ? 'bg-yellow-100 dark:bg-yellow-900/30 border-2 border-yellow-400' :
+                    idx === 1 ? 'bg-gray-100 dark:bg-gray-700 border-2 border-gray-400' :
+                    idx === 2 ? 'bg-orange-100 dark:bg-orange-900/30 border-2 border-orange-400' :
+                    'bg-gray-50 dark:bg-gray-700/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">
+                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}
+                    </span>
+                    <span className={`font-bold ${entry.team === myTeam ? 'text-purple-600 dark:text-purple-400' : 'dark:text-white'}`}>
+                      {entry.team}
+                      {entry.team === myTeam && ' (vous)'}
+                    </span>
+                  </div>
+                  <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                    {entry.score} pts
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Galerie des dessins */}
+          {finishedDrawings.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 mb-6">
+              <h3 className="text-xl font-bold dark:text-white mb-4 flex items-center gap-2">
+                <Image className="w-5 h-5 text-purple-500" />
+                Galerie des dessins ({finishedDrawings.length})
+              </h3>
+              
+              {/* Dessin actuel */}
+              {currentDrawing && (
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 mb-4">
+                  {currentDrawing.image_data ? (
+                    <div className="text-center">
+                      <img 
+                        src={currentDrawing.image_data} 
+                        alt={`Dessin de ${currentDrawing.team_name}`}
+                        className="max-w-full max-h-80 mx-auto rounded-lg shadow-lg"
+                      />
+                      <div className="mt-4 flex items-center justify-center gap-6">
+                        <div className="text-center">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Équipe</p>
+                          <p className={`font-bold ${currentDrawing.team_name === myTeam ? 'text-purple-600 dark:text-purple-400' : 'dark:text-white'}`}>
+                            {currentDrawing.team_name}
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Mot</p>
+                          <p className="font-bold dark:text-white">{currentDrawing.word}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDownloadDrawing(currentDrawing)}
+                        className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 mx-auto"
+                      >
+                        <Download className="w-4 h-4" />
+                        Télécharger
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Palette className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+                      <p className="text-gray-500 dark:text-gray-400">Image non disponible</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Navigation */}
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setCurrentDrawingIndex(prev => Math.max(0, prev - 1))}
+                  disabled={currentDrawingIndex === 0}
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 dark:text-white"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                  Précédent
+                </button>
+                
+                <span className="text-gray-600 dark:text-gray-400">
+                  {currentDrawingIndex + 1} / {finishedDrawings.length}
+                </span>
+                
+                <button
+                  onClick={() => setCurrentDrawingIndex(prev => Math.min(finishedDrawings.length - 1, prev + 1))}
+                  disabled={currentDrawingIndex === finishedDrawings.length - 1}
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 dark:text-white"
+                >
+                  Suivant
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {/* Miniatures */}
+              <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+                {finishedDrawings.map((drawing, idx) => (
+                  <button
+                    key={drawing.id || idx}
+                    onClick={() => setCurrentDrawingIndex(idx)}
+                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${
+                      idx === currentDrawingIndex 
+                        ? 'border-purple-500 ring-2 ring-purple-300' 
+                        : 'border-gray-300 dark:border-gray-600 hover:border-purple-400'
+                    }`}
+                  >
+                    {drawing.image_data ? (
+                      <img 
+                        src={drawing.image_data} 
+                        alt={`Miniature ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                        <Palette className="w-4 h-4 text-gray-400" />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Bouton retour */}
           <button
             onClick={handleLeave}
-            className="w-full py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold"
+            className="w-full py-3 bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 font-semibold shadow-lg"
           >
             Retour au menu
           </button>
@@ -424,6 +644,43 @@ const DrawingLobbyView = ({
                   </div>
                 ))}
               </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Passage au tour suivant...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Popup temps écoulé */}
+      {showTimeUpPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-md">
+            <div className="text-center">
+              <div className="text-6xl mb-4">⏰</div>
+              <h3 className="text-2xl font-bold dark:text-white mb-2">
+                Temps écoulé !
+              </h3>
+              <p className="text-lg text-purple-600 dark:text-purple-400 font-bold mb-4">
+                Le mot était : {showTimeUpPopup.word}
+              </p>
+              {showTimeUpPopup.teamsFound.length > 0 ? (
+                <div className="space-y-2 mb-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Équipes qui ont trouvé :</p>
+                  {showTimeUpPopup.teamsFound.map((team, idx) => (
+                    <div key={team} className="flex items-center justify-center gap-2">
+                      <span className="text-xl">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '✓'}</span>
+                      <span className={`font-medium ${team === myTeam ? 'text-purple-600 dark:text-purple-400' : 'dark:text-white'}`}>
+                        {team} {team === myTeam && '(vous)'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                  Personne n'a trouvé le mot 😔
+                </p>
+              )}
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 Passage au tour suivant...
               </p>
@@ -552,6 +809,7 @@ const DrawingLobbyView = ({
                   teamId={myTeam}
                   externalStrokes={externalStrokes}
                   clearSignal={clearSignal}
+                  externalCanvasRef={canvasRef}
                 />
               </div>
             ) : (

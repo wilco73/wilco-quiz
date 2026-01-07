@@ -92,16 +92,29 @@ function startPictionaryTimer(lobbyId) {
     
     // Temps écoulé pour ce tour
     if (gameState.timeRemaining <= 0) {
-      // Révéler le mot
+      console.log(`[PICTIONARY] Temps écoulé - Tour ${gameState.currentRound + 1}/${gameState.config.rounds}`);
+      
+      // Envoyer l'événement timeUp avec infos complètes (une seule fois)
       io.to(`drawing:${lobbyId}`).emit('pictionary:timeUp', {
         word: gameState.currentWord,
-        teamsFound: gameState.teamsFound
+        teamsFound: gameState.teamsFound,
+        scores: gameState.scores,
+        drawingTeam: gameState.drawingTeam,
+        currentRound: gameState.currentRound
       });
       
-      // Si c'est le dernier tour, terminer
-      if (gameState.currentRound >= gameState.config.rounds - 1) {
-        setTimeout(() => endPictionaryGame(lobbyId), 3000);
-      }
+      // Attendre 5 secondes puis passer au tour suivant ou terminer
+      setTimeout(() => {
+        const currentGameState = pictionaryGames.get(lobbyId);
+        if (!currentGameState || currentGameState.status !== 'playing') return;
+        
+        // Passer au tour suivant
+        triggerNextRound(lobbyId);
+      }, 5000);
+      
+      // Réinitialiser le timer à une grande valeur pour éviter les répétitions
+      // pendant qu'on attend le passage au tour suivant
+      gameState.timeRemaining = 9999;
     }
   }, 1000);
   
@@ -1134,7 +1147,9 @@ io.on('connection', (socket) => {
         io.to(`drawing:${lobbyId}`).emit('pictionary:allTeamsFound', {
           word: gameState.currentWord,
           teamsFound: gameState.teamsFound,
-          scores: gameState.scores
+          scores: gameState.scores,
+          drawingTeam: gameState.drawingTeam,
+          currentRound: gameState.currentRound
         });
         
         // Attendre 5 secondes puis passer au tour suivant automatiquement

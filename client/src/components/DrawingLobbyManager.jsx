@@ -28,6 +28,7 @@ const DrawingLobbyManager = ({
   const [allGuesses, setAllGuesses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAllTeamsPopup, setShowAllTeamsPopup] = useState(null);
+  const [showTimeUpPopup, setShowTimeUpPopup] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
   const canvasRef = useRef(null);
   const toast = useToast();
@@ -129,7 +130,16 @@ const DrawingLobbyManager = ({
     };
     
     const handleTimeUp = (data) => {
-      toast.info(`Temps écoulé ! Le mot était: ${data.word}`);
+      setShowTimeUpPopup({
+        word: data.word,
+        teamsFound: data.teamsFound || [],
+        scores: data.scores || {}
+      });
+      
+      // Masquer après 4.5 secondes
+      setTimeout(() => {
+        setShowTimeUpPopup(null);
+      }, 4500);
     };
     
     const handleEnded = (data) => {
@@ -359,6 +369,41 @@ const DrawingLobbyManager = ({
                     </div>
                   ))}
                 </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Passage au tour suivant...
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Popup temps écoulé */}
+        {showTimeUpPopup && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-md">
+              <div className="text-center">
+                <div className="text-6xl mb-4">⏰</div>
+                <h3 className="text-2xl font-bold dark:text-white mb-2">
+                  Temps écoulé !
+                </h3>
+                <p className="text-lg text-purple-600 dark:text-purple-400 font-bold mb-4">
+                  Le mot était : {showTimeUpPopup.word}
+                </p>
+                {showTimeUpPopup.teamsFound.length > 0 ? (
+                  <div className="space-y-2 mb-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Équipes qui ont trouvé :</p>
+                    {showTimeUpPopup.teamsFound.map((team, idx) => (
+                      <div key={team} className="flex items-center justify-center gap-2">
+                        <span className="text-xl">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '✓'}</span>
+                        <span className="font-medium dark:text-white">{team}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400 mb-4">
+                    Personne n'a trouvé le mot 😔
+                  </p>
+                )}
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   Passage au tour suivant...
                 </p>
