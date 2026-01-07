@@ -16,6 +16,8 @@ import DrawingLobbyView from './components/DrawingLobbyView';
 import { useToast } from './components/ToastProvider';
 import './App.css';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+
 const App = () => {
   const socket = useSocketContext();
   const toast = useToast();
@@ -489,6 +491,44 @@ const App = () => {
       return;
     }
     
+    // Si c'est une demande de création
+    if (lobby.action === 'create') {
+      try {
+        const res = await fetch(`${API_URL}/drawing-lobbies`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            config: { gameType: 'pictionary' },
+            creator_id: currentUser.id,
+            creator_type: 'participant'
+          })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          // Rejoindre le lobby créé
+          const result = await socket.joinDrawingLobby(
+            data.lobby.id,
+            currentUser.id,
+            currentUser.pseudo,
+            currentUser.teamName
+          );
+          
+          if (result.success) {
+            setCurrentDrawingLobby(result.lobby);
+            setView('drawing-lobby');
+            toast.success('Lobby créé ! Partagez le pour inviter des amis.');
+          }
+        } else {
+          toast.error('Erreur lors de la création du lobby');
+        }
+      } catch (error) {
+        toast.error('Erreur lors de la création du lobby');
+      }
+      return;
+    }
+    
+    // Rejoindre un lobby existant
     const result = await socket.joinDrawingLobby(
       lobby.id,
       currentUser.id,

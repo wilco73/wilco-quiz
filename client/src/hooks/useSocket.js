@@ -251,6 +251,20 @@ export function useSocket() {
     });
   }, []);
   
+  const addCustomWord = useCallback((lobbyId, word, addedBy) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('drawingLobby:addCustomWord', { lobbyId, word, addedBy }, resolve);
+    });
+  }, []);
+  
+  const removeCustomWord = useCallback((lobbyId, wordId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('drawingLobby:removeCustomWord', { lobbyId, wordId }, resolve);
+    });
+  }, []);
+  
   // ==================== PICTIONARY ====================
   
   const startPictionary = useCallback((lobbyId, config, words) => {
@@ -341,6 +355,8 @@ export function useSocket() {
     // Drawing Lobby
     joinDrawingLobby,
     leaveDrawingLobby,
+    addCustomWord,
+    removeCustomWord,
     // Pictionary
     startPictionary,
     pictionaryGuess,

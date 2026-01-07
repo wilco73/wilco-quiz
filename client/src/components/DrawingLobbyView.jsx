@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Clock, Trophy, Send, Check, Users, Crown, LogOut,
-  AlertCircle, Palette, ChevronLeft, ChevronRight, Download, Image
+  AlertCircle, Palette, ChevronLeft, ChevronRight, Download, Image,
+  Plus, X, Play, Settings
 } from 'lucide-react';
 import DrawingCanvas from './DrawingCanvas';
+import { PictionaryConfig } from './PictionaryGame';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -18,6 +20,9 @@ const DrawingLobbyView = ({
   const [guess, setGuess] = useState('');
   const [myGuesses, setMyGuesses] = useState([]);
   const [hasFoundWord, setHasFoundWord] = useState(false);
+  const [newCustomWord, setNewCustomWord] = useState('');
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [drawingWords, setDrawingWords] = useState([]);
   const [externalStrokes, setExternalStrokes] = useState([]);
   const [showAllTeamsPopup, setShowAllTeamsPopup] = useState(null);
   const [showTimeUpPopup, setShowTimeUpPopup] = useState(null);
@@ -44,10 +49,27 @@ const DrawingLobbyView = ({
   const hasRotation = gameState?.config?.timePerDrawer > 0;
   const canActuallyDraw = isDrawingTeam && (hasRotation ? isMyTurnToDraw : true);
   
+  // Vérifier si je suis le créateur du lobby
+  const isRoomMaster = lobby?.creator_id === currentUser?.id;
+  const isCreatedByParticipant = lobby?.creator_type === 'participant';
+  
+  // Équipes dans le lobby
+  const lobbyTeams = lobby?.participants 
+    ? [...new Set(lobby.participants.map(p => p.team_name).filter(Boolean))]
+    : [];
+  
   // Mettre à jour le lobby si la prop change
   useEffect(() => {
     setLobby(initialLobby);
   }, [initialLobby]);
+  
+  // Charger les mots de la DB
+  useEffect(() => {
+    fetch(`${API_URL}/drawing-words`)
+      .then(res => res.json())
+      .then(data => setDrawingWords(data || []))
+      .catch(err => console.error('Erreur chargement mots:', err));
+  }, []);
   
   // Écouter les événements Socket
   useEffect(() => {
@@ -364,6 +386,34 @@ const DrawingLobbyView = ({
     onLeave();
   };
   
+  // Ajouter un mot custom
+  const handleAddCustomWord = async () => {
+    if (!newCustomWord.trim()) return;
+    
+    const result = await socket.addCustomWord(lobby.id, newCustomWord.trim(), currentUser.pseudo);
+    if (result?.success) {
+      setNewCustomWord('');
+    }
+  };
+  
+  // Supprimer un mot custom
+  const handleRemoveCustomWord = async (wordId) => {
+    await socket.removeCustomWord(lobby.id, wordId);
+  };
+  
+  // Démarrer la partie (room master)
+  const handleStartPictionary = async (config) => {
+    // Fermer le modal
+    setShowConfigModal(false);
+    
+    // Démarrer la partie
+    const result = await socket.startPictionary(lobby.id, config, drawingWords);
+    
+    if (!result.success) {
+      alert(result.message || 'Erreur lors du lancement');
+    }
+  };
+  
   // ==================== RENDUS ====================
   
   // État pour les dessins de la partie terminée
@@ -553,14 +603,22 @@ const DrawingLobbyView = ({
   
   // Salle d'attente (pas encore de partie)
   if (!gameState || gameState.status !== 'playing') {
+    const customWords = lobby?.custom_words || [];
+    
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-2xl mx-auto space-y-4">
+          {/* Header */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2">
                 <Palette className="w-6 h-6 text-purple-600" />
                 Salle d'attente
+                {isRoomMaster && (
+                  <span className="text-sm px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded">
+                    👑 Vous êtes le maître de la room
+                  </span>
+                )}
               </h2>
               <button
                 onClick={handleLeave}
@@ -571,50 +629,153 @@ const DrawingLobbyView = ({
               </button>
             </div>
             
-            <div className="text-center py-8">
-              <div className="animate-pulse mb-4">
-                <Palette className="w-16 h-16 mx-auto text-purple-400" />
+            {currentUser && (
+              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-center">
+                <p className="text-purple-700 dark:text-purple-300">
+                  Vous êtes <strong>{currentUser.pseudo}</strong>
+                  {myTeam && <span> ({myTeam})</span>}
+                </p>
               </div>
-              <h3 className="text-xl font-bold dark:text-white mb-2">
-                En attente du lancement...
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                L'administrateur va bientôt démarrer la partie
+            )}
+          </div>
+          
+          {/* Participants */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+            <h3 className="font-bold dark:text-white mb-3 flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Participants ({lobby?.participants?.length || 0})
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {lobby?.participants?.map(p => (
+                <span 
+                  key={p.participant_id}
+                  className={`px-3 py-1 rounded-full text-sm flex items-center gap-1 ${
+                    p.participant_id === currentUser?.id
+                      ? 'bg-purple-500 text-white'
+                      : p.participant_id === lobby.creator_id
+                      ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  {p.participant_id === lobby.creator_id && '👑 '}
+                  {p.pseudo}
+                  <span className="text-xs opacity-70">({p.team_name})</span>
+                </span>
+              ))}
+            </div>
+            
+            {lobbyTeams.length < 2 && (
+              <p className="text-orange-600 dark:text-orange-400 text-sm mt-3">
+                ⚠️ Il faut au moins 2 équipes différentes pour jouer
               </p>
-              
-              {currentUser && (
-                <div className="mt-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                  <p className="text-purple-700 dark:text-purple-300">
-                    Vous êtes connecté en tant que <strong>{currentUser.pseudo}</strong>
-                    {myTeam && <span> ({myTeam})</span>}
+            )}
+          </div>
+          
+          {/* Section mots customs */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+            <h3 className="font-bold dark:text-white mb-3 flex items-center gap-2">
+              📝 Mots personnalisés ({customWords.length})
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Ajoutez vos propres mots à deviner ! Ils seront mélangés avec les mots de la base de données.
+            </p>
+            
+            {/* Formulaire d'ajout */}
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={newCustomWord}
+                onChange={(e) => setNewCustomWord(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAddCustomWord()}
+                placeholder="Entrez un mot..."
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-purple-500 focus:outline-none"
+              />
+              <button
+                onClick={handleAddCustomWord}
+                disabled={!newCustomWord.trim()}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Ajouter
+              </button>
+            </div>
+            
+            {/* Liste des mots customs */}
+            {customWords.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {customWords.map((cw) => (
+                  <span 
+                    key={cw.id}
+                    className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {cw.word}
+                    <span className="text-xs opacity-70">({cw.addedBy})</span>
+                    <button
+                      onClick={() => handleRemoveCustomWord(cw.id)}
+                      className="hover:text-red-500"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
+                Aucun mot personnalisé ajouté
+              </p>
+            )}
+          </div>
+          
+          {/* Bouton lancer la partie (room master ou lobby créé par participant) */}
+          {(isRoomMaster || !isCreatedByParticipant) && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+              {isRoomMaster ? (
+                <>
+                  <p className="text-gray-600 dark:text-gray-400 text-center mb-4">
+                    En tant que maître de la room, vous pouvez lancer la partie quand vous êtes prêt !
+                  </p>
+                  <button
+                    onClick={() => setShowConfigModal(true)}
+                    disabled={lobbyTeams.length < 2}
+                    className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center gap-2"
+                  >
+                    <Play className="w-5 h-5" />
+                    Configurer et lancer la partie
+                  </button>
+                </>
+              ) : (
+                <div className="text-center">
+                  <div className="animate-pulse mb-2">
+                    <Palette className="w-12 h-12 mx-auto text-purple-400" />
+                  </div>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    En attente du lancement par l'administrateur...
                   </p>
                 </div>
               )}
-              
-              {lobby?.participants?.length > 0 && (
-                <div className="mt-6">
-                  <h4 className="font-medium dark:text-white mb-2">
-                    Participants ({lobby.participants.length})
-                  </h4>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {lobby.participants.map(p => (
-                      <span 
-                        key={p.participant_id}
-                        className={`px-3 py-1 rounded-full text-sm ${
-                          p.participant_id === currentUser?.id
-                            ? 'bg-purple-500 text-white'
-                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                        }`}
-                      >
-                        {p.pseudo}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
+          )}
+          
+          {/* Info mots disponibles */}
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 text-center text-sm text-gray-600 dark:text-gray-400">
+            <p>
+              📚 {drawingWords.length} mots en base de données + {customWords.length} mots personnalisés
+            </p>
           </div>
         </div>
+        
+        {/* Modal configuration */}
+        {showConfigModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <PictionaryConfig
+              words={drawingWords}
+              teams={lobbyTeams}
+              customWordsCount={customWords.length}
+              onStart={handleStartPictionary}
+              onCancel={() => setShowConfigModal(false)}
+            />
+          </div>
+        )}
       </div>
     );
   }

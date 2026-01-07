@@ -10,6 +10,7 @@ import DrawingCanvas from './DrawingCanvas';
 export const PictionaryConfig = ({ 
   words = [], 
   teams = [], 
+  customWordsCount = 0,
   onStart, 
   onCancel 
 }) => {
@@ -20,7 +21,7 @@ export const PictionaryConfig = ({
     pointsFirstGuess: 3,
     pointsOtherGuess: 1,
     pointsDrawingTeam: 2, // si quelqu'un trouve
-    allowCustomWords: false,
+    useCustomWordsOnly: false, // N'utiliser que les mots customs
     selectedCategories: [],
     selectedDifficulties: []
   });
@@ -32,12 +33,17 @@ export const PictionaryConfig = ({
   // Nombre de mots nécessaires = tours × équipes
   const wordsNeeded = config.rounds * teams.length;
   
-  // Filtrer les mots selon les critères
-  const filteredWordsCount = words.filter(w => {
+  // Filtrer les mots selon les critères (ne s'applique qu'aux mots de la DB)
+  const filteredDbWordsCount = words.filter(w => {
     const catMatch = config.selectedCategories.length === 0 || config.selectedCategories.includes(w.category);
     const diffMatch = config.selectedDifficulties.length === 0 || config.selectedDifficulties.includes(w.difficulty);
     return catMatch && diffMatch;
   }).length;
+  
+  // Total des mots disponibles (DB filtrés + customs)
+  const totalWordsAvailable = config.useCustomWordsOnly 
+    ? customWordsCount 
+    : filteredDbWordsCount + customWordsCount;
   
   const toggleCategory = (cat) => {
     setConfig(prev => ({
@@ -57,7 +63,7 @@ export const PictionaryConfig = ({
     }));
   };
   
-  const canStart = teams.length >= 2 && filteredWordsCount >= wordsNeeded;
+  const canStart = teams.length >= 2 && totalWordsAvailable >= wordsNeeded;
   
   // Transformer la config pour le serveur (rounds interne = tours × équipes)
   const handleStart = () => {
@@ -70,29 +76,59 @@ export const PictionaryConfig = ({
   };
   
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-2xl mx-auto">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-2xl mx-auto max-h-[90vh] overflow-y-auto">
       <h2 className="text-2xl font-bold dark:text-white mb-6 flex items-center gap-2">
         🎨 Configuration Pictionary
       </h2>
       
       {/* Statistiques */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 text-center">
-          <Users className="w-8 h-8 mx-auto text-purple-600 dark:text-purple-400 mb-2" />
-          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{teams.length}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Équipes</p>
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-center">
+          <Users className="w-6 h-6 mx-auto text-purple-600 dark:text-purple-400 mb-1" />
+          <p className="text-xl font-bold text-purple-600 dark:text-purple-400">{teams.length}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400">Équipes</p>
         </div>
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 text-center">
-          <Shuffle className="w-8 h-8 mx-auto text-blue-600 dark:text-blue-400 mb-2" />
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{filteredWordsCount}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Mots disponibles</p>
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center">
+          <Shuffle className="w-6 h-6 mx-auto text-blue-600 dark:text-blue-400 mb-1" />
+          <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{filteredDbWordsCount}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400">Mots DB</p>
         </div>
-        <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center">
-          <Clock className="w-8 h-8 mx-auto text-green-600 dark:text-green-400 mb-2" />
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{wordsNeeded}</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Mots requis</p>
+        <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 text-center">
+          <span className="text-2xl">📝</span>
+          <p className="text-xl font-bold text-orange-600 dark:text-orange-400">{customWordsCount}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400">Mots custom</p>
+        </div>
+        <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
+          <Clock className="w-6 h-6 mx-auto text-green-600 dark:text-green-400 mb-1" />
+          <p className="text-xl font-bold text-green-600 dark:text-green-400">{wordsNeeded}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400">Requis</p>
         </div>
       </div>
+      
+      {/* Option mots customs uniquement */}
+      {customWordsCount > 0 && (
+        <div className="mb-6 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.useCustomWordsOnly}
+              onChange={(e) => setConfig(prev => ({ ...prev, useCustomWordsOnly: e.target.checked }))}
+              className="w-5 h-5 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+            />
+            <div>
+              <span className="font-medium dark:text-white">N'utiliser que les mots personnalisés</span>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {customWordsCount} mot(s) disponible(s) - Ignorer les mots de la base de données
+              </p>
+            </div>
+          </label>
+          {config.useCustomWordsOnly && customWordsCount < wordsNeeded && (
+            <p className="text-red-500 text-sm mt-2">
+              ⚠️ Pas assez de mots customs ({customWordsCount}/{wordsNeeded})
+            </p>
+          )}
+        </div>
+      )}
       
       {/* Paramètres */}
       <div className="space-y-4 mb-6">
@@ -238,6 +274,14 @@ export const PictionaryConfig = ({
         </div>
       </div>
       
+      {/* Note sur les filtres et mots customs */}
+      {!config.useCustomWordsOnly && customWordsCount > 0 && (
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          💡 Les filtres ci-dessus ne s'appliquent qu'aux mots de la base de données. 
+          Les {customWordsCount} mot(s) personnalisé(s) seront toujours inclus.
+        </p>
+      )}
+      
       {/* Avertissements */}
       {teams.length < 2 && (
         <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-600 rounded-lg p-3 mb-4 flex items-center gap-2">
@@ -248,11 +292,11 @@ export const PictionaryConfig = ({
         </div>
       )}
       
-      {filteredWordsCount < wordsNeeded && (
+      {totalWordsAvailable < wordsNeeded && (
         <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-600 rounded-lg p-3 mb-4 flex items-center gap-2">
           <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
           <span className="text-orange-700 dark:text-orange-300 text-sm">
-            Pas assez de mots disponibles ({filteredWordsCount}) pour {config.rounds} tour(s) × {teams.length} équipes = {wordsNeeded} mots requis
+            Pas assez de mots ({totalWordsAvailable} disponibles) pour {config.rounds} tour(s) × {teams.length} équipes = {wordsNeeded} mots requis
           </span>
         </div>
       )}

@@ -733,6 +733,7 @@ const DrawingLobbyManager = ({
             <PictionaryConfig
               words={drawingWords}
               teams={lobbyTeams}
+              customWordsCount={selectedLobby?.custom_words?.length || 0}
               onStart={handleStartPictionary}
               onCancel={() => setShowConfigModal(false)}
             />

@@ -275,10 +275,18 @@ function createTables() {
       round_start_time INTEGER,
       drawer_rotation_order TEXT,
       config TEXT,
+      creator_id TEXT,
+      creator_type TEXT DEFAULT 'admin',
+      custom_words TEXT,
       created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
       FOREIGN KEY (game_id) REFERENCES drawing_games(id)
     )
   `);
+  
+  // Migration: ajouter les nouvelles colonnes si elles n'existent pas
+  db.run(`ALTER TABLE drawing_lobbies ADD COLUMN creator_id TEXT`, [], () => {});
+  db.run(`ALTER TABLE drawing_lobbies ADD COLUMN creator_type TEXT DEFAULT 'admin'`, [], () => {});
+  db.run(`ALTER TABLE drawing_lobbies ADD COLUMN custom_words TEXT`, [], () => {});
   
   // Participants dans un lobby de dessin
   db.run(`
@@ -1538,6 +1546,7 @@ function getDrawingLobbyById(id) {
     ...lobby,
     config: lobby.config ? JSON.parse(lobby.config) : null,
     drawer_rotation_order: lobby.drawer_rotation_order ? JSON.parse(lobby.drawer_rotation_order) : null,
+    custom_words: lobby.custom_words ? JSON.parse(lobby.custom_words) : [],
     participants: getDrawingLobbyParticipants(lobby.id)
   };
 }
@@ -1546,9 +1555,16 @@ function createDrawingLobby(data) {
   const id = data.id || `drawing-lobby-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   
   run(`
-    INSERT INTO drawing_lobbies (id, game_id, status, config)
-    VALUES (?, ?, 'waiting', ?)
-  `, [id, data.game_id || null, JSON.stringify(data.config || {})]);
+    INSERT INTO drawing_lobbies (id, game_id, status, config, creator_id, creator_type, custom_words)
+    VALUES (?, ?, 'waiting', ?, ?, ?, ?)
+  `, [
+    id, 
+    data.game_id || null, 
+    JSON.stringify(data.config || {}),
+    data.creator_id || null,
+    data.creator_type || 'admin',
+    JSON.stringify(data.custom_words || [])
+  ]);
   
   saveDatabase();
   return getDrawingLobbyById(id);
@@ -1613,6 +1629,13 @@ function startDrawingLobby(lobbyId, gameState) {
     lobbyId
   ]);
   
+  saveDatabase();
+  return getDrawingLobbyById(lobbyId);
+}
+
+function updateDrawingLobbyCustomWords(lobbyId, customWords) {
+  run(`UPDATE drawing_lobbies SET custom_words = ? WHERE id = ?`, 
+    [JSON.stringify(customWords), lobbyId]);
   saveDatabase();
   return getDrawingLobbyById(lobbyId);
 }
@@ -1850,6 +1873,7 @@ module.exports = {
   leaveDrawingLobby,
   startDrawingLobby,
   updateDrawingLobbyState,
+  updateDrawingLobbyCustomWords,
   finishDrawingLobby,
   deleteDrawingLobby,
   getDrawingLobbyParticipants,

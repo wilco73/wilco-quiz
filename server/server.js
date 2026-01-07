@@ -972,9 +972,73 @@ io.on('connection', (socket) => {
     callback({ success: true });
   });
   
+  // Ajouter un mot custom au lobby
+  socket.on('drawingLobby:addCustomWord', (data, callback) => {
+    const { lobbyId, word, addedBy } = data;
+    
+    if (!word || !word.trim()) {
+      callback && callback({ success: false, message: 'Mot vide' });
+      return;
+    }
+    
+    const lobby = db.getDrawingLobbyById(lobbyId);
+    if (!lobby) {
+      callback && callback({ success: false, message: 'Lobby non trouvé' });
+      return;
+    }
+    
+    // Ajouter le mot à la liste
+    const customWords = lobby.custom_words || [];
+    const newWord = {
+      id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      word: word.trim(),
+      addedBy: addedBy || 'Anonyme',
+      addedAt: Date.now()
+    };
+    customWords.push(newWord);
+    
+    // Sauvegarder
+    const updatedLobby = db.updateDrawingLobbyCustomWords(lobbyId, customWords);
+    
+    // Notifier tous les participants
+    io.to(`drawing:${lobbyId}`).emit('drawingLobby:customWordAdded', { 
+      word: newWord, 
+      totalCustomWords: customWords.length 
+    });
+    io.to(`drawing:${lobbyId}`).emit('drawingLobby:updated', { lobby: updatedLobby });
+    
+    callback && callback({ success: true, word: newWord });
+  });
+  
+  // Supprimer un mot custom du lobby
+  socket.on('drawingLobby:removeCustomWord', (data, callback) => {
+    const { lobbyId, wordId } = data;
+    
+    const lobby = db.getDrawingLobbyById(lobbyId);
+    if (!lobby) {
+      callback && callback({ success: false, message: 'Lobby non trouvé' });
+      return;
+    }
+    
+    // Retirer le mot
+    const customWords = (lobby.custom_words || []).filter(w => w.id !== wordId);
+    
+    // Sauvegarder
+    const updatedLobby = db.updateDrawingLobbyCustomWords(lobbyId, customWords);
+    
+    // Notifier tous les participants
+    io.to(`drawing:${lobbyId}`).emit('drawingLobby:customWordRemoved', { 
+      wordId, 
+      totalCustomWords: customWords.length 
+    });
+    io.to(`drawing:${lobbyId}`).emit('drawingLobby:updated', { lobby: updatedLobby });
+    
+    callback && callback({ success: true });
+  });
+  
   // ==================== PICTIONARY GAME ====================
   
-  // Démarrer une partie de Pictionary (admin)
+  // Démarrer une partie de Pictionary (admin ou room master)
   socket.on('pictionary:start', (data, callback) => {
     const { lobbyId, config, words } = data;
     
@@ -996,11 +1060,34 @@ io.on('connection', (socket) => {
     // Mélanger les équipes pour l'ordre de passage
     const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
     
-    // Sélectionner des mots aléatoires
-    const selectedWords = [...words].sort(() => Math.random() - 0.5).slice(0, config.rounds);
+    // Préparer les mots disponibles
+    let availableWords = [];
+    const customWords = (lobby.custom_words || []).map(cw => ({
+      id: cw.id,
+      word: cw.word,
+      category: 'Custom',
+      difficulty: 'medium',
+      isCustom: true,
+      addedBy: cw.addedBy
+    }));
+    
+    console.log(`[PICTIONARY] Mots customs: ${customWords.length}, Mots DB: ${words.length}`);
+    console.log(`[PICTIONARY] Config useCustomWordsOnly: ${config.useCustomWordsOnly}`);
+    
+    if (config.useCustomWordsOnly) {
+      // N'utiliser que les mots customs
+      availableWords = customWords;
+    } else {
+      // Combiner mots de la DB et mots customs
+      availableWords = [...words, ...customWords];
+    }
+    
+    // Mélanger et sélectionner
+    const selectedWords = [...availableWords].sort(() => Math.random() - 0.5).slice(0, config.rounds);
     
     if (selectedWords.length < config.rounds) {
-      callback({ success: false, message: `Pas assez de mots (${selectedWords.length}/${config.rounds})` });
+      const source = config.useCustomWordsOnly ? 'mots customs' : 'mots disponibles';
+      callback({ success: false, message: `Pas assez de ${source} (${selectedWords.length}/${config.rounds})` });
       return;
     }
     
@@ -1848,6 +1935,19 @@ app.post('/api/drawing-lobbies/:id/archive', (req, res) => {
   const lobby = db.archiveDrawingLobby(req.params.id);
   if (lobby) {
     broadcastGlobalState();
+    res.json({ success: true, lobby });
+  } else {
+    res.status(404).json({ success: false, message: 'Lobby non trouvé' });
+  }
+});
+
+// Mettre à jour les mots customs d'un lobby
+app.post('/api/drawing-lobbies/:id/custom-words', (req, res) => {
+  const { customWords } = req.body;
+  const lobby = db.updateDrawingLobbyCustomWords(req.params.id, customWords || []);
+  if (lobby) {
+    // Notifier tous les participants
+    io.to(`drawing:${req.params.id}`).emit('drawingLobby:updated', { lobby });
     res.json({ success: true, lobby });
   } else {
     res.status(404).json({ success: false, message: 'Lobby non trouvé' });

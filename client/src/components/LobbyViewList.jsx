@@ -257,69 +257,106 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
         </div>
         
         {/* Section Jeux de Dessin */}
-        {drawingLobbies.length > 0 && (
-          <>
-            <h3 className="text-xl font-bold mb-4 mt-8 dark:text-white flex items-center gap-2">
-              <Palette className="w-6 h-6 text-purple-500" />
-              Jeux de Dessin
-            </h3>
-            <div className="grid gap-4">
-              {drawingLobbies.map(lobby => {
-                const isPlaying = lobby.status === 'playing';
-                const participantCount = lobby.participants?.length || 0;
-                
-                return (
-                  <div 
-                    key={lobby.id} 
-                    className={`bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition ${
-                      isPlaying ? 'border-2 border-green-400 dark:border-green-500' : 'border-2 border-purple-200 dark:border-purple-700'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="text-xl font-bold dark:text-white flex items-center gap-2">
-                        🎨 Pictionary
-                      </h4>
-                      <span className={`px-3 py-1 text-sm rounded-full font-semibold ${
-                        isPlaying 
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 animate-pulse'
-                          : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                      }`}>
-                        {isPlaying ? '🔴 En cours' : '⏳ En attente'}
-                      </span>
-                    </div>
-                    
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">
-                      Dessinez pour faire deviner des mots à votre équipe !
-                    </p>
-                    
-                    <div className="flex justify-between items-center">
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        <p className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
-                          {participantCount} participant(s)
-                        </p>
-                      </div>
-                      
-                      {currentUser.teamName ? (
-                        <button
-                          onClick={() => onJoinDrawingLobby && onJoinDrawingLobby(lobby)}
-                          className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
-                        >
-                          <UserPlus className="w-4 h-4" />
-                          {isPlaying ? 'Rejoindre' : 'Entrer'}
-                        </button>
-                      ) : (
-                        <p className="text-orange-600 dark:text-orange-400 text-sm">
-                          Rejoignez une équipe d'abord
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+        <h3 className="text-xl font-bold mb-4 mt-8 dark:text-white flex items-center gap-2">
+          <Palette className="w-6 h-6 text-purple-500" />
+          Jeux de Dessin
+        </h3>
+        <div className="grid gap-4">
+          {/* Bouton créer un lobby */}
+          {currentUser.teamName && (
+            <div 
+              className="bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg shadow p-6 hover:shadow-lg transition cursor-pointer"
+              onClick={() => onJoinDrawingLobby && onJoinDrawingLobby({ action: 'create' })}
+            >
+              <div className="flex justify-between items-center text-white">
+                <div>
+                  <h4 className="text-xl font-bold flex items-center gap-2">
+                    ✨ Créer un nouveau lobby
+                  </h4>
+                  <p className="text-white/80 mt-1">
+                    Invitez vos amis à jouer au Pictionary !
+                  </p>
+                </div>
+                <div className="text-4xl">🎨</div>
+              </div>
             </div>
-          </>
-        )}
+          )}
+          
+          {drawingLobbies.map(lobby => {
+            const isPlaying = lobby.status === 'playing';
+            const participantCount = lobby.participants?.length || 0;
+            const isCreator = lobby.creator_id === currentUser.id;
+            
+            return (
+              <div 
+                key={lobby.id} 
+                className={`bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition ${
+                  isPlaying ? 'border-2 border-green-400 dark:border-green-500' : 'border-2 border-purple-200 dark:border-purple-700'
+                }`}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                    🎨 Pictionary
+                    {isCreator && (
+                      <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">
+                        Votre lobby
+                      </span>
+                    )}
+                  </h4>
+                  <span className={`px-3 py-1 text-sm rounded-full font-semibold ${
+                    isPlaying 
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 animate-pulse'
+                      : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                  }`}>
+                    {isPlaying ? '🔴 En cours' : '⏳ En attente'}
+                  </span>
+                </div>
+                
+                <p className="text-gray-600 dark:text-gray-400 mb-2">
+                  Dessinez pour faire deviner des mots à votre équipe !
+                </p>
+                
+                {lobby.custom_words?.length > 0 && (
+                  <p className="text-sm text-purple-600 dark:text-purple-400 mb-2">
+                    📝 {lobby.custom_words.length} mot(s) custom ajouté(s)
+                  </p>
+                )}
+                
+                <div className="flex justify-between items-center">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="flex items-center gap-1">
+                      <Users className="w-4 h-4" />
+                      {participantCount} participant(s)
+                    </p>
+                  </div>
+                  
+                  {currentUser.teamName ? (
+                    <button
+                      onClick={() => onJoinDrawingLobby && onJoinDrawingLobby(lobby)}
+                      className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      {isPlaying ? 'Rejoindre' : 'Entrer'}
+                    </button>
+                  ) : (
+                    <p className="text-orange-600 dark:text-orange-400 text-sm">
+                      Rejoignez une équipe d'abord
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          
+          {drawingLobbies.length === 0 && !currentUser.teamName && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
+              <Palette className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+              <p className="text-gray-600 dark:text-gray-400">
+                Rejoignez une équipe pour créer ou rejoindre un lobby Pictionary
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
