@@ -13,6 +13,7 @@ import ReconnectingScreen from './components/ReconnectingScreen';
 import ProfileView from './components/ProfileView';
 import HistoryView from './components/HistoryView';
 import DrawingLobbyView from './components/DrawingLobbyView';
+import RelayLobbyView from './components/RelayLobbyView';
 import { useToast } from './components/ToastProvider';
 import './App.css';
 
@@ -494,11 +495,12 @@ const App = () => {
     // Si c'est une demande de création
     if (lobby.action === 'create') {
       try {
+        const gameType = lobby.gameType || 'pictionary';
         const res = await fetch(`${API_URL}/drawing-lobbies`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            config: { gameType: 'pictionary' },
+            config: { gameType },
             creator_id: currentUser.id,
             creator_type: 'participant'
           })
@@ -517,7 +519,8 @@ const App = () => {
           if (result.success) {
             setCurrentDrawingLobby(result.lobby);
             setView('drawing-lobby');
-            toast.success('Lobby créé ! Partagez le pour inviter des amis.');
+            const gameName = gameType === 'relay' ? 'Passe moi le relais' : 'Pictionary';
+            toast.success(`Lobby ${gameName} créé !`);
           }
         } else {
           toast.error('Erreur lors de la création du lobby');
@@ -687,15 +690,27 @@ const App = () => {
       )}
       
       {view === 'drawing-lobby' && currentDrawingLobby && (
-        <DrawingLobbyView
-          lobby={currentDrawingLobby}
-          currentUser={currentUser}
-          socket={socket}
-          onLeave={() => {
-            setCurrentDrawingLobby(null);
-            setView('lobby-list');
-          }}
-        />
+        currentDrawingLobby.config?.gameType === 'relay' ? (
+          <RelayLobbyView
+            lobby={currentDrawingLobby}
+            currentUser={currentUser}
+            socket={socket}
+            onLeave={() => {
+              setCurrentDrawingLobby(null);
+              setView('lobby-list');
+            }}
+          />
+        ) : (
+          <DrawingLobbyView
+            lobby={currentDrawingLobby}
+            currentUser={currentUser}
+            socket={socket}
+            onLeave={() => {
+              setCurrentDrawingLobby(null);
+              setView('lobby-list');
+            }}
+          />
+        )
       )}
       
       {view === 'admin' && (

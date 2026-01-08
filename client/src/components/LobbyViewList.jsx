@@ -262,22 +262,32 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
           Jeux de Dessin
         </h3>
         <div className="grid gap-4">
-          {/* Bouton créer un lobby */}
+          {/* Boutons créer un lobby */}
           {currentUser.teamName && (
-            <div 
-              className="bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg shadow p-6 hover:shadow-lg transition cursor-pointer"
-              onClick={() => onJoinDrawingLobby && onJoinDrawingLobby({ action: 'create' })}
-            >
-              <div className="flex justify-between items-center text-white">
-                <div>
-                  <h4 className="text-xl font-bold flex items-center gap-2">
-                    ✨ Créer un nouveau lobby
-                  </h4>
-                  <p className="text-white/80 mt-1">
-                    Invitez vos amis à jouer au Pictionary !
-                  </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div 
+                className="bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg shadow p-4 hover:shadow-lg transition cursor-pointer"
+                onClick={() => onJoinDrawingLobby && onJoinDrawingLobby({ action: 'create', gameType: 'pictionary' })}
+              >
+                <div className="flex items-center gap-3 text-white">
+                  <div className="text-3xl">🎨</div>
+                  <div>
+                    <h4 className="text-lg font-bold">Pictionary</h4>
+                    <p className="text-white/80 text-sm">Dessinez pour faire deviner</p>
+                  </div>
                 </div>
-                <div className="text-4xl">🎨</div>
+              </div>
+              <div 
+                className="bg-gradient-to-r from-green-500 to-teal-500 rounded-lg shadow p-4 hover:shadow-lg transition cursor-pointer"
+                onClick={() => onJoinDrawingLobby && onJoinDrawingLobby({ action: 'create', gameType: 'relay' })}
+              >
+                <div className="flex items-center gap-3 text-white">
+                  <div className="text-3xl">🔄</div>
+                  <div>
+                    <h4 className="text-lg font-bold">Passe moi le relais</h4>
+                    <p className="text-white/80 text-sm">Reproduisez de mémoire</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -286,17 +296,23 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
             const isPlaying = lobby.status === 'playing';
             const participantCount = lobby.participants?.length || 0;
             const isCreator = lobby.creator_id === currentUser.id;
+            const gameType = lobby.config?.gameType || 'pictionary';
+            const isRelay = gameType === 'relay';
             
             return (
               <div 
                 key={lobby.id} 
                 className={`bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition ${
-                  isPlaying ? 'border-2 border-green-400 dark:border-green-500' : 'border-2 border-purple-200 dark:border-purple-700'
+                  isPlaying 
+                    ? 'border-2 border-green-400 dark:border-green-500' 
+                    : isRelay 
+                    ? 'border-2 border-teal-200 dark:border-teal-700'
+                    : 'border-2 border-purple-200 dark:border-purple-700'
                 }`}
               >
                 <div className="flex justify-between items-start mb-2">
                   <h4 className="text-xl font-bold dark:text-white flex items-center gap-2">
-                    🎨 Pictionary
+                    {isRelay ? '🔄 Passe moi le relais' : '🎨 Pictionary'}
                     {isCreator && (
                       <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">
                         Votre lobby

@@ -211,6 +211,195 @@ function triggerNextRound(lobbyId) {
   console.log(`[PICTIONARY] Passage automatique au tour ${gameState.currentRound + 1}/${gameState.config.rounds}`);
 }
 
+// ==================== PASSE MOI LE RELAIS - HELPERS ====================
+
+/**
+ * Logique des passages Relay :
+ * - currentRound = numéro du cycle de dessin actuel (0 = premier dessin sur l'image originale)
+ * - totalRounds = nombre total de cycles de dessin = passages + 1
+ *   (le +1 car le premier round est sur l'image originale, puis chaque "passage" est une rotation)
+ * 
+ * Exemple avec 2 équipes et 1 passage configuré :
+ *   Round 0 : Équipe A observe image1, Équipe B observe image2 → ils dessinent
+ *   Round 1 : Équipe A observe dessin de B, Équipe B observe dessin de A → ils dessinent
+ *   Fin : 2 rounds = passages(1) + 1
+ */
+
+function startRelayTimer(lobbyId) {
+  if (pictionaryTimers.has(lobbyId)) {
+    clearInterval(pictionaryTimers.get(lobbyId));
+  }
+  
+  const intervalId = setInterval(() => {
+    const gameState = pictionaryGames.get(lobbyId);
+    if (!gameState || gameState.status !== 'playing' || gameState.gameType !== 'relay') {
+      clearInterval(intervalId);
+      pictionaryTimers.delete(lobbyId);
+      return;
+    }
+    
+    gameState.phaseTimeRemaining--;
+    
+    io.to(`drawing:${lobbyId}`).emit('relay:timerTick', {
+      phase: gameState.phase,
+      phaseTimeRemaining: gameState.phaseTimeRemaining,
+      currentRound: gameState.currentRound,
+      totalRounds: gameState.totalRounds
+    });
+    
+    if (gameState.phaseTimeRemaining <= 0) {
+      if (gameState.phase === 'observation') {
+        gameState.phase = 'drawing';
+        gameState.phaseTimeRemaining = gameState.config.drawingTime || 120;
+        
+        console.log(`[RELAY] Phase dessin - Round ${gameState.currentRound + 1}/${gameState.totalRounds}`);
+        
+        io.to(`drawing:${lobbyId}`).emit('relay:phaseChange', {
+          phase: 'drawing',
+          phaseTimeRemaining: gameState.phaseTimeRemaining,
+          currentRound: gameState.currentRound,
+          message: 'À vos crayons ! Reproduisez ce que vous avez vu !'
+        });
+        
+      } else if (gameState.phase === 'drawing') {
+        gameState.phase = 'transition';
+        gameState.phaseTimeRemaining = 9999;
+        
+        console.log(`[RELAY] Fin du dessin - Round ${gameState.currentRound + 1}/${gameState.totalRounds}`);
+        
+        io.to(`drawing:${lobbyId}`).emit('relay:drawingTimeUp', {
+          currentRound: gameState.currentRound,
+          totalRounds: gameState.totalRounds
+        });
+        
+        setTimeout(() => {
+          triggerNextRelayRound(lobbyId);
+        }, 5000);
+      }
+    }
+  }, 1000);
+  
+  pictionaryTimers.set(lobbyId, intervalId);
+}
+
+function triggerNextRelayRound(lobbyId) {
+  const gameState = pictionaryGames.get(lobbyId);
+  if (!gameState || gameState.status !== 'playing') return;
+  
+  gameState.currentRound++;
+  
+  console.log(`[RELAY] Passage au round ${gameState.currentRound + 1}/${gameState.totalRounds}`);
+  
+  // Vérifier si on a terminé tous les rounds
+  if (gameState.currentRound >= gameState.totalRounds) {
+    console.log(`[RELAY] Tous les rounds terminés, fin de partie`);
+    endRelayGame(lobbyId);
+    return;
+  }
+  
+  // Rotation des dessins
+  const numTeams = gameState.teams.length;
+  
+  gameState.currentAssignments = gameState.teams.map((team, idx) => {
+    // L'équipe idx voit le dessin de l'équipe (idx - 1 + numTeams) % numTeams du round précédent
+    const sourceTeamIdx = (idx - 1 + numTeams) % numTeams;
+    const sourceTeam = gameState.teams[sourceTeamIdx];
+    
+    // Trouver le dessin fait par l'équipe source au round précédent
+    const sourceDrawing = gameState.drawings.find(d => 
+      d.team === sourceTeam && d.round === gameState.currentRound - 1
+    );
+    
+    console.log(`[RELAY] ${team} reçoit le dessin de ${sourceTeam} (round ${gameState.currentRound - 1}): ${sourceDrawing ? 'trouvé' : 'NON TROUVÉ'}`);
+    
+    // Quelle chaîne ? À chaque round, l'index de la chaîne décale
+    const chainIdx = (idx - gameState.currentRound + numTeams * 100) % numTeams;
+    
+    return {
+      team,
+      chainIndex: chainIdx,
+      referenceName: gameState.references[chainIdx]?.name || 'Image',
+      referenceUrl: null, // Plus d'image originale après le round 0
+      sourceDrawingData: sourceDrawing?.imageData || null,
+      sourceTeam: sourceTeam
+    };
+  });
+  
+  gameState.phase = 'observation';
+  gameState.phaseTimeRemaining = gameState.config.observationTime || 30;
+  
+  io.to(`drawing:${lobbyId}`).emit('relay:newRound', {
+    currentRound: gameState.currentRound,
+    totalRounds: gameState.totalRounds,
+    phase: 'observation',
+    phaseTimeRemaining: gameState.phaseTimeRemaining,
+    assignments: gameState.currentAssignments
+  });
+}
+
+function endRelayGame(lobbyId) {
+  const gameState = pictionaryGames.get(lobbyId);
+  if (!gameState) return;
+  
+  gameState.status = 'finished';
+  gameState.phase = 'finished';
+  
+  if (pictionaryTimers.has(lobbyId)) {
+    clearInterval(pictionaryTimers.get(lobbyId));
+    pictionaryTimers.delete(lobbyId);
+  }
+  
+  console.log(`[RELAY] Fin de partie - ${gameState.drawings.length} dessins sauvegardés`);
+  
+  // Organiser les dessins par chaîne
+  const numTeams = gameState.teams.length;
+  const chains = gameState.references.map((ref, refIdx) => {
+    const chainDrawings = [];
+    
+    // Pour chaque round, trouver qui a dessiné cette chaîne
+    for (let round = 0; round < gameState.totalRounds; round++) {
+      // Au round R, l'équipe qui dessine la chaîne refIdx est (refIdx + round) % numTeams
+      const teamIdx = (refIdx + round) % numTeams;
+      const team = gameState.teams[teamIdx];
+      
+      const drawing = gameState.drawings.find(d => 
+        d.round === round && d.team === team
+      );
+      
+      chainDrawings.push({
+        round,
+        team,
+        imageData: drawing?.imageData || null,
+        drawingId: drawing?.id || null
+      });
+    }
+    
+    return {
+      referenceId: ref.id,
+      referenceName: ref.name,
+      referenceUrl: ref.imageUrl,
+      drawings: chainDrawings
+    };
+  });
+  
+  console.log(`[RELAY] Partie terminée - Lobby: ${lobbyId}`);
+  
+  // Mettre à jour en DB
+  db.finishDrawingLobby(lobbyId);
+  
+  // Broadcaster la fin de partie avec les chaînes de dessins
+  io.to(`drawing:${lobbyId}`).emit('relay:ended', {
+    chains,
+    totalPassages: gameState.totalPassages,
+    teams: gameState.teams
+  });
+  
+  // Nettoyer après un délai
+  setTimeout(() => {
+    pictionaryGames.delete(lobbyId);
+  }, 60000);
+}
+
 // ==================== HELPERS ====================
 
 function shuffleArray(array) {
@@ -867,46 +1056,113 @@ io.on('connection', (socket) => {
   socket.on('drawing:stroke', (data) => {
     const { lobbyId, teamId, odId, points, color, width, opacity, complete } = data;
     
-    // Broadcaster à tous les autres dans le lobby (drawing: ou lobby:)
-    socket.to(`drawing:${lobbyId}`).emit('drawing:stroke', {
-      lobbyId,
-      teamId,
-      odId,
-      points,
-      color,
-      width,
-      opacity,
-      complete,
-      timestamp: Date.now()
-    });
+    // Vérifier si c'est un jeu Relay (canvas isolés par équipe)
+    const gameState = pictionaryGames.get(lobbyId);
+    const isRelay = gameState?.gameType === 'relay';
+    
+    if (isRelay && teamId) {
+      // Mode Relay: envoyer uniquement aux membres de la même équipe
+      // On utilise un room spécifique par équipe
+      socket.to(`relay:${lobbyId}:${teamId}`).emit('drawing:stroke', {
+        lobbyId,
+        teamId,
+        odId,
+        points,
+        color,
+        width,
+        opacity,
+        complete,
+        timestamp: Date.now()
+      });
+      
+      // Envoyer aussi à l'admin pour le monitoring
+      socket.to(`relay:${lobbyId}:admin`).emit('drawing:stroke', {
+        lobbyId,
+        teamId,
+        odId,
+        points,
+        color,
+        width,
+        opacity,
+        complete,
+        timestamp: Date.now()
+      });
+    } else {
+      // Mode Pictionary ou autre: broadcast à tout le lobby
+      socket.to(`drawing:${lobbyId}`).emit('drawing:stroke', {
+        lobbyId,
+        teamId,
+        odId,
+        points,
+        color,
+        width,
+        opacity,
+        complete,
+        timestamp: Date.now()
+      });
+    }
+  });
+  
+  // Recevoir et broadcaster une forme (line, rectangle, circle, triangle)
+  socket.on('drawing:shape', (data) => {
+    const { lobbyId, teamId, odId, shapeType, startX, startY, endX, endY, color, width, opacity, fill } = data;
+    
+    const gameState = pictionaryGames.get(lobbyId);
+    const isRelay = gameState?.gameType === 'relay';
+    
+    const shapeData = {
+      lobbyId, teamId, odId, shapeType, startX, startY, endX, endY, 
+      color, width, opacity, fill, timestamp: Date.now()
+    };
+    
+    if (isRelay && teamId) {
+      socket.to(`relay:${lobbyId}:${teamId}`).emit('drawing:shape', shapeData);
+      socket.to(`relay:${lobbyId}:admin`).emit('drawing:shape', shapeData);
+    } else {
+      socket.to(`drawing:${lobbyId}`).emit('drawing:shape', shapeData);
+    }
   });
   
   // Recevoir et broadcaster un remplissage
   socket.on('drawing:fill', (data) => {
     const { lobbyId, teamId, odId, x, y, color, opacity } = data;
     
-    socket.to(`drawing:${lobbyId}`).emit('drawing:fill', {
-      lobbyId,
-      teamId,
-      odId,
-      x,
-      y,
-      color,
-      opacity,
-      timestamp: Date.now()
-    });
+    const gameState = pictionaryGames.get(lobbyId);
+    const isRelay = gameState?.gameType === 'relay';
+    
+    if (isRelay && teamId) {
+      socket.to(`relay:${lobbyId}:${teamId}`).emit('drawing:fill', {
+        lobbyId, teamId, odId, x, y, color, opacity, timestamp: Date.now()
+      });
+      socket.to(`relay:${lobbyId}:admin`).emit('drawing:fill', {
+        lobbyId, teamId, odId, x, y, color, opacity, timestamp: Date.now()
+      });
+    } else {
+      socket.to(`drawing:${lobbyId}`).emit('drawing:fill', {
+        lobbyId, teamId, odId, x, y, color, opacity, timestamp: Date.now()
+      });
+    }
   });
   
   // Recevoir et broadcaster un effacement du canvas
   socket.on('drawing:clear', (data) => {
     const { lobbyId, teamId, odId } = data;
     
-    socket.to(`drawing:${lobbyId}`).emit('drawing:clear', {
-      lobbyId,
-      teamId,
-      odId,
-      timestamp: Date.now()
-    });
+    const gameState = pictionaryGames.get(lobbyId);
+    const isRelay = gameState?.gameType === 'relay';
+    
+    if (isRelay && teamId) {
+      socket.to(`relay:${lobbyId}:${teamId}`).emit('drawing:clear', {
+        lobbyId, teamId, odId, timestamp: Date.now()
+      });
+      socket.to(`relay:${lobbyId}:admin`).emit('drawing:clear', {
+        lobbyId, teamId, odId, timestamp: Date.now()
+      });
+    } else {
+      socket.to(`drawing:${lobbyId}`).emit('drawing:clear', {
+        lobbyId, teamId, odId, timestamp: Date.now()
+      });
+    }
   });
   
   // ==================== DRAWING LOBBY SYSTEM ====================
@@ -919,6 +1175,8 @@ io.on('connection', (socket) => {
     socket.join(`drawing:${lobbyId}`);
     socket.drawingLobbyId = lobbyId;
     socket.odId = odId;
+    socket.teamName = teamName; // Stocker pour le mode Relay
+    socket.pseudo = pseudo;
     
     // Enregistrer dans la DB
     const lobby = db.joinDrawingLobby(lobbyId, odId, teamName);
@@ -926,6 +1184,18 @@ io.on('connection', (socket) => {
     if (!lobby) {
       callback({ success: false, message: 'Lobby non trouvé' });
       return;
+    }
+    
+    // Si la partie Relay est en cours, joindre la room d'équipe
+    const gameState = pictionaryGames.get(lobbyId);
+    if (gameState?.gameType === 'relay' && gameState.status === 'playing') {
+      if (teamName) {
+        socket.join(`relay:${lobbyId}:${teamName}`);
+        console.log(`[RELAY] ${pseudo} rejoint relay:${lobbyId}:${teamName}`);
+      }
+      if (odId === 'admin') {
+        socket.join(`relay:${lobbyId}:admin`);
+      }
     }
     
     console.log(`[DRAWING] ${pseudo} (${teamName}) a rejoint le lobby ${lobbyId}`);
@@ -937,21 +1207,25 @@ io.on('connection', (socket) => {
       teamName
     });
     
-    // Récupérer l'état du jeu en cours si existe
-    const gameState = pictionaryGames.get(lobbyId);
-    
     callback({ 
       success: true, 
       lobby,
       gameState: gameState ? {
         status: gameState.status,
+        gameType: gameState.gameType,
         currentRound: gameState.currentRound,
         totalRounds: gameState.config?.rounds,
         drawingTeam: gameState.drawingTeam,
         timeRemaining: gameState.timeRemaining,
         scores: gameState.scores,
         teamsFound: gameState.teamsFound,
-        currentWord: teamName === gameState.drawingTeam ? gameState.currentWord : null
+        currentWord: teamName === gameState.drawingTeam ? gameState.currentWord : null,
+        // Pour Relay
+        currentPassage: gameState.currentPassage,
+        totalPassages: gameState.totalPassages,
+        phase: gameState.phase,
+        phaseTimeRemaining: gameState.phaseTimeRemaining,
+        assignments: gameState.currentAssignments
       } : null
     });
     
@@ -1333,6 +1607,169 @@ io.on('connection', (socket) => {
       console.error('[PICTIONARY] Erreur sauvegarde dessin:', error);
       callback && callback({ success: false, message: error.message });
     }
+  });
+  
+  // ==================== PASSE MOI LE RELAIS (Relay Game) ====================
+  
+  // Démarrer une partie "Passe moi le relais"
+  socket.on('relay:start', (data, callback) => {
+    const { lobbyId, config, references } = data;
+    
+    const lobby = db.getDrawingLobbyById(lobbyId);
+    if (!lobby) {
+      callback({ success: false, message: 'Lobby non trouvé' });
+      return;
+    }
+    
+    // Obtenir les équipes uniques
+    const teams = [...new Set(lobby.participants.map(p => p.team_name).filter(Boolean))];
+    
+    if (teams.length < 2) {
+      callback({ success: false, message: 'Il faut au moins 2 équipes' });
+      return;
+    }
+    
+    // Vérifier qu'il y a assez de références
+    if (!references || references.length < teams.length) {
+      callback({ success: false, message: `Il faut au moins ${teams.length} images de référence (une par équipe)` });
+      return;
+    }
+    
+    // Mélanger les équipes et les références
+    const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
+    const shuffledRefs = [...references].sort(() => Math.random() - 0.5).slice(0, teams.length);
+    
+    // totalRounds = passages + 1 (le premier round est sur l'image originale)
+    const totalRounds = (config.passages || 1) + 1;
+    
+    // Créer l'état du jeu
+    const gameState = {
+      lobbyId,
+      config,
+      gameType: 'relay',
+      teams: shuffledTeams,
+      references: shuffledRefs,
+      currentRound: 0,
+      totalRounds: totalRounds,
+      phase: 'observation',
+      phaseTimeRemaining: config.observationTime || 30,
+      status: 'playing',
+      currentAssignments: shuffledTeams.map((team, idx) => ({
+        team,
+        chainIndex: idx,
+        referenceId: shuffledRefs[idx].id,
+        referenceName: shuffledRefs[idx].name,
+        referenceUrl: shuffledRefs[idx].imageUrl,
+        sourceDrawingData: null
+      })),
+      drawings: []
+    };
+    
+    // Stocker l'état en mémoire
+    pictionaryGames.set(lobbyId, gameState);
+    
+    // Mettre à jour le lobby en DB
+    db.updateDrawingLobbyState(lobbyId, {
+      status: 'playing',
+      config: { ...config, gameType: 'relay' }
+    });
+    
+    // Joindre chaque participant à sa room d'équipe pour le dessin isolé
+    const socketsInLobby = io.sockets.adapter.rooms.get(`drawing:${lobbyId}`);
+    if (socketsInLobby) {
+      socketsInLobby.forEach(socketId => {
+        const participantSocket = io.sockets.sockets.get(socketId);
+        if (participantSocket && participantSocket.teamName) {
+          participantSocket.join(`relay:${lobbyId}:${participantSocket.teamName}`);
+          console.log(`[RELAY] ${participantSocket.teamName} rejoint relay:${lobbyId}:${participantSocket.teamName}`);
+        } else if (participantSocket && participantSocket.odId === 'admin') {
+          participantSocket.join(`relay:${lobbyId}:admin`);
+          console.log(`[RELAY] Admin rejoint relay:${lobbyId}:admin`);
+        }
+      });
+    }
+    
+    console.log(`[RELAY] Partie démarrée - Lobby: ${lobbyId}, ${teams.length} équipes, ${config.passages} passage(s) = ${totalRounds} rounds`);
+    
+    // Broadcaster le démarrage
+    io.to(`drawing:${lobbyId}`).emit('relay:started', {
+      lobbyId,
+      config,
+      teams: shuffledTeams,
+      currentRound: 0,
+      totalRounds: totalRounds,
+      phase: 'observation',
+      phaseTimeRemaining: config.observationTime,
+      assignments: gameState.currentAssignments
+    });
+    
+    // Démarrer le timer
+    startRelayTimer(lobbyId);
+    
+    callback({ success: true, lobbyId });
+  });
+  
+  // Sauvegarder le dessin d'une équipe pour relay
+  socket.on('relay:saveDrawing', (data, callback) => {
+    const { lobbyId, teamName, imageData } = data;
+    
+    const gameState = pictionaryGames.get(lobbyId);
+    if (!gameState || gameState.gameType !== 'relay') {
+      callback && callback({ success: false, message: 'Partie non trouvée' });
+      return;
+    }
+    
+    try {
+      // Sauvegarder le dessin
+      const drawingId = db.saveDrawing(
+        lobbyId, 
+        gameState.currentRound, 
+        teamName, 
+        gameState.currentAssignments.find(a => a.team === teamName)?.referenceName || 'inconnu',
+        imageData
+      );
+      
+      // Ajouter au tracking des dessins
+      gameState.drawings.push({
+        id: drawingId,
+        round: gameState.currentRound,
+        team: teamName,
+        imageData
+      });
+      
+      console.log(`[RELAY] Dessin sauvegardé: ${drawingId} (${teamName}, round ${gameState.currentRound})`);
+      callback && callback({ success: true, drawingId });
+    } catch (error) {
+      console.error('[RELAY] Erreur sauvegarde dessin:', error);
+      callback && callback({ success: false, message: error.message });
+    }
+  });
+  
+  // Terminer la partie relay (admin)
+  socket.on('relay:end', (data, callback) => {
+    const { lobbyId } = data;
+    endRelayGame(lobbyId);
+    callback({ success: true });
+  });
+  
+  // Admin rejoint le monitoring Relay
+  socket.on('relay:joinMonitoring', (data, callback) => {
+    const { lobbyId } = data;
+    socket.join(`relay:${lobbyId}:admin`);
+    console.log(`[RELAY] Admin rejoint le monitoring relay:${lobbyId}:admin`);
+    
+    const gameState = pictionaryGames.get(lobbyId);
+    callback && callback({ 
+      success: true, 
+      gameState: gameState ? {
+        teams: gameState.teams,
+        currentPassage: gameState.currentPassage,
+        totalPassages: gameState.totalPassages,
+        phase: gameState.phase,
+        assignments: gameState.currentAssignments,
+        drawings: gameState.drawings
+      } : null
+    });
   });
   
   // ==================== DECONNEXION ====================
@@ -1781,32 +2218,18 @@ app.post('/api/drawing-words/import', (req, res) => {
     return res.json({ success: false, message: 'Format invalide' });
   }
   
-  let added = 0, updated = 0;
-  
-  if (mode === 'replace') {
-    // Supprimer tous les mots existants
-    const existing = db.getAllDrawingWords();
-    existing.forEach(w => db.deleteDrawingWord(w.id));
-  }
-  
-  words.forEach(word => {
-    if (word.id && mode === 'update') {
-      const existing = db.getDrawingWordById(word.id);
-      if (existing) {
-        db.updateDrawingWord(word.id, word);
-        updated++;
-      } else {
-        db.createDrawingWord(word);
-        added++;
-      }
-    } else {
-      db.createDrawingWord({ ...word, id: word.id || Date.now().toString() + Math.random().toString(36).substr(2, 9) });
-      added++;
-    }
-  });
+  // Utiliser la fonction de merge optimisée
+  const results = db.mergeDrawingWords(words, mode);
   
   broadcastGlobalState();
-  res.json({ success: true, added, updated, total: db.getAllDrawingWords().length });
+  res.json({ 
+    success: true, 
+    added: results.added, 
+    updated: results.updated,
+    skipped: results.skipped,
+    errors: results.errors,
+    total: db.getAllDrawingWords().length 
+  });
 });
 
 // ==================== DRAWING REFERENCES API ====================
@@ -1841,31 +2264,18 @@ app.post('/api/drawing-references/import', (req, res) => {
     return res.json({ success: false, message: 'Format invalide' });
   }
   
-  let added = 0, updated = 0;
-  
-  if (mode === 'replace') {
-    const existing = db.getAllDrawingReferences();
-    existing.forEach(r => db.deleteDrawingReference(r.id));
-  }
-  
-  references.forEach(ref => {
-    if (ref.id && mode === 'update') {
-      const existing = db.getDrawingReferenceById(ref.id);
-      if (existing) {
-        db.updateDrawingReference(ref.id, ref);
-        updated++;
-      } else {
-        db.createDrawingReference(ref);
-        added++;
-      }
-    } else {
-      db.createDrawingReference({ ...ref, id: ref.id || Date.now().toString() + Math.random().toString(36).substr(2, 9) });
-      added++;
-    }
-  });
+  // Utiliser la fonction de merge optimisée
+  const results = db.mergeDrawingReferences(references, mode);
   
   broadcastGlobalState();
-  res.json({ success: true, added, updated, total: db.getAllDrawingReferences().length });
+  res.json({ 
+    success: true, 
+    added: results.added, 
+    updated: results.updated,
+    skipped: results.skipped,
+    errors: results.errors,
+    total: db.getAllDrawingReferences().length 
+  });
 });
 
 // ==================== DRAWING GAMES API ====================
@@ -1968,6 +2378,12 @@ app.get('/api/drawing-lobbies/:id/results', (req, res) => {
 app.get('/api/drawing-lobbies/:id/drawings', (req, res) => {
   const drawings = db.getDrawingsByLobby(req.params.id);
   res.json(drawings);
+});
+
+// Récupérer les dessins d'un lobby spécifique
+app.get('/api/drawings/lobby/:lobbyId', (req, res) => {
+  const drawings = db.getDrawingsByLobby(req.params.lobbyId);
+  res.json(drawings || []);
 });
 
 // Récupérer un dessin spécifique

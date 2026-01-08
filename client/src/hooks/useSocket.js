@@ -302,6 +302,36 @@ export function useSocket() {
     });
   }, []);
   
+  // ==================== PASSE MOI LE RELAIS (Relay) ====================
+  
+  const startRelay = useCallback((lobbyId, config, references) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('relay:start', { lobbyId, config, references }, resolve);
+    });
+  }, []);
+  
+  const relaySaveDrawing = useCallback((lobbyId, teamName, imageData) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('relay:saveDrawing', { lobbyId, teamName, imageData }, resolve);
+    });
+  }, []);
+  
+  const relayEnd = useCallback((lobbyId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('relay:end', { lobbyId }, resolve);
+    });
+  }, []);
+  
+  const relayJoinMonitoring = useCallback((lobbyId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('relay:joinMonitoring', { lobbyId }, resolve);
+    });
+  }, []);
+  
   // Emit générique pour le dessin
   const emit = useCallback((event, data) => {
     if (socketRef.current?.connected) {
@@ -363,6 +393,11 @@ export function useSocket() {
     pictionaryNextRound,
     pictionaryEnd,
     pictionarySaveDrawing,
+    // Relay (Passe moi le relais)
+    startRelay,
+    relaySaveDrawing,
+    relayEnd,
+    relayJoinMonitoring,
     // Generic
     emit,
     // Events

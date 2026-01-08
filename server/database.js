@@ -49,6 +49,31 @@ function saveDatabase() {
 }
 
 /**
+ * Ajoute une colonne à une table si elle n'existe pas déjà
+ * Gère silencieusement l'erreur si la colonne existe
+ */
+function addColumnIfNotExists(table, column, type) {
+  try {
+    // Vérifier si la colonne existe déjà
+    const tableInfo = db.exec(`PRAGMA table_info(${table})`);
+    if (tableInfo.length > 0) {
+      const columns = tableInfo[0].values.map(row => row[1]); // row[1] = column name
+      if (columns.includes(column)) {
+        return; // Colonne existe déjà
+      }
+    }
+    // Ajouter la colonne
+    db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    console.log(`[MIGRATION] Colonne ${column} ajoutée à ${table}`);
+  } catch (error) {
+    // Ignorer l'erreur si c'est "duplicate column"
+    if (!error.message.includes('duplicate column')) {
+      console.error(`[MIGRATION] Erreur ajout colonne ${column}:`, error.message);
+    }
+  }
+}
+
+/**
  * Crée les tables si elles n'existent pas
  */
 function createTables() {
@@ -284,9 +309,9 @@ function createTables() {
   `);
   
   // Migration: ajouter les nouvelles colonnes si elles n'existent pas
-  db.run(`ALTER TABLE drawing_lobbies ADD COLUMN creator_id TEXT`, [], () => {});
-  db.run(`ALTER TABLE drawing_lobbies ADD COLUMN creator_type TEXT DEFAULT 'admin'`, [], () => {});
-  db.run(`ALTER TABLE drawing_lobbies ADD COLUMN custom_words TEXT`, [], () => {});
+  addColumnIfNotExists('drawing_lobbies', 'creator_id', 'TEXT');
+  addColumnIfNotExists('drawing_lobbies', 'creator_type', "TEXT DEFAULT 'admin'");
+  addColumnIfNotExists('drawing_lobbies', 'custom_words', 'TEXT');
   
   // Participants dans un lobby de dessin
   db.run(`
@@ -1358,6 +1383,72 @@ function deleteDrawingWord(id) {
   run(`DELETE FROM drawing_words WHERE id = ?`, [id]);
 }
 
+// Merge des mots (import avec gestion doublons)
+function mergeDrawingWords(words, mode = 'add') {
+  const results = { added: 0, updated: 0, skipped: 0, errors: [] };
+  
+  // Mode replace : supprimer tous les mots existants d'abord
+  if (mode === 'replace') {
+    run(`DELETE FROM drawing_words`);
+  }
+  
+  const batchSize = 100;
+  for (let i = 0; i < words.length; i += batchSize) {
+    const batch = words.slice(i, i + batchSize);
+    
+    for (const wordData of batch) {
+      try {
+        if (!wordData.word || !wordData.word.trim()) {
+          results.skipped++;
+          continue;
+        }
+        
+        // Vérifier si le mot existe déjà (par le texte du mot)
+        const existing = queryOne(`SELECT id FROM drawing_words WHERE LOWER(word) = LOWER(?)`, [wordData.word.trim()]);
+        
+        if (existing) {
+          if (mode === 'update' || mode === 'replace') {
+            // Mettre à jour
+            run(`
+              UPDATE drawing_words 
+              SET category = ?, difficulty = ?, tags = ?
+              WHERE id = ?
+            `, [
+              wordData.category || null,
+              wordData.difficulty || 'moyen',
+              wordData.tags ? JSON.stringify(wordData.tags) : null,
+              existing.id
+            ]);
+            results.updated++;
+          } else {
+            // Mode 'add' : ignorer les doublons
+            results.skipped++;
+          }
+        } else {
+          // Créer nouveau
+          const id = `word-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          run(`
+            INSERT INTO drawing_words (id, word, category, difficulty, tags)
+            VALUES (?, ?, ?, ?, ?)
+          `, [
+            id,
+            wordData.word.trim(),
+            wordData.category || null,
+            wordData.difficulty || 'moyen',
+            wordData.tags ? JSON.stringify(wordData.tags) : null
+          ]);
+          results.added++;
+        }
+      } catch (error) {
+        results.errors.push({ word: wordData.word, error: error.message });
+      }
+    }
+  }
+  
+  saveDatabase();
+  return results;
+}
+
 function getRandomDrawingWords(count, category = null, difficulty = null) {
   let sql = `SELECT id, word, category, difficulty, tags FROM drawing_words WHERE 1=1`;
   const params = [];
@@ -1437,6 +1528,72 @@ function updateDrawingReference(id, refData) {
 
 function deleteDrawingReference(id) {
   run(`DELETE FROM drawing_references WHERE id = ?`, [id]);
+}
+
+// Merge des références (import avec gestion doublons)
+function mergeDrawingReferences(references, mode = 'add') {
+  const results = { added: 0, updated: 0, skipped: 0, errors: [] };
+  
+  // Mode replace : supprimer toutes les références existantes d'abord
+  if (mode === 'replace') {
+    run(`DELETE FROM drawing_references`);
+  }
+  
+  const batchSize = 50; // Plus petit car les images sont volumineuses
+  for (let i = 0; i < references.length; i += batchSize) {
+    const batch = references.slice(i, i + batchSize);
+    
+    for (const refData of batch) {
+      try {
+        if (!refData.name || !refData.name.trim()) {
+          results.skipped++;
+          continue;
+        }
+        
+        // Vérifier si la référence existe déjà (par le nom)
+        const existing = queryOne(`SELECT id FROM drawing_references WHERE LOWER(name) = LOWER(?)`, [refData.name.trim()]);
+        
+        if (existing) {
+          if (mode === 'update' || mode === 'replace') {
+            // Mettre à jour
+            run(`
+              UPDATE drawing_references 
+              SET image_url = ?, category = ?, tags = ?
+              WHERE id = ?
+            `, [
+              refData.imageUrl || refData.image_url,
+              refData.category || null,
+              refData.tags ? JSON.stringify(refData.tags) : null,
+              existing.id
+            ]);
+            results.updated++;
+          } else {
+            // Mode 'add' : ignorer les doublons
+            results.skipped++;
+          }
+        } else {
+          // Créer nouveau
+          const id = `ref-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          run(`
+            INSERT INTO drawing_references (id, name, image_url, category, tags)
+            VALUES (?, ?, ?, ?, ?)
+          `, [
+            id,
+            refData.name.trim(),
+            refData.imageUrl || refData.image_url,
+            refData.category || null,
+            refData.tags ? JSON.stringify(refData.tags) : null
+          ]);
+          results.added++;
+        }
+      } catch (error) {
+        results.errors.push({ name: refData.name, error: error.message });
+      }
+    }
+  }
+  
+  saveDatabase();
+  return results;
 }
 
 function getRandomDrawingReferences(count, category = null) {
@@ -1848,14 +2005,16 @@ module.exports = {
   createDrawingWord,
   updateDrawingWord,
   deleteDrawingWord,
+  mergeDrawingWords,
   getRandomDrawingWords,
   
-  // Drawing References (Téléphone Arabe)
+  // Drawing References (Passe moi le relais)
   getAllDrawingReferences,
   getDrawingReferenceById,
   createDrawingReference,
   updateDrawingReference,
   deleteDrawingReference,
+  mergeDrawingReferences,
   getRandomDrawingReferences,
   
   // Drawing Games

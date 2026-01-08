@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { 
   Pencil, Eraser, Trash2, Undo, Redo, Download, 
   Paintbrush, Droplets,
-  ChevronDown, Lock
+  ChevronDown, Lock, Square, Circle, Minus, Triangle
 } from 'lucide-react';
 
 const COLORS = [
@@ -15,8 +15,8 @@ const COLORS = [
 const BRUSH_SIZES = [2, 4, 8, 12, 20, 30, 50];
 
 const DrawingCanvas = ({
-  width = 800,
-  height = 600,
+  width = 900,
+  height = 550,
   canDraw = true,
   showTools = true,
   collaborative = false,
@@ -28,11 +28,12 @@ const DrawingCanvas = ({
   onClear = null,
   externalStrokes = [],
   backgroundColor = '#FFFFFF',
-  externalCanvasRef = null, // Ref externe pour permettre l'export de l'image
-  clearSignal = 0 // Incrémenter pour forcer l'effacement
+  externalCanvasRef = null,
+  clearSignal = 0
 }) => {
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
+  const previewCanvasRef = useRef(null); // Canvas de prévisualisation pour les formes
   
   // Exposer le canvas via la ref externe
   useEffect(() => {
@@ -43,14 +44,15 @@ const DrawingCanvas = ({
   
   // États du canvas
   const [isDrawing, setIsDrawing] = useState(false);
-  const [tool, setTool] = useState('pencil'); // pencil, eraser, fill
+  const [tool, setTool] = useState('pencil'); // pencil, eraser, fill, line, rectangle, circle, triangle
   const [color, setColor] = useState('#000000');
   const [customColor, setCustomColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(4);
-  const [opacity, setOpacity] = useState(100); // 0-100
+  const [opacity, setOpacity] = useState(100);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showSizePicker, setShowSizePicker] = useState(false);
   const [showOpacityPicker, setShowOpacityPicker] = useState(false);
+  const [fillShape, setFillShape] = useState(false); // Pour remplir les formes
   
   // Historique pour undo/redo
   const [history, setHistory] = useState([]);
@@ -59,6 +61,9 @@ const DrawingCanvas = ({
   // Points du trait en cours
   const currentStrokeRef = useRef([]);
   const lastPointRef = useRef({ x: 0, y: 0 });
+  
+  // Point de départ pour les formes
+  const shapeStartRef = useRef({ x: 0, y: 0 });
   
   // Initialisation du canvas
   useEffect(() => {
@@ -106,7 +111,7 @@ const DrawingCanvas = ({
     }
   }, [color, brushSize, tool, backgroundColor, opacity]);
   
-  // Écouter les strokes et fills externes (mode collaboratif)
+  // Écouter les strokes, fills et shapes externes (mode collaboratif)
   useEffect(() => {
     if (externalStrokes.length > 0 && contextRef.current) {
       const lastStroke = externalStrokes[externalStrokes.length - 1];
@@ -114,6 +119,9 @@ const DrawingCanvas = ({
         if (lastStroke.type === 'fill') {
           // Appliquer un fill externe
           applyExternalFill(lastStroke);
+        } else if (lastStroke.type === 'shape') {
+          // Dessiner une forme externe
+          drawExternalShape(lastStroke);
         } else {
           // Dessiner un trait externe
           drawStroke(lastStroke);
@@ -121,6 +129,65 @@ const DrawingCanvas = ({
       }
     }
   }, [externalStrokes, odId]);
+  
+  // Dessiner une forme reçue de l'extérieur
+  const drawExternalShape = useCallback((shapeData) => {
+    const ctx = contextRef.current;
+    if (!ctx) return;
+    
+    const { shapeType, startX, startY, endX, endY, color: shapeColor, width: shapeWidth, opacity: shapeOpacity, fill: shapeFill } = shapeData;
+    
+    ctx.beginPath();
+    ctx.strokeStyle = shapeColor;
+    ctx.lineWidth = shapeWidth;
+    ctx.globalAlpha = (shapeOpacity || 100) / 100;
+    
+    const w = endX - startX;
+    const h = endY - startY;
+    
+    switch (shapeType) {
+      case 'line':
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        break;
+      case 'rectangle':
+        if (shapeFill) {
+          ctx.fillStyle = shapeColor;
+          ctx.fillRect(startX, startY, w, h);
+        }
+        ctx.strokeRect(startX, startY, w, h);
+        break;
+      case 'circle':
+        const radiusX = Math.abs(w) / 2;
+        const radiusY = Math.abs(h) / 2;
+        const centerX = startX + w / 2;
+        const centerY = startY + h / 2;
+        ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+        if (shapeFill) {
+          ctx.fillStyle = shapeColor;
+          ctx.fill();
+        }
+        ctx.stroke();
+        break;
+      case 'triangle':
+        const midX = startX + w / 2;
+        ctx.moveTo(midX, startY);
+        ctx.lineTo(startX, endY);
+        ctx.lineTo(endX, endY);
+        ctx.closePath();
+        if (shapeFill) {
+          ctx.fillStyle = shapeColor;
+          ctx.fill();
+        }
+        ctx.stroke();
+        break;
+      default:
+        break;
+    }
+    
+    ctx.globalAlpha = 1;
+  }, []);
   
   // Appliquer un fill reçu de l'extérieur
   const applyExternalFill = useCallback((fillData) => {
@@ -357,7 +424,60 @@ const DrawingCanvas = ({
     // Stocker le point de départ
     currentStrokeRef.current = [{ x, y }];
     lastPointRef.current = { x, y };
+    shapeStartRef.current = { x, y };
     setIsDrawing(true);
+  };
+  
+  // Dessiner une prévisualisation de forme
+  const drawShapePreview = (ctx, startX, startY, endX, endY, shapeType) => {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = brushSize;
+    ctx.globalAlpha = opacity / 100;
+    
+    const width = endX - startX;
+    const height = endY - startY;
+    
+    switch (shapeType) {
+      case 'line':
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke(); // Ajout du stroke() !
+        break;
+      case 'rectangle':
+        if (fillShape) {
+          ctx.fillStyle = color;
+          ctx.fillRect(startX, startY, width, height);
+        }
+        ctx.strokeRect(startX, startY, width, height);
+        break;
+      case 'circle':
+        const radiusX = Math.abs(width) / 2;
+        const radiusY = Math.abs(height) / 2;
+        const centerX = startX + width / 2;
+        const centerY = startY + height / 2;
+        ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+        if (fillShape) {
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
+        ctx.stroke();
+        break;
+      case 'triangle':
+        const midX = startX + width / 2;
+        ctx.moveTo(midX, startY);
+        ctx.lineTo(startX, endY);
+        ctx.lineTo(endX, endY);
+        ctx.closePath();
+        if (fillShape) {
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
+        ctx.stroke();
+        break;
+      default:
+        break;
+    }
   };
   
   // Pendant le dessin
@@ -368,7 +488,29 @@ const DrawingCanvas = ({
     const { x, y } = getCoordinates(e);
     const ctx = contextRef.current;
     
-    // Dessiner un segment du dernier point au nouveau point
+    // Si c'est une forme, on redessine à chaque mouvement
+    if (['line', 'rectangle', 'circle', 'triangle'].includes(tool)) {
+      // Restaurer l'état avant la prévisualisation
+      if (history[historyIndex]) {
+        const img = new Image();
+        img.src = history[historyIndex];
+        img.onload = () => {
+          ctx.globalAlpha = 1;
+          ctx.drawImage(img, 0, 0);
+          // Dessiner la prévisualisation de la forme
+          drawShapePreview(ctx, shapeStartRef.current.x, shapeStartRef.current.y, x, y, tool);
+        };
+      } else {
+        // Effacer et redessiner (premier trait)
+        ctx.fillStyle = backgroundColor;
+        ctx.fillRect(0, 0, width, height);
+        drawShapePreview(ctx, shapeStartRef.current.x, shapeStartRef.current.y, x, y, tool);
+      }
+      currentStrokeRef.current = [shapeStartRef.current, { x, y }];
+      return;
+    }
+    
+    // Dessiner un segment du dernier point au nouveau point (crayon/gomme)
     ctx.beginPath();
     ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
     ctx.lineTo(x, y);
@@ -399,7 +541,56 @@ const DrawingCanvas = ({
     if (!isDrawing) return;
     e?.preventDefault();
     
-    contextRef.current.closePath();
+    const ctx = contextRef.current;
+    
+    // Si c'est une forme, dessiner la version finale
+    if (['line', 'rectangle', 'circle', 'triangle'].includes(tool) && currentStrokeRef.current.length >= 2) {
+      const start = currentStrokeRef.current[0];
+      const end = currentStrokeRef.current[currentStrokeRef.current.length - 1];
+      
+      // Restaurer l'état précédent et dessiner la forme finale
+      if (history[historyIndex]) {
+        const img = new Image();
+        img.src = history[historyIndex];
+        img.onload = () => {
+          ctx.globalAlpha = 1;
+          ctx.drawImage(img, 0, 0);
+          drawShapePreview(ctx, start.x, start.y, end.x, end.y, tool);
+          saveToHistory();
+        };
+      } else {
+        ctx.fillStyle = backgroundColor;
+        ctx.fillRect(0, 0, width, height);
+        drawShapePreview(ctx, start.x, start.y, end.x, end.y, tool);
+        saveToHistory();
+      }
+      
+      // Envoyer la forme aux autres
+      if (collaborative && socket) {
+        const shapeData = {
+          odId,
+          teamId,
+          lobbyId,
+          shapeType: tool,
+          startX: start.x,
+          startY: start.y,
+          endX: end.x,
+          endY: end.y,
+          color,
+          width: brushSize,
+          opacity: opacity / 100,
+          fill: fillShape,
+          timestamp: Date.now()
+        };
+        socket.emit('drawing:shape', shapeData);
+      }
+      
+      setIsDrawing(false);
+      currentStrokeRef.current = [];
+      return;
+    }
+    
+    ctx.closePath();
     setIsDrawing(false);
     
     // Envoyer le trait complet
@@ -538,6 +729,69 @@ const DrawingCanvas = ({
             >
               <Paintbrush className="w-5 h-5" />
             </button>
+          </div>
+          
+          {/* Formes */}
+          <div className="flex items-center gap-1 border-r border-gray-300 dark:border-gray-600 pr-2">
+            <button
+              onClick={() => setTool('line')}
+              className={`p-2 rounded-lg transition ${
+                tool === 'line' 
+                  ? 'bg-purple-500 text-white' 
+                  : 'bg-white dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 dark:text-white'
+              }`}
+              title="Ligne"
+            >
+              <Minus className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setTool('rectangle')}
+              className={`p-2 rounded-lg transition ${
+                tool === 'rectangle' 
+                  ? 'bg-purple-500 text-white' 
+                  : 'bg-white dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 dark:text-white'
+              }`}
+              title="Rectangle"
+            >
+              <Square className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setTool('circle')}
+              className={`p-2 rounded-lg transition ${
+                tool === 'circle' 
+                  ? 'bg-purple-500 text-white' 
+                  : 'bg-white dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 dark:text-white'
+              }`}
+              title="Ellipse"
+            >
+              <Circle className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setTool('triangle')}
+              className={`p-2 rounded-lg transition ${
+                tool === 'triangle' 
+                  ? 'bg-purple-500 text-white' 
+                  : 'bg-white dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 dark:text-white'
+              }`}
+              title="Triangle"
+            >
+              <Triangle className="w-5 h-5" />
+            </button>
+            {/* Toggle remplissage */}
+            {['rectangle', 'circle', 'triangle'].includes(tool) && (
+              <button
+                onClick={() => setFillShape(!fillShape)}
+                className={`p-2 rounded-lg transition ${
+                  fillShape 
+                    ? 'bg-green-500 text-white' 
+                    : 'bg-white dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 dark:text-white'
+                }`}
+                title={fillShape ? 'Forme remplie' : 'Forme vide'}
+              >
+                <div className={`w-5 h-5 rounded border-2 ${fillShape ? 'bg-current' : ''}`} 
+                     style={{ borderColor: 'currentColor' }} />
+              </button>
+            )}
           </div>
           
           {/* Couleur */}

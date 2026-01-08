@@ -109,6 +109,13 @@ const DrawingLobbyView = ({
       }
     };
     
+    // Recevoir les formes
+    const handleShape = (data) => {
+      if (data.lobbyId === lobby.id) {
+        setExternalStrokes(prev => [...prev, { ...data, type: 'shape' }]);
+      }
+    };
+    
     // Canvas effacé
     const handleClear = (data) => {
       if (data.lobbyId === lobby.id) {
@@ -243,6 +250,7 @@ const DrawingLobbyView = ({
     
     socket.on('drawing:stroke', handleStroke);
     socket.on('drawing:fill', handleFill);
+    socket.on('drawing:shape', handleShape);
     socket.on('drawing:clear', handleClear);
     socket.on('pictionary:started', handleStarted);
     socket.on('pictionary:timerTick', handleTimerTick);
@@ -261,6 +269,7 @@ const DrawingLobbyView = ({
     return () => {
       socket.off('drawing:stroke', handleStroke);
       socket.off('drawing:fill', handleFill);
+      socket.off('drawing:shape', handleShape);
       socket.off('drawing:clear', handleClear);
       socket.off('pictionary:started', handleStarted);
       socket.off('pictionary:timerTick', handleTimerTick);
