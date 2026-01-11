@@ -137,10 +137,14 @@ const DrawingCanvas = ({
     
     const { shapeType, startX, startY, endX, endY, color: shapeColor, width: shapeWidth, opacity: shapeOpacity, fill: shapeFill } = shapeData;
     
+    ctx.save();
     ctx.beginPath();
     ctx.strokeStyle = shapeColor;
     ctx.lineWidth = shapeWidth;
-    ctx.globalAlpha = (shapeOpacity || 100) / 100;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // L'opacité est déjà entre 0 et 1 (envoyée comme opacity / 100)
+    ctx.globalAlpha = shapeOpacity || 1;
     
     const w = endX - startX;
     const h = endY - startY;
@@ -186,7 +190,7 @@ const DrawingCanvas = ({
         break;
     }
     
-    ctx.globalAlpha = 1;
+    ctx.restore();
   }, []);
   
   // Appliquer un fill reçu de l'extérieur

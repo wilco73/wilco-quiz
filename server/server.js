@@ -1600,6 +1600,18 @@ io.on('connection', (socket) => {
     }
     
     try {
+      // Vérifier si un dessin existe déjà pour cette équipe à ce round
+      const existingDrawings = db.getDrawingsByLobby(lobbyId);
+      const alreadySaved = existingDrawings.some(d => 
+        d.round === round && d.team_name === teamName
+      );
+      
+      if (alreadySaved) {
+        console.log(`[PICTIONARY] Dessin déjà sauvegardé pour ${teamName} au round ${round}, ignoré`);
+        callback && callback({ success: true, message: 'Déjà sauvegardé', skipped: true });
+        return;
+      }
+      
       const drawingId = db.saveDrawing(lobbyId, round, teamName, word, imageData);
       console.log(`[PICTIONARY] Dessin sauvegardé: ${drawingId} (${teamName}, round ${round})`);
       callback && callback({ success: true, drawingId });
@@ -1720,6 +1732,17 @@ io.on('connection', (socket) => {
     }
     
     try {
+      // Vérifier si un dessin existe déjà pour cette équipe à ce round (en mémoire)
+      const alreadySaved = gameState.drawings.some(d => 
+        d.round === gameState.currentRound && d.team === teamName
+      );
+      
+      if (alreadySaved) {
+        console.log(`[RELAY] Dessin déjà sauvegardé pour ${teamName} au round ${gameState.currentRound}, ignoré`);
+        callback && callback({ success: true, message: 'Déjà sauvegardé', skipped: true });
+        return;
+      }
+      
       // Sauvegarder le dessin
       const drawingId = db.saveDrawing(
         lobbyId, 
