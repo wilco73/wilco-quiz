@@ -69,7 +69,7 @@ const LobbyView = ({ currentLobby, quizzes, participants, onLeaveLobby }) => {
                   >
                     <Avatar avatarId={getParticipantAvatar(participant.participantId)} size="md" />
                     <div>
-                      <p className="font-semibold dark:text-white">{participant.pseudo}</p>
+                      <p className="text-left font-semibold dark:text-white">{participant.pseudo}</p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         {participant.teamName || 'Sans équipe'}
                       </p>
