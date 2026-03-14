@@ -5,7 +5,7 @@ import Avatar, { AvatarSelector, AVATARS } from './Avatar';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
-const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose }) => {
+const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = false }) => {
   const [selectedTeam, setSelectedTeam] = useState(currentUser?.teamName || '');
   const [newTeamName, setNewTeamName] = useState('');
   const [showCreateTeam, setShowCreateTeam] = useState(false);
@@ -173,8 +173,13 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose }) => {
     setIsLoading(false);
   };
 
+  // Classes du conteneur selon le mode
+  const containerClass = embedded 
+    ? "" 
+    : "min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 p-4";
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 p-4">
+    <div className={containerClass}>
       <div className="max-w-lg mx-auto">
         {/* Header avec Avatar */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-4">
@@ -207,12 +212,14 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose }) => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
-            >
-              <X className="w-6 h-6 text-gray-500" />
-            </button>
+            {!embedded && (
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+              >
+                <X className="w-6 h-6 text-gray-500" />
+              </button>
+            )}
           </div>
         </div>
 

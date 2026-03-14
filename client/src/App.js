@@ -3,7 +3,8 @@ import { useSocketContext } from './contexts/SocketContext';
 import { saveSession, getSession, clearSession } from './services/storage';
 import * as api from './services/api';
 import LoginView from './components/LoginView';
-import LobbyViewList from './components/LobbyViewList';
+import MainLayout from './components/MainLayout';
+import LobbyList from './components/LobbyList';
 import LobbyView from './components/LobbyView';
 import QuizView from './components/QuizView';
 import QuizResultsView from './components/QuizResultsView';
@@ -561,55 +562,90 @@ const App = () => {
     return <ReconnectingScreen />;
   }
 
+  // Vues qui utilisent le MainLayout (navigation latérale)
+  const layoutViews = ['lobby-list', 'history', 'profile', 'scoreboard'];
+  const useMainLayout = currentUser && layoutViews.includes(view);
+
+  // Contenu pour le MainLayout
+  const renderLayoutContent = () => {
+    switch (view) {
+      case 'lobby-list':
+        return (
+          <LobbyList
+            currentUser={currentUser}
+            lobbies={lobbies}
+            quizzes={quizzes}
+            onJoinLobby={handleJoinLobby}
+            onJoinDrawingLobby={handleJoinDrawingLobby}
+          />
+        );
+      
+      case 'history':
+        return (
+          <HistoryView
+            currentUser={currentUser}
+            lobbies={lobbies}
+            quizzes={quizzes}
+            onViewResults={(lobby) => {
+              setCurrentLobby(lobby);
+              setCurrentQuiz(quizzes.find(q => q.id === lobby.quizId));
+              setView('results');
+            }}
+            onBack={() => setView('lobby-list')}
+            embedded={true}
+          />
+        );
+      
+      case 'profile':
+        return (
+          <ProfileView
+            currentUser={currentUser}
+            teams={teams}
+            onUpdateProfile={(updatedUser) => {
+              setCurrentUser(updatedUser);
+              saveSession({ currentUser: updatedUser });
+            }}
+            onClose={() => setView('lobby-list')}
+            embedded={true}
+          />
+        );
+      
+      case 'scoreboard':
+        return (
+          <ScoreboardView
+            teams={teams}
+            currentUser={currentUser}
+            onBack={() => setView('lobby-list')}
+            embedded={true}
+          />
+        );
+      
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="App">
       {view === 'login' && (
         <LoginView onLogin={handleLogin} />
       )}
       
-      {view === 'lobby-list' && currentUser && (
-        <LobbyViewList
+      {/* Vues avec MainLayout */}
+      {useMainLayout && (
+        <MainLayout
           currentUser={currentUser}
-          lobbies={lobbies}
-          quizzes={quizzes}
           teams={teams}
           participants={participants}
-          onJoinLobby={handleJoinLobby}
-          onJoinDrawingLobby={handleJoinDrawingLobby}
-          onViewScoreboard={() => setView('scoreboard')}
-          onViewProfile={() => setView('profile')}
-          onViewHistory={() => setView('history')}
-          onViewAdmin={isAdmin ? () => setView('admin') : null}
+          onNavigate={setView}
+          currentView={view}
           onLogout={handleLogout}
-        />
+        >
+          {renderLayoutContent()}
+        </MainLayout>
       )}
       
-      {view === 'history' && currentUser && (
-        <HistoryView
-          currentUser={currentUser}
-          lobbies={lobbies}
-          quizzes={quizzes}
-          onViewResults={(lobby) => {
-            setCurrentLobby(lobby);
-            setCurrentQuiz(quizzes.find(q => q.id === lobby.quizId));
-            setView('results');
-          }}
-          onBack={() => setView('lobby-list')}
-        />
-      )}
-      
-      {view === 'profile' && currentUser && (
-        <ProfileView
-          currentUser={currentUser}
-          teams={teams}
-          onUpdateProfile={(updatedUser) => {
-            setCurrentUser(updatedUser);
-            saveSession({ currentUser: updatedUser });
-          }}
-          onClose={() => setView('lobby-list')}
-        />
-      )}
-      
+      {/* Vues sans MainLayout (jeu en cours) */}
       {view === 'lobby' && currentLobby && (
         <LobbyView
           currentLobby={currentLobby}

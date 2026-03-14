@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Trophy, Medal, Users, TrendingUp, Star, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const ScoreboardView = ({ teams, currentUser, onBack }) => {
+const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const teamsPerPage = 5; // Nombre d'équipes par page
   
@@ -37,14 +37,19 @@ const ScoreboardView = ({ teams, currentUser, onBack }) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
 
+  // Classes du conteneur selon le mode
+  const containerClass = embedded 
+    ? "" 
+    : "min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 dark:from-gray-900 dark:to-gray-800 p-4";
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 dark:from-gray-900 dark:to-gray-800 p-4">
+    <div className={containerClass}>
       <div className="max-w-4xl mx-auto">
         {/* Header avec bouton retour */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            {/* Bouton Retour */}
-            {onBack && (
+            {/* Bouton Retour - seulement si pas embedded */}
+            {!embedded && onBack && (
               <button
                 onClick={onBack}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition font-semibold text-gray-800 dark:text-gray-200"
@@ -285,8 +290,8 @@ const ScoreboardView = ({ teams, currentUser, onBack }) => {
           </div>
         </div>
 
-        {/* Bouton Retour en bas aussi */}
-        {onBack && (
+        {/* Bouton Retour en bas - seulement si pas embedded */}
+        {!embedded && onBack && (
           <div className="mt-6 text-center">
             <button
               onClick={onBack}
