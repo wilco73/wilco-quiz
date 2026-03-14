@@ -147,11 +147,52 @@ const LobbyList = ({
           Jeux de dessin
         </h2>
         
-        {drawingLobbies.length === 0 ? (
+        {/* Boutons de création - visibles si l'utilisateur a une équipe */}
+        {currentUser?.teamName && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <button
+              onClick={() => onJoinDrawingLobby({ action: 'create', gameType: 'pictionary' })}
+              className="bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl shadow-sm hover:shadow-md p-4 transition-all text-left"
+            >
+              <div className="flex items-center gap-3 text-white">
+                <div className="text-3xl">🎨</div>
+                <div>
+                  <h4 className="text-lg font-bold">Pictionary</h4>
+                  <p className="text-white/80 text-sm">Dessinez pour faire deviner</p>
+                </div>
+              </div>
+            </button>
+            <button
+              onClick={() => onJoinDrawingLobby({ action: 'create', gameType: 'relay' })}
+              className="bg-gradient-to-r from-green-500 to-teal-500 rounded-xl shadow-sm hover:shadow-md p-4 transition-all text-left"
+            >
+              <div className="flex items-center gap-3 text-white">
+                <div className="text-3xl">🔄</div>
+                <div>
+                  <h4 className="text-lg font-bold">Passe-moi le Relais</h4>
+                  <p className="text-white/80 text-sm">Reproduisez de mémoire</p>
+                </div>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* Message si pas d'équipe et pas de lobbies */}
+        {!currentUser?.teamName && drawingLobbies.length === 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center shadow-sm">
             <Palette className="w-12 h-12 mx-auto text-gray-400 mb-3" />
             <p className="text-gray-500 dark:text-gray-400">
-              Aucun jeu de dessin disponible
+              Rejoignez une équipe pour créer ou rejoindre un jeu de dessin
+            </p>
+          </div>
+        )}
+        
+        {/* Liste des lobbies existants */}
+        {drawingLobbies.length === 0 && currentUser?.teamName ? (
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center shadow-sm">
+            <Palette className="w-12 h-12 mx-auto text-gray-400 mb-3" />
+            <p className="text-gray-500 dark:text-gray-400">
+              Aucune partie en cours — créez-en une !
             </p>
           </div>
         ) : (
@@ -161,24 +202,40 @@ const LobbyList = ({
               const gameType = lobby.config?.gameType;
               const gameLabel = gameType === 'relay' ? 'Passe-moi le Relais' : 'Pictionary';
               const isInLobby = lobby.participants?.some(p => p.odId === currentUser?.id);
+              const isCreator = lobby.creator_id === currentUser?.id;
+              const isRelay = gameType === 'relay';
               
               return (
                 <div 
                   key={lobby.id}
                   className={`
                     bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all
-                    ${isPlaying ? 'ring-2 ring-pink-400 dark:ring-pink-500' : ''}
+                    ${isPlaying 
+                      ? 'ring-2 ring-green-400 dark:ring-green-500' 
+                      : isRelay 
+                        ? 'ring-1 ring-teal-200 dark:ring-teal-700'
+                        : 'ring-1 ring-purple-200 dark:ring-purple-700'
+                    }
                   `}
                 >
                   <div className="p-5">
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400 text-xs rounded-full font-medium">
-                            {gameLabel}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                            isRelay 
+                              ? 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400'
+                              : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+                          }`}>
+                            {isRelay ? '🔄' : '🎨'} {gameLabel}
                           </span>
+                          {isCreator && (
+                            <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs rounded-full">
+                              Votre lobby
+                            </span>
+                          )}
                           {isPlaying && (
-                            <span className="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-xs rounded-full animate-pulse">
+                            <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-full animate-pulse">
                               🔴 En cours
                             </span>
                           )}
@@ -189,27 +246,42 @@ const LobbyList = ({
                       </div>
                     </div>
                     
+                    {/* Mots custom */}
+                    {lobby.custom_words?.length > 0 && (
+                      <p className="text-sm text-purple-600 dark:text-purple-400 mb-2">
+                        📝 {lobby.custom_words.length} mot(s) personnalisé(s)
+                      </p>
+                    )}
+                    
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
                         <Users className="w-4 h-4" />
                         {lobby.participants?.length || 0} joueur{(lobby.participants?.length || 0) > 1 ? 's' : ''}
                       </span>
                       
-                      <button
-                        onClick={() => onJoinDrawingLobby(lobby)}
-                        disabled={isPlaying && !isInLobby}
-                        className={`
-                          px-4 py-2 rounded-lg font-semibold transition-colors
-                          ${isInLobby 
-                            ? 'bg-green-600 hover:bg-green-700 text-white'
-                            : isPlaying
-                              ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                              : 'bg-pink-600 hover:bg-pink-700 text-white'
-                          }
-                        `}
-                      >
-                        {isInLobby ? 'Rejoindre' : isPlaying ? 'En cours...' : 'Jouer'}
-                      </button>
+                      {currentUser?.teamName ? (
+                        <button
+                          onClick={() => onJoinDrawingLobby(lobby)}
+                          disabled={isPlaying && !isInLobby}
+                          className={`
+                            px-4 py-2 rounded-lg font-semibold transition-colors
+                            ${isInLobby 
+                              ? 'bg-green-600 hover:bg-green-700 text-white'
+                              : isPlaying
+                                ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                : isRelay
+                                  ? 'bg-teal-600 hover:bg-teal-700 text-white'
+                                  : 'bg-purple-600 hover:bg-purple-700 text-white'
+                            }
+                          `}
+                        >
+                          {isInLobby ? 'Rejoindre' : isPlaying ? 'En cours...' : 'Jouer'}
+                        </button>
+                      ) : (
+                        <p className="text-orange-600 dark:text-orange-400 text-sm">
+                          Rejoignez une équipe d'abord
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
