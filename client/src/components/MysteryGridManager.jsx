@@ -45,7 +45,7 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
 
   // Écouter les événements socket
   useEffect(() => {
-    if (!socket) return;
+    if (!socket?.on) return;
     
     const handleLobbyCreated = (lobby) => {
       setLobbies(prev => [lobby, ...prev]);
@@ -64,9 +64,11 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
     socket.on('mystery:lobbyDeleted', handleLobbyDeleted);
     
     return () => {
-      socket.off('mystery:lobbyCreated', handleLobbyCreated);
-      socket.off('mystery:lobbyUpdated', handleLobbyUpdated);
-      socket.off('mystery:lobbyDeleted', handleLobbyDeleted);
+      if (socket?.off) {
+        socket.off('mystery:lobbyCreated', handleLobbyCreated);
+        socket.off('mystery:lobbyUpdated', handleLobbyUpdated);
+        socket.off('mystery:lobbyDeleted', handleLobbyDeleted);
+      }
     };
   }, [socket]);
 
@@ -75,26 +77,34 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
       const [gridsRes, lobbiesRes] = await Promise.all([
         fetch(`${API_URL}/mystery/grids`).catch(err => {
           console.error('Erreur fetch grids:', err);
-          return { ok: false };
+          return null;
         }),
         fetch(`${API_URL}/mystery/lobbies`).catch(err => {
           console.error('Erreur fetch lobbies:', err);
-          return { ok: false };
+          return null;
         })
       ]);
       
-      if (gridsRes.ok) {
-        const gridsData = await gridsRes.json();
-        if (gridsData.success) setGrids(gridsData.grids || []);
+      if (gridsRes && gridsRes.ok) {
+        try {
+          const gridsData = await gridsRes.json();
+          if (gridsData.success) setGrids(gridsData.grids || []);
+        } catch (e) {
+          console.error('Erreur parse grids:', e);
+        }
       }
       
-      if (lobbiesRes.ok) {
-        const lobbiesData = await lobbiesRes.json();
-        if (lobbiesData.success) setLobbies(lobbiesData.lobbies || []);
+      if (lobbiesRes && lobbiesRes.ok) {
+        try {
+          const lobbiesData = await lobbiesRes.json();
+          if (lobbiesData.success) setLobbies(lobbiesData.lobbies || []);
+        } catch (e) {
+          console.error('Erreur parse lobbies:', e);
+        }
       }
     } catch (error) {
       console.error('Erreur chargement mystery:', error);
-      toast.error('Erreur de chargement des données');
+      if (toast?.error) toast.error('Erreur de chargement des données');
     } finally {
       setLoading(false);
     }
@@ -213,6 +223,10 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
   // === LOBBIES ===
   
   const handleCreateLobby = async (gridId) => {
+    if (!socket?.emit) {
+      toast.error('Connexion non établie');
+      return;
+    }
     socket.emit('mystery:createLobby', { gridId }, (response) => {
       if (response.success) {
         toast.success('Lobby créé !');
@@ -224,7 +238,10 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
 
   const handleDeleteLobby = async (lobbyId) => {
     if (!window.confirm('Supprimer ce lobby ?')) return;
-    
+    if (!socket?.emit) {
+      toast.error('Connexion non établie');
+      return;
+    }
     socket.emit('mystery:deleteLobby', { lobbyId }, (response) => {
       if (response.success) {
         toast.success('Lobby supprimé');
