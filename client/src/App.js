@@ -9,7 +9,7 @@ import LobbyView from './components/LobbyView';
 import QuizView from './components/QuizView';
 import QuizResultsView from './components/QuizResultsView';
 import ScoreboardView from './components/ScoreboardView';
-import AdminDashboard from './components/AdminDashboard';
+import AdminContent from './components/AdminContent';
 import ReconnectingScreen from './components/ReconnectingScreen';
 import ProfileView from './components/ProfileView';
 import HistoryView from './components/HistoryView';
@@ -552,6 +552,17 @@ const App = () => {
     }
   };
 
+  const handleResetScores = async () => {
+    if (!window.confirm('Réinitialiser tous les scores ? Cette action est irréversible.')) return;
+    
+    const result = await socket.resetScores();
+    if (result.success) {
+      toast.success('Scores réinitialisés !');
+    } else {
+      toast.error(result.message || 'Erreur lors de la réinitialisation');
+    }
+  };
+
   // === RENDER ===
   
   if (!isConnected && view !== 'login') {
@@ -563,7 +574,12 @@ const App = () => {
   }
 
   // Vues qui utilisent le MainLayout (navigation latérale)
-  const layoutViews = ['lobby-list', 'history', 'profile', 'scoreboard'];
+  const layoutViews = [
+    'lobby-list', 'history', 'profile', 'scoreboard',
+    'admin-dashboard', 'admin-participants', 'admin-questions', 
+    'admin-drawing', 'admin-lobbies', 'admin-monitoring', 
+    'admin-validation', 'admin-users'
+  ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
   // Contenu pour le MainLayout
@@ -620,6 +636,31 @@ const App = () => {
           />
         );
       
+      // Vues admin
+      case 'admin-dashboard':
+      case 'admin-participants':
+      case 'admin-questions':
+      case 'admin-drawing':
+      case 'admin-lobbies':
+      case 'admin-monitoring':
+      case 'admin-validation':
+      case 'admin-users':
+        return (
+          <AdminContent
+            activeTab={view}
+            teams={teams}
+            participants={participants}
+            quizzes={quizzes}
+            questions={questions}
+            lobbies={lobbies}
+            socket={socket}
+            currentUser={currentUser}
+            onRefreshData={handleRefreshData}
+            onUpdateParticipant={handleUpdateParticipant}
+            onDeleteTeam={handleDeleteTeam}
+          />
+        );
+      
       default:
         return null;
     }
@@ -640,6 +681,7 @@ const App = () => {
           onNavigate={setView}
           currentView={view}
           onLogout={handleLogout}
+          onResetScores={(currentUser?.isAdmin || currentUser?.isSuperAdmin) ? handleResetScores : null}
         >
           {renderLayoutContent()}
         </MainLayout>
@@ -725,24 +767,6 @@ const App = () => {
             }}
           />
         )
-      )}
-      
-      {view === 'admin' && (
-        <AdminDashboard
-          adminUsername={adminUsername}
-          lobbies={lobbies}
-          teams={teams}
-          participants={participants}
-          quizzes={quizzes}
-          questions={questions}
-          socket={socket}
-          currentUser={currentUser}
-          onBack={currentUser ? () => setView('lobby-list') : null}
-          onLogout={handleLogout}
-          onRefreshData={handleRefreshData}
-          onUpdateParticipant={handleUpdateParticipant}
-          onDeleteTeam={handleDeleteTeam}
-        />
       )}
     </div>
   );

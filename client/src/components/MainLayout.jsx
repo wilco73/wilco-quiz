@@ -1,21 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Menu, X, Home, Trophy, User, History, Settings, LogOut, 
-  ChevronLeft, Users, Star, Crown
+  Users, Star, Crown, ChevronDown, ChevronRight,
+  FileQuestion, Palette, Trash, Monitor, Check, RotateCcw
 } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 import Avatar from './Avatar';
 
 /**
  * MainLayout - Layout principal avec menu burger et sidebar
- * 
- * Props:
- * - currentUser: utilisateur connecté
- * - teams: liste des équipes
- * - children: contenu principal
- * - onNavigate: fonction de navigation (view) => void
- * - currentView: vue actuelle
- * - onLogout: fonction de déconnexion
+ * Intègre maintenant les sous-menus admin
  */
 const MainLayout = ({ 
   currentUser, 
@@ -24,41 +18,76 @@ const MainLayout = ({
   children, 
   onNavigate, 
   currentView,
-  onLogout 
+  onLogout,
+  onResetScores
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [adminExpanded, setAdminExpanded] = useState(false);
+  
+  // Ouvrir automatiquement le menu admin si on est dans une section admin
+  useEffect(() => {
+    if (currentView?.startsWith('admin')) {
+      setAdminExpanded(true);
+    }
+  }, [currentView]);
   
   // Infos équipe
-  const userTeam = teams.find(t => t.name === currentUser?.teamName);
-  const sortedTeams = [...teams].sort((a, b) => (b.validatedScore || 0) - (a.validatedScore || 0));
+  const userTeam = teams?.find(t => t.name === currentUser?.teamName);
+  const sortedTeams = [...(teams || [])].sort((a, b) => (b.validatedScore || 0) - (a.validatedScore || 0));
   const teamRank = userTeam ? sortedTeams.findIndex(t => t.name === userTeam.name) + 1 : null;
   
   // Coéquipiers
   const teamMembers = currentUser?.teamName 
-    ? participants.filter(p => p.teamName === currentUser.teamName && p.id !== currentUser.id)
+    ? (participants || []).filter(p => p.teamName === currentUser.teamName && p.id !== currentUser.id)
     : [];
 
-  // Items du menu
-  const menuItems = [
+  // Items du menu principal
+  const mainMenuItems = [
     { id: 'lobby-list', label: 'Accueil', icon: Home },
     { id: 'scoreboard', label: 'Classement', icon: Trophy },
     { id: 'history', label: 'Historique', icon: History },
     { id: 'profile', label: 'Profil', icon: User },
   ];
   
-  // Ajouter Admin si droits
-  if (currentUser?.isAdmin || currentUser?.isSuperAdmin) {
-    menuItems.push({ id: 'admin', label: 'Administration', icon: Settings, className: 'text-red-500' });
+  // Sous-menu admin
+  const adminMenuItems = [
+    { id: 'admin-dashboard', label: 'Tableau de bord', icon: Trophy },
+    { id: 'admin-participants', label: 'Participants', icon: Users },
+    { id: 'admin-questions', label: 'Questions', icon: FileQuestion },
+    { id: 'admin-drawing', label: 'Jeux de Dessin', icon: Palette },
+    { id: 'admin-lobbies', label: 'Gérer Lobbies', icon: Trash },
+    { id: 'admin-monitoring', label: 'Suivi Direct', icon: Monitor },
+    { id: 'admin-validation', label: 'Validation', icon: Check },
+  ];
+  
+  // Ajouter gestion utilisateurs pour superadmin
+  if (currentUser?.isSuperAdmin) {
+    adminMenuItems.push({ id: 'admin-users', label: 'Utilisateurs', icon: Crown });
   }
+
+  const isAdmin = currentUser?.isAdmin || currentUser?.isSuperAdmin;
+  const isInAdminSection = currentView?.startsWith('admin');
 
   const handleNavigate = (viewId) => {
     onNavigate(viewId);
     setSidebarOpen(false);
   };
 
+  const toggleAdmin = () => {
+    if (!adminExpanded) {
+      setAdminExpanded(true);
+      // Si on ouvre le menu admin, aller au dashboard
+      if (!isInAdminSection) {
+        onNavigate('admin-dashboard');
+      }
+    } else {
+      setAdminExpanded(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex">
-      {/* Overlay pour mobile quand sidebar ouverte */}
+      {/* Overlay mobile */}
       {sidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -168,8 +197,9 @@ const MainLayout = ({
         
         {/* Navigation */}
         <nav className="flex-1 p-4 overflow-y-auto">
+          {/* Menu principal */}
           <ul className="space-y-1">
-            {menuItems.map(item => {
+            {mainMenuItems.map(item => {
               const Icon = item.icon;
               const isActive = currentView === item.id;
               return (
@@ -182,7 +212,6 @@ const MainLayout = ({
                         ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' 
                         : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
                       }
-                      ${item.className || ''}
                     `}
                   >
                     <Icon className="w-5 h-5" />
@@ -192,11 +221,82 @@ const MainLayout = ({
               );
             })}
           </ul>
+          
+          {/* Section Admin */}
+          {isAdmin && (
+            <div className="mt-6">
+              <div className="px-4 mb-2">
+                <div className="border-t dark:border-gray-700" />
+              </div>
+              
+              {/* Bouton Administration */}
+              <button
+                onClick={toggleAdmin}
+                className={`
+                  w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors
+                  ${isInAdminSection
+                    ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                  }
+                `}
+              >
+                <div className="flex items-center gap-3">
+                  <Settings className="w-5 h-5" />
+                  <span className="font-medium">Administration</span>
+                </div>
+                {adminExpanded ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
+              </button>
+              
+              {/* Sous-menu admin */}
+              {adminExpanded && (
+                <ul className="mt-1 ml-4 space-y-1 border-l-2 border-gray-200 dark:border-gray-700">
+                  {adminMenuItems.map(item => {
+                    const Icon = item.icon;
+                    const isActive = currentView === item.id;
+                    return (
+                      <li key={item.id}>
+                        <button
+                          onClick={() => handleNavigate(item.id)}
+                          className={`
+                            w-full flex items-center gap-3 px-4 py-2 rounded-r-lg transition-colors text-sm
+                            ${isActive 
+                              ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-l-2 border-red-500 -ml-[2px]' 
+                              : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'
+                            }
+                          `}
+                        >
+                          <Icon className="w-4 h-4" />
+                          <span>{item.label}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                  
+                  {/* Bouton Reset Scores */}
+                  {onResetScores && (
+                    <li>
+                      <button
+                        onClick={onResetScores}
+                        className="w-full flex items-center gap-3 px-4 py-2 rounded-r-lg transition-colors text-sm hover:bg-orange-50 dark:hover:bg-orange-900/20 text-orange-600 dark:text-orange-400"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        <span>Reset Scores</span>
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+          )}
         </nav>
         
         {/* Footer sidebar */}
         <div className="p-4 border-t dark:border-gray-700">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between">
             <DarkModeToggle />
             <button
               onClick={onLogout}
@@ -221,7 +321,7 @@ const MainLayout = ({
           </button>
           
           <h1 className="text-lg font-bold text-purple-600 dark:text-purple-400">
-            Wilco Quiz
+            {isInAdminSection ? 'Administration' : 'Wilco Quiz'}
           </h1>
           
           <div className="flex items-center gap-2">
