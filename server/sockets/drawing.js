@@ -147,12 +147,20 @@ function register(socket, io) {
     const { lobbyId, odId } = data;
     
     socket.leave(`drawing:${lobbyId}`);
+    delete socket.drawingLobbyId; // Nettoyer pour éviter double traitement à la déconnexion
+    
     const lobby = await db.leaveDrawingLobby(lobbyId, odId);
     
-    socket.to(`drawing:${lobbyId}`).emit('drawingLobby:participantLeft', { odId });
-    io.to(`drawing:${lobbyId}`).emit('drawingLobby:updated', { lobby });
-    
-    callback({ success: true });
+    if (lobby) {
+      // Le lobby existe encore
+      socket.to(`drawing:${lobbyId}`).emit('drawingLobby:participantLeft', { odId });
+      io.to(`drawing:${lobbyId}`).emit('drawingLobby:updated', { lobby });
+      callback({ success: true, lobbyDeleted: false });
+    } else {
+      // Le lobby a été supprimé (était vide)
+      io.to(`drawing:${lobbyId}`).emit('drawingLobby:deleted', { lobbyId });
+      callback({ success: true, lobbyDeleted: true });
+    }
   });
   
   socket.on('drawingLobby:addCustomWord', async (data, callback) => {

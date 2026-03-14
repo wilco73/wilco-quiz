@@ -1676,13 +1676,42 @@ async function joinDrawingLobby(lobbyId, participantId, teamName) {
 }
 
 async function leaveDrawingLobby(lobbyId, participantId) {
+  // Récupérer le lobby avant de retirer le participant
+  const lobby = await getDrawingLobbyById(lobbyId);
+  if (!lobby) return null;
+  
+  // Retirer le participant
   await supabase
     .from('drawing_lobby_participants')
     .delete()
     .eq('lobby_id', lobbyId)
     .eq('participant_id', participantId);
   
-  return getDrawingLobbyById(lobbyId);
+  // Récupérer le lobby mis à jour
+  const updatedLobby = await getDrawingLobbyById(lobbyId);
+  
+  // Si le lobby est vide et en attente → le supprimer
+  if (updatedLobby && updatedLobby.status === 'waiting' && 
+      (!updatedLobby.participants || updatedLobby.participants.length === 0)) {
+    console.log(`[DRAWING] Lobby ${lobbyId} vide et en attente → suppression automatique`);
+    await deleteDrawingLobby(lobbyId);
+    return null; // Retourner null pour indiquer que le lobby a été supprimé
+  }
+  
+  // Si le créateur est parti mais il reste des participants → transférer la propriété
+  if (updatedLobby && updatedLobby.creator_id === participantId && 
+      updatedLobby.participants && updatedLobby.participants.length > 0) {
+    const newCreator = updatedLobby.participants[0];
+    console.log(`[DRAWING] Transfert de propriété du lobby ${lobbyId} à ${newCreator.odId}`);
+    await supabase
+      .from('drawing_lobbies')
+      .update({ creator_id: newCreator.odId })
+      .eq('id', lobbyId);
+    
+    return getDrawingLobbyById(lobbyId);
+  }
+  
+  return updatedLobby;
 }
 
 async function startDrawingLobby(lobbyId, gameState) {
