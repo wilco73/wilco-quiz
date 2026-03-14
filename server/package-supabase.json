@@ -1,11 +1,12 @@
 {
   "name": "wilcoquiz-server",
   "version": "4.0.0",
-  "description": "Serveur Wilco Quiz - Architecture modulaire avec Supabase",
+  "description": "Serveur pour l'application Wilco Quiz - Version Supabase + Socket.IO",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "backup": "node backup-database.js"
   },
   "dependencies": {
     "express": "^4.18.2",

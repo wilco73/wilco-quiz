@@ -1,0 +1,14 @@
+{
+  "name": "wilco-quiz-migration",
+  "version": "1.0.0",
+  "description": "Scripts de migration SQLite vers Supabase",
+  "scripts": {
+    "migrate": "node migrate-to-supabase.js",
+    "update-urls": "node update-media-urls.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.3.1",
+    "sql.js": "^1.9.0"
+  }
+}
