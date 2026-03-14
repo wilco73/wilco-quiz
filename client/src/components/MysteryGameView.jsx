@@ -151,19 +151,33 @@ const MysteryGameView = ({
     };
   }, [socket, lobby?.id, isMuted, onLeave, toast]);
 
-  // Calculer le nombre de colonnes adaptatif
+  // Calculer le nombre optimal de colonnes pour remplir l'écran
   const getGridColumns = useCallback(() => {
     const totalCells = gameState?.totalCells || grid?.gridSize || 12;
     
-    // Mobile: 3-4 colonnes
-    // Tablet: 4-6 colonnes
-    // Desktop: 6-8 colonnes
+    // Calcul basé sur le ratio optimal pour remplir l'écran
+    // On veut des cases carrées qui remplissent bien l'espace
+    const sqrt = Math.sqrt(totalCells);
+    const cols = Math.ceil(sqrt);
+    
+    // Ajuster selon la taille d'écran - moins de colonnes = cases plus grandes
+    // Mobile: ratio 9:16 (portrait) -> moins de colonnes
+    // Desktop: ratio 16:9 (paysage) -> plus de colonnes
+    
+    if (totalCells <= 4) return { mobile: 2, tablet: 2, desktop: 2 };
     if (totalCells <= 9) return { mobile: 3, tablet: 3, desktop: 3 };
+    if (totalCells <= 12) return { mobile: 3, tablet: 4, desktop: 4 };
     if (totalCells <= 16) return { mobile: 4, tablet: 4, desktop: 4 };
-    if (totalCells <= 25) return { mobile: 4, tablet: 5, desktop: 5 };
-    if (totalCells <= 36) return { mobile: 4, tablet: 6, desktop: 6 };
-    if (totalCells <= 49) return { mobile: 5, tablet: 7, desktop: 7 };
-    return { mobile: 5, tablet: 8, desktop: 8 };
+    if (totalCells <= 20) return { mobile: 4, tablet: 5, desktop: 5 };
+    if (totalCells <= 25) return { mobile: 5, tablet: 5, desktop: 5 };
+    if (totalCells <= 30) return { mobile: 5, tablet: 6, desktop: 6 };
+    if (totalCells <= 36) return { mobile: 6, tablet: 6, desktop: 6 };
+    if (totalCells <= 42) return { mobile: 6, tablet: 7, desktop: 7 };
+    if (totalCells <= 49) return { mobile: 7, tablet: 7, desktop: 7 };
+    if (totalCells <= 56) return { mobile: 7, tablet: 8, desktop: 8 };
+    if (totalCells <= 64) return { mobile: 8, tablet: 8, desktop: 8 };
+    // Pour les très grandes grilles
+    return { mobile: Math.min(8, cols), tablet: Math.min(10, cols), desktop: cols };
   }, [gameState?.totalCells, grid?.gridSize]);
 
   const cols = getGridColumns();
@@ -239,42 +253,43 @@ const MysteryGameView = ({
         onClick={() => handleRevealCell(index)}
         disabled={!isAdmin || status !== 'playing' || isRevealed}
         className={`
-          aspect-square rounded-lg border-2 transition-all duration-300 relative overflow-hidden
+          w-full h-full rounded-xl border-3 transition-all duration-300 relative overflow-hidden shadow-lg
           ${isRevealed 
-            ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 dark:border-purple-600' 
+            ? 'bg-gradient-to-br from-purple-200 to-indigo-200 dark:from-purple-800/50 dark:to-indigo-800/50 border-purple-400 dark:border-purple-500' 
             : isAdmin && status === 'playing'
-              ? 'bg-gradient-to-br from-purple-500 to-indigo-600 border-purple-400 hover:scale-105 hover:shadow-lg cursor-pointer'
-              : 'bg-gradient-to-br from-purple-500 to-indigo-600 border-purple-400'
+              ? 'bg-gradient-to-br from-purple-500 via-indigo-500 to-purple-600 border-purple-300 hover:scale-[1.02] hover:shadow-2xl hover:border-yellow-400 cursor-pointer'
+              : 'bg-gradient-to-br from-purple-500 via-indigo-500 to-purple-600 border-purple-300'
           }
           ${isFlipping ? 'animate-flip' : ''}
         `}
         style={{
           transform: isFlipping ? 'rotateY(90deg)' : 'rotateY(0deg)',
-          transition: 'transform 0.3s ease-in-out'
+          transition: 'transform 0.3s ease-in-out',
+          borderWidth: '3px'
         }}
       >
         {isRevealed ? (
           // Case révélée - afficher thumbnail/image
-          <div className="w-full h-full flex items-center justify-center p-1">
+          <div className="w-full h-full flex items-center justify-center p-2">
             {(cellInfo?.type?.thumbnailUrl || cellInfo?.type?.imageUrl) ? (
               <img 
                 src={cellInfo.type.thumbnailUrl || cellInfo.type.imageUrl}
                 alt={cellInfo.type?.name}
-                className="w-full h-full object-cover rounded"
+                className="w-full h-full object-cover rounded-lg"
               />
             ) : (
-              <div className="text-center">
-                <Sparkles className="w-6 h-6 text-purple-500 mx-auto" />
-                <span className="text-xs text-purple-600 dark:text-purple-400 truncate block mt-1">
+              <div className="text-center flex flex-col items-center justify-center">
+                <Sparkles className="w-8 h-8 md:w-12 md:h-12 text-purple-500 mb-1" />
+                <span className="text-sm md:text-base font-bold text-purple-700 dark:text-purple-300 line-clamp-2 px-1">
                   {cellInfo?.type?.name}
                 </span>
               </div>
             )}
           </div>
         ) : (
-          // Case non révélée - afficher numéro
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="text-2xl md:text-3xl font-bold text-white drop-shadow-lg">
+          // Case non révélée - afficher numéro bien visible
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/10 to-transparent">
+            <span className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
               {index + 1}
             </span>
           </div>
@@ -282,8 +297,8 @@ const MysteryGameView = ({
         
         {/* Overlay hover pour admin */}
         {isAdmin && status === 'playing' && !isRevealed && (
-          <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
-            <Eye className="w-8 h-8 text-white drop-shadow-lg" />
+          <div className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
+            <Eye className="w-10 h-10 md:w-14 md:h-14 text-white drop-shadow-lg" />
           </div>
         )}
       </button>
@@ -358,20 +373,20 @@ const MysteryGameView = ({
 
   // === ÉCRAN DE JEU ===
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex flex-col">
-      {/* Header */}
-      <div className="p-4 flex justify-between items-center bg-black/20">
-        <div className="flex items-center gap-4">
+    <div className="h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex flex-col overflow-hidden">
+      {/* Header compact */}
+      <div className="flex-shrink-0 px-4 py-2 flex justify-between items-center bg-black/30">
+        <div className="flex items-center gap-3">
           <button
             onClick={onLeave}
-            className="flex items-center gap-2 px-3 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20"
+            className="flex items-center gap-1 px-3 py-1.5 bg-white/10 text-white rounded-lg hover:bg-white/20 text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Quitter</span>
           </button>
           <div>
-            <h1 className="text-lg md:text-xl font-bold text-white">{grid?.title}</h1>
-            <p className="text-purple-300 text-sm">
+            <h1 className="text-base md:text-lg font-bold text-white">{grid?.title}</h1>
+            <p className="text-purple-300 text-xs">
               {gameState.revealedCount || 0} / {gameState.totalCells || grid?.gridSize} révélées
             </p>
           </div>
@@ -379,21 +394,21 @@ const MysteryGameView = ({
         
         <div className="flex items-center gap-2">
           {isAdmin && (
-            <span className="px-2 py-1 bg-yellow-500 text-black rounded text-xs font-bold flex items-center gap-1">
+            <span className="px-2 py-0.5 bg-yellow-500 text-black rounded text-xs font-bold flex items-center gap-1">
               <Crown className="w-3 h-3" />
               Admin
             </span>
           )}
           <button
             onClick={handleToggleMute}
-            className={`p-2 rounded-lg ${isMuted ? 'bg-red-600' : 'bg-white/10'} text-white hover:bg-white/20`}
+            className={`p-1.5 rounded-lg ${isMuted ? 'bg-red-600' : 'bg-white/10'} text-white hover:bg-white/20`}
           >
-            {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
           {isAdmin && status === 'playing' && (
             <button
               onClick={handleFinishGame}
-              className="flex items-center gap-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
             >
               <StopCircle className="w-4 h-4" />
               <span className="hidden sm:inline">Stop</span>
@@ -402,51 +417,39 @@ const MysteryGameView = ({
         </div>
       </div>
 
-      {/* Grille */}
-      <div className="flex-1 p-4 flex items-center justify-center">
+      {/* Grille plein écran */}
+      <div className="flex-1 p-2 sm:p-4 overflow-hidden">
+        <style>{`
+          @keyframes flip {
+            0% { transform: rotateY(0deg); }
+            50% { transform: rotateY(90deg); }
+            100% { transform: rotateY(0deg); }
+          }
+          .animate-flip {
+            animation: flip 0.5s ease-in-out;
+          }
+        `}</style>
         <div 
-          className="w-full max-w-4xl grid gap-2 md:gap-3"
+          className="h-full w-full grid gap-1 sm:gap-2 md:gap-3 auto-rows-fr"
           style={{
             gridTemplateColumns: `repeat(${cols.mobile}, 1fr)`,
           }}
         >
-          <style>{`
-            @media (min-width: 640px) {
-              .mystery-grid { grid-template-columns: repeat(${cols.tablet}, 1fr) !important; }
-            }
-            @media (min-width: 1024px) {
-              .mystery-grid { grid-template-columns: repeat(${cols.desktop}, 1fr) !important; }
-            }
-            @keyframes flip {
-              0% { transform: rotateY(0deg); }
-              50% { transform: rotateY(90deg); }
-              100% { transform: rotateY(0deg); }
-            }
-            .animate-flip {
-              animation: flip 0.5s ease-in-out;
-            }
-          `}</style>
-          <div 
-            className="mystery-grid w-full grid gap-2 md:gap-3"
-            style={{
-              gridTemplateColumns: `repeat(${cols.mobile}, 1fr)`,
-            }}
-          >
-            {Array.from({ length: gameState.totalCells || grid?.gridSize || 0 }, (_, i) => renderCell(i))}
-          </div>
+          {Array.from({ length: gameState.totalCells || grid?.gridSize || 0 }, (_, i) => renderCell(i))}
         </div>
       </div>
 
-      {/* Participants (petite barre en bas) */}
-      <div className="p-2 bg-black/20 flex items-center justify-center gap-2 flex-wrap">
-        <Users className="w-4 h-4 text-purple-300" />
-        {participants.slice(0, 10).map((p, idx) => (
-          <span key={idx} className="px-2 py-0.5 bg-purple-600/30 text-purple-200 rounded text-xs">
+      {/* Barre participants (très compacte) */}
+      <div className="flex-shrink-0 px-2 py-1 bg-black/30 flex items-center justify-center gap-2 flex-wrap text-xs">
+        <Users className="w-3 h-3 text-purple-300" />
+        <span className="text-purple-300">{participants.length}</span>
+        {participants.slice(0, 5).map((p, idx) => (
+          <span key={idx} className="px-1.5 py-0.5 bg-purple-600/30 text-purple-200 rounded text-xs">
             {p.pseudo}
           </span>
         ))}
-        {participants.length > 10 && (
-          <span className="text-purple-300 text-xs">+{participants.length - 10}</span>
+        {participants.length > 5 && (
+          <span className="text-purple-300">+{participants.length - 5}</span>
         )}
       </div>
 
