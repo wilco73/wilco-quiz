@@ -168,8 +168,14 @@ function register(socket, io) {
   socket.on('auth:getAllUsers', async (data, callback) => {
     console.log('[AUTH] auth:getAllUsers appelé avec:', data);
     
+    // Vérifier que callback est une fonction
+    if (typeof callback !== 'function') {
+      console.error('[AUTH] auth:getAllUsers - callback n\'est pas une fonction');
+      return;
+    }
+    
     try {
-      const { requesterId } = data;
+      const { requesterId } = data || {};
       
       if (!requesterId) {
         console.log('[AUTH] auth:getAllUsers - requesterId manquant');
@@ -193,7 +199,9 @@ function register(socket, io) {
       callback({ success: true, users: participants || [] });
     } catch (error) {
       console.error('[AUTH] auth:getAllUsers - Erreur:', error);
-      callback({ success: false, message: error.message || 'Erreur serveur' });
+      if (typeof callback === 'function') {
+        callback({ success: false, message: error.message || 'Erreur serveur' });
+      }
     }
   });
 }
