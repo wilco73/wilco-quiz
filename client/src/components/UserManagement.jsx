@@ -18,7 +18,7 @@ const UserManagement = ({ socket, currentUser }) => {
   const toast = useToast();
 
   // Charger les utilisateurs
-  const loadUsers = () => {
+  const loadUsers = async () => {
     if (!socket || !currentUser?.id) {
       console.log('[UserManagement] Socket ou currentUser manquant', { socket: !!socket, currentUser });
       setLoading(false);
@@ -28,15 +28,8 @@ const UserManagement = ({ socket, currentUser }) => {
     console.log('[UserManagement] Chargement des utilisateurs...', { requesterId: currentUser.id });
     setLoading(true);
     
-    // Timeout de sécurité
-    const timeout = setTimeout(() => {
-      console.log('[UserManagement] Timeout - pas de réponse du serveur');
-      toast.error('Timeout - le serveur ne répond pas');
-      setLoading(false);
-    }, 10000);
-    
-    socket.emit('auth:getAllUsers', { requesterId: currentUser.id }, (response) => {
-      clearTimeout(timeout);
+    try {
+      const response = await socket.getAllUsers(currentUser.id);
       console.log('[UserManagement] Réponse reçue:', response);
       
       if (response?.success) {
@@ -44,8 +37,12 @@ const UserManagement = ({ socket, currentUser }) => {
       } else {
         toast.error(response?.message || 'Erreur lors du chargement');
       }
+    } catch (error) {
+      console.error('[UserManagement] Erreur:', error);
+      toast.error('Erreur de connexion');
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => {
@@ -80,12 +77,9 @@ const UserManagement = ({ socket, currentUser }) => {
   }, [users]);
 
   // Changer le rôle d'un utilisateur
-  const handleRoleChange = (userId, newRole) => {
-    socket.emit('auth:updateRole', {
-      requesterId: currentUser.id,
-      targetId: userId,
-      newRole
-    }, (response) => {
+  const handleRoleChange = async (userId, newRole) => {
+    try {
+      const response = await socket.updateUserRole(currentUser.id, userId, newRole);
       if (response.success) {
         setUsers(users.map(u => 
           u.id === userId ? { ...u, role: newRole } : u
@@ -94,8 +88,10 @@ const UserManagement = ({ socket, currentUser }) => {
       } else {
         toast.error(response.message || 'Erreur lors de la mise à jour');
       }
-      setEditingUserId(null);
-    });
+    } catch (error) {
+      toast.error('Erreur de connexion');
+    }
+    setEditingUserId(null);
   };
 
   const getRoleIcon = (role) => {

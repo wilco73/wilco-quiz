@@ -131,6 +131,16 @@ export function useSocket() {
     });
   }, []);
   
+  const getAllUsers = useCallback((requesterId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { 
+        resolve({ success: false, message: 'Socket non connecté' }); 
+        return; 
+      }
+      socketRef.current.emit('auth:getAllUsers', { requesterId }, resolve);
+    });
+  }, []);
+  
   const confirmTeamChange = useCallback((odId, newTeamName) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
@@ -387,6 +397,7 @@ export function useSocket() {
     login,
     getUser,
     updateUserRole,
+    getAllUsers,
     confirmTeamChange,
     // Lobby
     createLobby,
