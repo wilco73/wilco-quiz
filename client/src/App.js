@@ -15,6 +15,7 @@ import ProfileView from './components/ProfileView';
 import HistoryView from './components/HistoryView';
 import DrawingLobbyView from './components/DrawingLobbyView';
 import RelayLobbyView from './components/RelayLobbyView';
+import MonitoringWidget from './components/MonitoringWidget';
 import { useToast } from './components/ToastProvider';
 import './App.css';
 
@@ -35,6 +36,7 @@ const App = () => {
   const [hasAnswered, setHasAnswered] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [currentDrawingLobby, setCurrentDrawingLobby] = useState(null);
+  const [showMonitoringWidget, setShowMonitoringWidget] = useState(false);
   
   const hasReconnected = useRef(false);
   const draftTimeoutRef = useRef(null);
@@ -670,6 +672,9 @@ const App = () => {
           onNavigate={setView}
           currentView={view}
           onLogout={handleLogout}
+          showMonitoringWidget={showMonitoringWidget}
+          onToggleMonitoring={() => setShowMonitoringWidget(!showMonitoringWidget)}
+          hasActiveQuiz={lobbies.some(l => l.status === 'playing')}
         >
           {renderLayoutContent()}
         </MainLayout>
@@ -747,6 +752,27 @@ const App = () => {
             }}
           />
         )
+      )}
+      
+      {/* Widget de Monitoring Flottant - visible pour les admins */}
+      {(currentUser?.isAdmin || currentUser?.isSuperAdmin) && (
+        <MonitoringWidget
+          lobbies={lobbies}
+          quizzes={quizzes}
+          socket={socket}
+          isVisible={showMonitoringWidget}
+          onClose={() => setShowMonitoringWidget(false)}
+          onToggleVisibility={() => setShowMonitoringWidget(!showMonitoringWidget)}
+          onNextQuestion={async (lobbyId) => {
+            const result = await socket.nextQuestion(lobbyId);
+            if (!result.success) toast.error(result.message || 'Erreur');
+          }}
+          onStopQuiz={async (lobbyId) => {
+            const result = await socket.stopLobby(lobbyId);
+            if (result.success) toast.success('Quiz arrêté');
+            else toast.error(result.message || 'Erreur');
+          }}
+        />
       )}
     </div>
   );

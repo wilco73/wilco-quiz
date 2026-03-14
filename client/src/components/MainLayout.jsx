@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Menu, X, Home, Trophy, User, History, Settings, LogOut, 
   Users, Star, Crown, ChevronDown, ChevronRight,
-  FileQuestion, Palette, Trash, Monitor, Check
+  FileQuestion, Palette, Trash, Monitor, Check, Eye, EyeOff
 } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 import Avatar from './Avatar';
@@ -18,7 +18,10 @@ const MainLayout = ({
   children, 
   onNavigate, 
   currentView,
-  onLogout
+  onLogout,
+  showMonitoringWidget,
+  onToggleMonitoring,
+  hasActiveQuiz
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [adminExpanded, setAdminExpanded] = useState(false);
@@ -283,7 +286,31 @@ const MainLayout = ({
         </nav>
         
         {/* Footer sidebar */}
-        <div className="p-4 border-t dark:border-gray-700">
+        <div className="p-4 border-t dark:border-gray-700 space-y-3">
+          {/* Bouton Monitoring - visible pour admins */}
+          {isAdmin && onToggleMonitoring && (
+            <button
+              onClick={onToggleMonitoring}
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                hasActiveQuiz
+                  ? showMonitoringWidget
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-purple-600 text-white hover:bg-purple-700 animate-pulse'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+              }`}
+              disabled={!hasActiveQuiz}
+              title={hasActiveQuiz ? 'Ouvrir/fermer le monitoring' : 'Aucun quiz en cours'}
+            >
+              {showMonitoringWidget ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              <span className="text-sm">
+                {hasActiveQuiz 
+                  ? (showMonitoringWidget ? 'Masquer Monitoring' : 'Monitoring Live')
+                  : 'Pas de quiz actif'
+                }
+              </span>
+            </button>
+          )}
+          
           <div className="flex items-center justify-between">
             <DarkModeToggle />
             <button
