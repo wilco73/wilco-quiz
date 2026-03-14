@@ -1899,7 +1899,13 @@ async function getAllMysteryGrids() {
     .select('*')
     .order('created_at', { ascending: false });
   
-  if (error) throw error;
+  // Si erreur (table n'existe pas), retourner tableau vide
+  if (error) {
+    console.error('[DB] Erreur getAllMysteryGrids:', error.message);
+    return [];
+  }
+  
+  if (!data || data.length === 0) return [];
   
   // Récupérer les types pour chaque grille
   const grids = await Promise.all(data.map(async (grid) => {
@@ -2016,7 +2022,13 @@ async function getMysteryGridTypes(gridId) {
     .eq('grid_id', gridId)
     .order('created_at');
   
-  if (error) throw error;
+  // Si erreur, retourner tableau vide
+  if (error) {
+    console.error('[DB] Erreur getMysteryGridTypes:', error.message);
+    return [];
+  }
+  
+  if (!data) return [];
   
   return data.map(t => ({
     id: t.id,
@@ -2109,7 +2121,13 @@ async function getAllMysteryLobbies() {
     .select('*, mystery_grids(title)')
     .order('created_at', { ascending: false });
   
-  if (error) throw error;
+  // Si erreur (table n'existe pas), retourner tableau vide
+  if (error) {
+    console.error('[DB] Erreur getAllMysteryLobbies:', error.message);
+    return [];
+  }
+  
+  if (!data) return [];
   
   return data.map(l => ({
     id: l.id,

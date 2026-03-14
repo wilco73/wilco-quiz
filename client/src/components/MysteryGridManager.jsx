@@ -73,18 +73,28 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
   const loadData = async () => {
     try {
       const [gridsRes, lobbiesRes] = await Promise.all([
-        fetch(`${API_URL}/mystery/grids`),
-        fetch(`${API_URL}/mystery/lobbies`)
+        fetch(`${API_URL}/mystery/grids`).catch(err => {
+          console.error('Erreur fetch grids:', err);
+          return { ok: false };
+        }),
+        fetch(`${API_URL}/mystery/lobbies`).catch(err => {
+          console.error('Erreur fetch lobbies:', err);
+          return { ok: false };
+        })
       ]);
       
-      const gridsData = await gridsRes.json();
-      const lobbiesData = await lobbiesRes.json();
+      if (gridsRes.ok) {
+        const gridsData = await gridsRes.json();
+        if (gridsData.success) setGrids(gridsData.grids || []);
+      }
       
-      if (gridsData.success) setGrids(gridsData.grids);
-      if (lobbiesData.success) setLobbies(lobbiesData.lobbies);
+      if (lobbiesRes.ok) {
+        const lobbiesData = await lobbiesRes.json();
+        if (lobbiesData.success) setLobbies(lobbiesData.lobbies || []);
+      }
     } catch (error) {
-      console.error('Erreur chargement:', error);
-      toast.error('Erreur de chargement');
+      console.error('Erreur chargement mystery:', error);
+      toast.error('Erreur de chargement des données');
     } finally {
       setLoading(false);
     }
