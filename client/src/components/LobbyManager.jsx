@@ -3,7 +3,7 @@ import { Trash2, Trophy, Users, Calendar, Archive, Eye, EyeOff, RotateCcw } from
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
-const LobbyManager = ({ lobbies, quizzes, onDelete }) => {
+const LobbyManager = ({ lobbies = [], quizzes = [], onDelete }) => {
   const [showArchived, setShowArchived] = useState(false);
   
   const finishedLobbies = lobbies.filter(l => l.status === 'finished');

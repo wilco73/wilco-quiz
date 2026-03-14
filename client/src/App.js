@@ -552,17 +552,6 @@ const App = () => {
     }
   };
 
-  const handleResetScores = async () => {
-    if (!window.confirm('Réinitialiser tous les scores ? Cette action est irréversible.')) return;
-    
-    const result = await socket.resetScores();
-    if (result.success) {
-      toast.success('Scores réinitialisés !');
-    } else {
-      toast.error(result.message || 'Erreur lors de la réinitialisation');
-    }
-  };
-
   // === RENDER ===
   
   if (!isConnected && view !== 'login') {
@@ -681,7 +670,6 @@ const App = () => {
           onNavigate={setView}
           currentView={view}
           onLogout={handleLogout}
-          onResetScores={(currentUser?.isAdmin || currentUser?.isSuperAdmin) ? handleResetScores : null}
         >
           {renderLayoutContent()}
         </MainLayout>

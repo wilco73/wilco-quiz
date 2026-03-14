@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Menu, X, Home, Trophy, User, History, Settings, LogOut, 
   Users, Star, Crown, ChevronDown, ChevronRight,
-  FileQuestion, Palette, Trash, Monitor, Check, RotateCcw
+  FileQuestion, Palette, Trash, Monitor, Check
 } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 import Avatar from './Avatar';
@@ -18,8 +18,7 @@ const MainLayout = ({
   children, 
   onNavigate, 
   currentView,
-  onLogout,
-  onResetScores
+  onLogout
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [adminExpanded, setAdminExpanded] = useState(false);
@@ -276,18 +275,7 @@ const MainLayout = ({
                     );
                   })}
                   
-                  {/* Bouton Reset Scores */}
-                  {onResetScores && (
-                    <li>
-                      <button
-                        onClick={onResetScores}
-                        className="w-full flex items-center gap-3 px-4 py-2 rounded-r-lg transition-colors text-sm hover:bg-orange-50 dark:hover:bg-orange-900/20 text-orange-600 dark:text-orange-400"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                        <span>Reset Scores</span>
-                      </button>
-                    </li>
-                  )}
+
                 </ul>
               )}
             </div>
