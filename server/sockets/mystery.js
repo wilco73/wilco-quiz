@@ -14,10 +14,10 @@ module.exports = function(io, socket, db) {
       // Notifier tout le monde
       io.emit('mystery:lobbyCreated', lobby);
       
-      callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MYSTERY] Erreur création lobby:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -30,15 +30,15 @@ module.exports = function(io, socket, db) {
       // Rejoindre la room socket
       socket.join(`mystery:${lobbyId}`);
       socket.mysteryLobbyId = lobbyId;
-      socket.odId = odId;
+      socket.mysteryOdId = odId; // Utiliser un nom différent pour éviter conflit
       
       // Notifier les participants
       io.to(`mystery:${lobbyId}`).emit('mystery:lobbyUpdated', lobby);
       
-      callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MYSTERY] Erreur join lobby:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -51,15 +51,16 @@ module.exports = function(io, socket, db) {
       // Quitter la room socket
       socket.leave(`mystery:${lobbyId}`);
       delete socket.mysteryLobbyId;
+      delete socket.mysteryOdId;
       
       if (lobby) {
         io.to(`mystery:${lobbyId}`).emit('mystery:lobbyUpdated', lobby);
       }
       
-      callback({ success: true });
+      if (callback) callback({ success: true });
     } catch (error) {
       console.error('[MYSTERY] Erreur leave lobby:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -73,10 +74,10 @@ module.exports = function(io, socket, db) {
       io.to(`mystery:${lobbyId}`).emit('mystery:gameStarted', lobby);
       io.emit('mystery:lobbyUpdated', lobby);
       
-      callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MYSTERY] Erreur start game:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -101,10 +102,10 @@ module.exports = function(io, socket, db) {
         io.emit('mystery:lobbyUpdated', finishedLobby);
       }
       
-      callback({ success: true, result });
+      if (callback) callback({ success: true, result });
     } catch (error) {
       console.error('[MYSTERY] Erreur reveal cell:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -116,10 +117,10 @@ module.exports = function(io, socket, db) {
       
       io.to(`mystery:${lobbyId}`).emit('mystery:revealClosed', lobby);
       
-      callback({ success: true });
+      if (callback) callback({ success: true });
     } catch (error) {
       console.error('[MYSTERY] Erreur close reveal:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -130,10 +131,10 @@ module.exports = function(io, socket, db) {
       await db.toggleMysteryMute(lobbyId, odId, muted);
       
       // Pas besoin de broadcast, c'est local
-      callback({ success: true });
+      if (callback) callback({ success: true });
     } catch (error) {
       console.error('[MYSTERY] Erreur toggle mute:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -146,10 +147,10 @@ module.exports = function(io, socket, db) {
       io.to(`mystery:${lobbyId}`).emit('mystery:gameFinished', lobby);
       io.emit('mystery:lobbyUpdated', lobby);
       
-      callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MYSTERY] Erreur finish game:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -162,10 +163,10 @@ module.exports = function(io, socket, db) {
       io.to(`mystery:${lobbyId}`).emit('mystery:lobbyDeleted', { lobbyId });
       io.emit('mystery:lobbyDeleted', { lobbyId });
       
-      callback({ success: true });
+      if (callback) callback({ success: true });
     } catch (error) {
       console.error('[MYSTERY] Erreur delete lobby:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -176,24 +177,12 @@ module.exports = function(io, socket, db) {
       socket.join(`mystery:${lobbyId}`);
       
       const lobby = await db.getMysteryLobbyById(lobbyId);
-      callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MYSTERY] Erreur join monitoring:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
-  // Gérer la déconnexion
-  socket.on('disconnect', async () => {
-    if (socket.mysteryLobbyId && socket.odId) {
-      try {
-        const lobby = await db.leaveMysteryLobby(socket.mysteryLobbyId, socket.odId);
-        if (lobby) {
-          io.to(`mystery:${socket.mysteryLobbyId}`).emit('mystery:lobbyUpdated', lobby);
-        }
-      } catch (error) {
-        console.error('[MYSTERY] Erreur leave on disconnect:', error);
-      }
-    }
-  });
+  // NOTE: Le handler disconnect est géré dans sockets/index.js pour éviter les doublons
 };

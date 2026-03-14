@@ -67,23 +67,39 @@ function setup(io) {
       
       // Si dans un lobby de dessin, quitter proprement
       if (socket.drawingLobbyId && socket.odId) {
-        const db = require('../database');
-        const lobby = await db.leaveDrawingLobby(socket.drawingLobbyId, socket.odId);
-        
-        if (lobby) {
-          // Le lobby existe encore, notifier les autres
-          io.to(`drawing:${socket.drawingLobbyId}`).emit('drawingLobby:participantLeft', { 
-            odId: socket.odId 
-          });
-          io.to(`drawing:${socket.drawingLobbyId}`).emit('drawingLobby:updated', { lobby });
-        } else {
-          // Le lobby a été supprimé (était vide)
-          io.to(`drawing:${socket.drawingLobbyId}`).emit('drawingLobby:deleted', { 
-            lobbyId: socket.drawingLobbyId 
-          });
+        try {
+          const lobby = await db.leaveDrawingLobby(socket.drawingLobbyId, socket.odId);
+          
+          if (lobby) {
+            // Le lobby existe encore, notifier les autres
+            io.to(`drawing:${socket.drawingLobbyId}`).emit('drawingLobby:participantLeft', { 
+              odId: socket.odId 
+            });
+            io.to(`drawing:${socket.drawingLobbyId}`).emit('drawingLobby:updated', { lobby });
+          } else {
+            // Le lobby a été supprimé (était vide)
+            io.to(`drawing:${socket.drawingLobbyId}`).emit('drawingLobby:deleted', { 
+              lobbyId: socket.drawingLobbyId 
+            });
+          }
+          
+          console.log(`[DRAWING] ${socket.pseudo || socket.odId} déconnecté du lobby ${socket.drawingLobbyId}`);
+        } catch (error) {
+          console.error('[DRAWING] Erreur leave on disconnect:', error);
         }
-        
-        console.log(`[DRAWING] ${socket.pseudo || socket.odId} déconnecté du lobby ${socket.drawingLobbyId}`);
+      }
+      
+      // Si dans un lobby mystery, quitter proprement
+      if (socket.mysteryLobbyId && socket.mysteryOdId) {
+        try {
+          const lobby = await db.leaveMysteryLobby(socket.mysteryLobbyId, socket.mysteryOdId);
+          if (lobby) {
+            io.to(`mystery:${socket.mysteryLobbyId}`).emit('mystery:lobbyUpdated', lobby);
+          }
+          console.log(`[MYSTERY] ${socket.mysteryOdId} déconnecté du lobby ${socket.mysteryLobbyId}`);
+        } catch (error) {
+          console.error('[MYSTERY] Erreur leave on disconnect:', error);
+        }
       }
       
       console.log(`[SOCKET] Déconnexion: ${socket.id}`);

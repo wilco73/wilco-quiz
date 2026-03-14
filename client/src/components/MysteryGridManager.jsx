@@ -431,6 +431,13 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
                 </div>
                 <div className="flex gap-2">
                   <button
+                    onClick={() => setEditingGrid(editingGrid?.id === grid.id ? null : grid)}
+                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg"
+                    title="Modifier"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => handleCreateLobby(grid.id)}
                     disabled={!grid.isValid}
                     className="flex items-center gap-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -447,6 +454,75 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
                   </button>
                 </div>
               </div>
+
+              {/* Formulaire d'édition de la grille */}
+              {editingGrid?.id === grid.id && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-700">
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-3">Modifier la grille</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-600 dark:text-gray-400">Titre</label>
+                      <input
+                        type="text"
+                        value={editingGrid.title}
+                        onChange={(e) => setEditingGrid({ ...editingGrid, title: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600 dark:text-gray-400">Nombre de cases</label>
+                      <input
+                        type="number"
+                        value={editingGrid.gridSize}
+                        onChange={(e) => setEditingGrid({ ...editingGrid, gridSize: parseInt(e.target.value) || 1 })}
+                        min="1"
+                        max="100"
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600 dark:text-gray-400">Son par défaut (URL)</label>
+                      <input
+                        type="url"
+                        value={editingGrid.defaultSoundUrl || ''}
+                        onChange={(e) => setEditingGrid({ ...editingGrid, defaultSoundUrl: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="https://..."
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600 dark:text-gray-400">Thumbnail par défaut (URL)</label>
+                      <input
+                        type="url"
+                        value={editingGrid.thumbnailDefault || ''}
+                        onChange={(e) => setEditingGrid({ ...editingGrid, thumbnailDefault: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="https://..."
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => handleUpdateGrid(grid.id, {
+                        title: editingGrid.title,
+                        gridSize: editingGrid.gridSize,
+                        defaultSoundUrl: editingGrid.defaultSoundUrl,
+                        thumbnailDefault: editingGrid.thumbnailDefault
+                      })}
+                      className="flex items-center gap-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      <Save className="w-4 h-4" />
+                      Enregistrer
+                    </button>
+                    <button
+                      onClick={() => setEditingGrid(null)}
+                      className="px-4 py-2 bg-gray-300 dark:bg-gray-600 rounded-lg hover:bg-gray-400"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Détails grille (expanded) */}
               {expandedGridId === grid.id && (
