@@ -97,22 +97,44 @@ export function useSocket() {
     };
   }, []);
   
-  // Auth
-  const login = useCallback((teamName, pseudo, password, isAdmin = false) => {
+  // Auth - Login unifié (le serveur détermine le rôle)
+  const login = useCallback((pseudo, password) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { 
         console.log('[SOCKET] login: socket non connecte');
-        resolve({ success: false, message: 'Socket non connecte' }); 
+        resolve({ success: false, message: 'Socket non connecté' }); 
         return; 
       }
-      socketRef.current.emit('auth:login', { teamName, pseudo, password, isAdmin }, resolve);
+      socketRef.current.emit('auth:login', { pseudo, password }, resolve);
     });
   }, []);
   
-  const confirmTeamChange = useCallback((odId, newTeamName, password) => {
+  // Récupérer les infos utilisateur (refresh)
+  const getUser = useCallback((odId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { 
+        resolve({ success: false, message: 'Socket non connecté' }); 
+        return; 
+      }
+      socketRef.current.emit('auth:getUser', { odId }, resolve);
+    });
+  }, []);
+  
+  // Mettre à jour le rôle d'un utilisateur (superadmin only)
+  const updateUserRole = useCallback((requesterId, targetId, newRole) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { 
+        resolve({ success: false, message: 'Socket non connecté' }); 
+        return; 
+      }
+      socketRef.current.emit('auth:updateRole', { requesterId, targetId, newRole }, resolve);
+    });
+  }, []);
+  
+  const confirmTeamChange = useCallback((odId, newTeamName) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
-      socketRef.current.emit('auth:confirmTeamChange', { odId, newTeamName, password }, resolve);
+      socketRef.current.emit('auth:confirmTeamChange', { odId, newTeamName }, resolve);
     });
   }, []);
   
@@ -363,6 +385,8 @@ export function useSocket() {
     setCurrentLobbyState,
     // Auth
     login,
+    getUser,
+    updateUserRole,
     confirmTeamChange,
     // Lobby
     createLobby,

@@ -257,22 +257,22 @@ const App = () => {
       return;
     }
     
-    if (savedSession.isAdmin) {
-      setIsAdmin(true);
-      setAdminUsername(savedSession.adminUsername || 'Admin');
-      setView('admin');
-      hasReconnected.current = true;
-      return;
-    }
-    
+    // Restaurer l'utilisateur
     if (savedSession.currentUser) {
-      setCurrentUser(savedSession.currentUser);
+      const user = savedSession.currentUser;
+      setCurrentUser(user);
+      
+      // Restaurer les droits admin si présents
+      if (user.isAdmin || user.isSuperAdmin) {
+        setIsAdmin(true);
+        setAdminUsername(user.pseudo);
+      }
       
       // Attendre que les lobbies soient charges
       if (savedSession.currentLobbyId) {
         if (lobbies.length > 0) {
           setIsReconnecting(true);
-          reconnectToLobby(savedSession.currentLobbyId, savedSession.currentUser);
+          reconnectToLobby(savedSession.currentLobbyId, user);
           hasReconnected.current = true;
         }
         // Si lobbies pas encore charges, on attend le prochain render
@@ -343,53 +343,30 @@ const App = () => {
 
   // === HANDLERS ===
   
-  const handleLogin = async (teamName, pseudo, password, adminMode) => {
-    if (adminMode) {
-      try {
-        const result = await api.adminLogin(pseudo, password);
-        if (result.success) {
-          setIsAdmin(true);
-          setAdminUsername(pseudo);
-          setView('admin');
-          saveSession({ isAdmin: true, adminUsername: pseudo });
-          toast.success('Connexion admin reussie');
-        } else {
-          toast.error(result.message || 'Echec connexion admin');
-        }
-      } catch (error) {
-        toast.error('Erreur de connexion');
-      }
-      return;
-    }
-    
-    // Login participant via Socket
-    const result = await socket.login(teamName, pseudo, password, false);
+  // Login unifié - le serveur détermine le rôle via la colonne 'role'
+  const handleLogin = async (pseudo, password) => {
+    const result = await socket.login(pseudo, password);
     
     if (result.success) {
-      setCurrentUser(result.user);
-      setView('lobby-list');
-      saveSession({ currentUser: result.user });
-      toast.success(`Bienvenue ${result.user.pseudo} !`);
-    } else if (result.needsConfirmation) {
-      const confirmed = window.confirm(
-        `${result.message}\n\nVoulez-vous changer d'equipe vers "${teamName}" ?`
-      );
+      const user = result.user;
+      setCurrentUser(user);
       
-      if (confirmed) {
-        const changeResult = await socket.confirmTeamChange(result.participant.id, teamName, password);
-        if (changeResult.success) {
-          setCurrentUser(changeResult.user);
-          setView('lobby-list');
-          saveSession({ currentUser: changeResult.user });
-          toast.success('Equipe changee avec succes');
-        }
+      // Vérifier si l'utilisateur a des droits admin
+      if (user.isAdmin || user.isSuperAdmin) {
+        setIsAdmin(true);
+        setAdminUsername(user.pseudo);
+      }
+      
+      setView('lobby-list');
+      saveSession({ currentUser: user });
+      
+      if (result.isNew) {
+        toast.success(`Bienvenue ${user.pseudo} ! Votre compte a été créé.`);
       } else {
-        setCurrentUser(result.participant);
-        setView('lobby-list');
-        saveSession({ currentUser: result.participant });
+        toast.success(`Bon retour ${user.pseudo} !`);
       }
     } else {
-      toast.error(result.message || 'Echec connexion');
+      toast.error(result.message || 'Échec de connexion');
     }
   };
 
@@ -602,6 +579,7 @@ const App = () => {
           onViewScoreboard={() => setView('scoreboard')}
           onViewProfile={() => setView('profile')}
           onViewHistory={() => setView('history')}
+          onViewAdmin={isAdmin ? () => setView('admin') : null}
           onLogout={handleLogout}
         />
       )}
@@ -722,6 +700,7 @@ const App = () => {
           quizzes={quizzes}
           questions={questions}
           socket={socket}
+          onBack={currentUser ? () => setView('lobby-list') : null}
           onLogout={handleLogout}
           onRefreshData={handleRefreshData}
           onUpdateParticipant={handleUpdateParticipant}

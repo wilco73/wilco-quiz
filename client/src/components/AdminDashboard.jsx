@@ -260,6 +260,7 @@ const AdminDashboard = ({
   onUpdateParticipant,
   onDeleteTeam,
   onRefreshData,
+  onBack,
   onLogout
 }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -470,6 +471,15 @@ const AdminDashboard = ({
             <h2 className="text-2xl font-bold dark:text-white">Admin - {adminUsername}</h2>
             <div className="flex gap-2">
               <DarkModeToggle />
+              {onBack && (
+                <button
+                  onClick={onBack}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Retour
+                </button>
+              )}
               <button
                 onClick={handleResetScores}
                 className="flex items-center gap-2 px-4 py-2 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600"

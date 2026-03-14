@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { LogOut, UserPlus, Trophy, Users, Star, User, History, Palette } from 'lucide-react';
+import { LogOut, UserPlus, Trophy, Users, Star, User, History, Palette, Settings } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 import Avatar from './Avatar';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
-const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJoinLobby, onJoinDrawingLobby, onViewScoreboard, onViewProfile, onViewHistory, onLogout }) => {
+const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJoinLobby, onJoinDrawingLobby, onViewScoreboard, onViewProfile, onViewHistory, onViewAdmin, onLogout }) => {
   const availableLobbies = lobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
   const userTeam = teams.find(t => t.name === currentUser.teamName);
   const [drawingLobbies, setDrawingLobbies] = useState([]);
@@ -181,6 +181,17 @@ const LobbyViewList = ({ currentUser, lobbies, quizzes, teams, participants, onJ
                 <Trophy className="w-4 h-4" />
                 Classement
               </button>
+              {/* Bouton Admin - visible uniquement si l'utilisateur a les droits */}
+              {(currentUser.isAdmin || currentUser.isSuperAdmin) && onViewAdmin && (
+                <button
+                  onClick={onViewAdmin}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600"
+                  title="Administration"
+                >
+                  <Settings className="w-4 h-4" />
+                  Admin
+                </button>
+              )}
               <button
                 onClick={onLogout}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
