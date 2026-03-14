@@ -21,6 +21,43 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 const SALT_ROUNDS = 10;
 
+// ==================== CONSTANTES ROLES ====================
+
+const ROLES = {
+  USER: 'user',
+  ADMIN: 'admin',
+  SUPERADMIN: 'superadmin'
+};
+
+const ROLE_HIERARCHY = {
+  'user': 0,
+  'admin': 1,
+  'superadmin': 2
+};
+
+/**
+ * Vérifie si un rôle a les permissions d'un autre rôle
+ */
+function hasRole(userRole, requiredRole) {
+  const userLevel = ROLE_HIERARCHY[userRole] || 0;
+  const requiredLevel = ROLE_HIERARCHY[requiredRole] || 0;
+  return userLevel >= requiredLevel;
+}
+
+/**
+ * Vérifie si l'utilisateur est au moins admin
+ */
+function isAdmin(role) {
+  return hasRole(role, ROLES.ADMIN);
+}
+
+/**
+ * Vérifie si l'utilisateur est superadmin
+ */
+function isSuperAdmin(role) {
+  return role === ROLES.SUPERADMIN;
+}
+
 /**
  * Initialise la connexion à la base de données
  */
@@ -264,7 +301,7 @@ async function getAllParticipants() {
   const { data, error } = await supabase
     .from('participants')
     .select(`
-      id, pseudo, password_hash, team_id, avatar, created_at,
+      id, pseudo, password_hash, team_id, avatar, role, created_at,
       teams (name)
     `)
     .order('pseudo');
@@ -278,6 +315,7 @@ async function getAllParticipants() {
     teamId: p.team_id,
     teamName: p.teams?.name || null,
     avatar: p.avatar || 'default',
+    role: p.role || 'user',
     createdAt: p.created_at
   }));
 }
@@ -286,7 +324,7 @@ async function getParticipantByPseudo(pseudo) {
   const { data } = await supabase
     .from('participants')
     .select(`
-      id, pseudo, password_hash, team_id, avatar, created_at,
+      id, pseudo, password_hash, team_id, avatar, role, created_at,
       teams (name)
     `)
     .eq('pseudo', pseudo)
@@ -301,6 +339,7 @@ async function getParticipantByPseudo(pseudo) {
     teamId: data.team_id,
     teamName: data.teams?.name || null,
     avatar: data.avatar || 'default',
+    role: data.role || 'user',
     createdAt: data.created_at
   };
 }
@@ -309,7 +348,7 @@ async function getParticipantById(id) {
   const { data } = await supabase
     .from('participants')
     .select(`
-      id, pseudo, password_hash, team_id, avatar, created_at,
+      id, pseudo, password_hash, team_id, avatar, role, created_at,
       teams (name)
     `)
     .eq('id', id)
@@ -324,11 +363,12 @@ async function getParticipantById(id) {
     teamId: data.team_id,
     teamName: data.teams?.name || null,
     avatar: data.avatar || 'default',
+    role: data.role || 'user',
     createdAt: data.created_at
   };
 }
 
-async function createParticipant(id, pseudo, password, teamId, avatar = 'default') {
+async function createParticipant(id, pseudo, password, teamId, avatar = 'default', role = 'user') {
   const passwordHash = hashPasswordSync(password);
   
   const { error } = await supabase
@@ -338,7 +378,8 @@ async function createParticipant(id, pseudo, password, teamId, avatar = 'default
       pseudo,
       password_hash: passwordHash,
       team_id: teamId,
-      avatar
+      avatar,
+      role
     });
   
   if (error) throw error;
@@ -394,6 +435,69 @@ async function deleteParticipant(participantId) {
   await supabase.from('drawing_lobby_participants').delete().eq('participant_id', participantId);
   // Puis supprimer le participant
   await supabase.from('participants').delete().eq('id', participantId);
+}
+
+// ==================== GESTION DES ROLES ====================
+
+async function updateParticipantRole(participantId, role) {
+  if (!Object.values(ROLES).includes(role)) {
+    throw new Error(`Rôle invalide: ${role}`);
+  }
+  
+  await supabase
+    .from('participants')
+    .update({ role })
+    .eq('id', participantId);
+  
+  return getParticipantById(participantId);
+}
+
+async function getParticipantsByRole(role) {
+  const { data, error } = await supabase
+    .from('participants')
+    .select(`
+      id, pseudo, password_hash, team_id, avatar, role, created_at,
+      teams (name)
+    `)
+    .eq('role', role)
+    .order('pseudo');
+  
+  if (error) throw error;
+  
+  return data.map(p => ({
+    id: p.id,
+    pseudo: p.pseudo,
+    password: p.password_hash,
+    teamId: p.team_id,
+    teamName: p.teams?.name || null,
+    avatar: p.avatar || 'default',
+    role: p.role || 'user',
+    createdAt: p.created_at
+  }));
+}
+
+async function getAdminParticipants() {
+  const { data, error } = await supabase
+    .from('participants')
+    .select(`
+      id, pseudo, password_hash, team_id, avatar, role, created_at,
+      teams (name)
+    `)
+    .in('role', ['admin', 'superadmin'])
+    .order('pseudo');
+  
+  if (error) throw error;
+  
+  return data.map(p => ({
+    id: p.id,
+    pseudo: p.pseudo,
+    password: p.password_hash,
+    teamId: p.team_id,
+    teamName: p.teams?.name || null,
+    avatar: p.avatar || 'default',
+    role: p.role,
+    createdAt: p.created_at
+  }));
 }
 
 async function saveAllParticipants(participants) {
@@ -1882,5 +1986,14 @@ module.exports = {
   saveDrawing,
   getDrawingsByLobby,
   getDrawingById,
-  getDrawingScoresByLobby
+  getDrawingScoresByLobby,
+  
+  // Roles
+  ROLES,
+  hasRole,
+  isAdmin,
+  isSuperAdmin,
+  updateParticipantRole,
+  getParticipantsByRole,
+  getAdminParticipants
 };
