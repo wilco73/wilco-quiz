@@ -85,7 +85,7 @@ const MainLayout = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex">
+    <div className="h-screen bg-gray-100 dark:bg-gray-900 flex overflow-hidden">
       {/* Overlay mobile */}
       {sidebarOpen && (
         <div 
@@ -100,7 +100,7 @@ const MainLayout = ({
         w-72 bg-white dark:bg-gray-800 shadow-xl
         transform transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        flex flex-col
+        flex flex-col h-screen
       `}>
         {/* Header sidebar */}
         <div className="p-4 border-b dark:border-gray-700">
@@ -298,9 +298,9 @@ const MainLayout = ({
       </aside>
       
       {/* Contenu principal */}
-      <main className="flex-1 flex flex-col min-h-screen">
+      <main className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Header mobile */}
-        <header className="lg:hidden sticky top-0 z-30 bg-white dark:bg-gray-800 shadow-sm px-4 py-3 flex items-center justify-between">
+        <header className="lg:hidden sticky top-0 z-30 bg-white dark:bg-gray-800 shadow-sm px-4 py-3 flex items-center justify-between flex-shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
@@ -317,7 +317,7 @@ const MainLayout = ({
           </div>
         </header>
         
-        {/* Contenu */}
+        {/* Contenu - scroll interne uniquement */}
         <div className="flex-1 p-4 lg:p-6 overflow-auto">
           {children}
         </div>

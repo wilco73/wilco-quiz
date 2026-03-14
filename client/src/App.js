@@ -725,14 +725,6 @@ const App = () => {
         />
       )}
       
-      {view === 'scoreboard' && (
-        <ScoreboardView
-          teams={teams}
-          currentUser={currentUser}
-          onBack={() => setView(currentLobby ? 'results' : 'lobby-list')}
-        />
-      )}
-      
       {view === 'drawing-lobby' && currentDrawingLobby && (
         currentDrawingLobby.config?.gameType === 'relay' ? (
           <RelayLobbyView

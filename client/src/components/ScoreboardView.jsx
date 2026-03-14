@@ -3,7 +3,7 @@ import { Trophy, Medal, Users, TrendingUp, Star, ArrowLeft, ChevronLeft, Chevron
 
 const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
   const [currentPage, setCurrentPage] = useState(1);
-  const teamsPerPage = 5; // Nombre d'équipes par page
+  const teamsPerPage = embedded ? 10 : 5;
   
   const sortedTeams = [...teams].sort((a, b) => (b.validatedScore || 0) - (a.validatedScore || 0));
   const userTeam = teams.find(t => t.name === currentUser?.teamName);
@@ -15,20 +15,21 @@ const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
   const endIndex = startIndex + teamsPerPage;
   const currentTeams = sortedTeams.slice(startIndex, endIndex);
 
-  const getMedalIcon = (rank) => {
+  const getMedalIcon = (rank, small = false) => {
+    const size = small ? "w-5 h-5" : "w-8 h-8";
     switch(rank) {
-      case 1: return <Trophy className="w-8 h-8 text-yellow-500 dark:text-yellow-400" />;
-      case 2: return <Medal className="w-8 h-8 text-gray-400 dark:text-gray-500" />;
-      case 3: return <Medal className="w-8 h-8 text-orange-600 dark:text-orange-500" />;
+      case 1: return <Trophy className={`${size} text-yellow-500`} />;
+      case 2: return <Medal className={`${size} text-gray-400`} />;
+      case 3: return <Medal className={`${size} text-orange-600`} />;
       default: return null;
     }
   };
 
   const getMedalColor = (rank) => {
     switch(rank) {
-      case 1: return 'bg-gradient-to-r from-yellow-100 to-yellow-200 dark:from-yellow-900/30 dark:to-yellow-800/30 border-yellow-500 dark:border-yellow-600';
-      case 2: return 'bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 border-gray-500 dark:border-gray-600';
-      case 3: return 'bg-gradient-to-r from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30 border-orange-500 dark:border-orange-600';
+      case 1: return 'bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border-yellow-400';
+      case 2: return 'bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 border-gray-400';
+      case 3: return 'bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-orange-400';
       default: return 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600';
     }
   };
@@ -37,10 +38,116 @@ const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
 
-  // Classes du conteneur selon le mode
-  const containerClass = embedded 
-    ? "" 
-    : "min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 dark:from-gray-900 dark:to-gray-800 p-4";
+  // Version compacte pour embedded
+  if (embedded) {
+    return (
+      <div className="h-full flex flex-col">
+        {/* Header compact */}
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-xl font-bold dark:text-white flex items-center gap-2">
+            <Trophy className="w-6 h-6 text-yellow-500" />
+            Classement
+          </h1>
+          <span className="text-sm text-gray-500">
+            {teams.length} équipes
+          </span>
+        </div>
+
+        {/* Votre équipe - compact */}
+        {userTeam && (
+          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 mb-4 border border-purple-300 dark:border-purple-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-purple-600" />
+                <span className="font-semibold dark:text-white">{userTeam.name}</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-purple-600 font-bold">#{userRank}</span>
+                <span className="text-purple-600 font-bold">{userTeam.validatedScore || 0} pts</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Podium inline compact */}
+        {sortedTeams.length >= 3 && (
+          <div className="flex gap-2 mb-4">
+            {[0, 1, 2].map(idx => (
+              <div key={idx} className={`flex-1 p-2 rounded-lg border text-center ${getMedalColor(idx + 1)}`}>
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  {getMedalIcon(idx + 1, true)}
+                  <span className="font-bold text-sm">{idx + 1}</span>
+                </div>
+                <p className="font-semibold text-sm truncate dark:text-white">{sortedTeams[idx]?.name}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">{sortedTeams[idx]?.validatedScore || 0} pts</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Liste compacte */}
+        <div className="flex-1 overflow-auto">
+          <div className="space-y-1">
+            {currentTeams.map((team, pageIndex) => {
+              const rank = startIndex + pageIndex + 1;
+              const isUserTeam = team.name === currentUser?.teamName;
+              
+              return (
+                <div
+                  key={team.id}
+                  className={`flex items-center justify-between p-2 rounded-lg border ${
+                    isUserTeam 
+                      ? 'border-purple-400 bg-purple-50 dark:bg-purple-900/20' 
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 flex justify-center">
+                      {rank <= 3 ? getMedalIcon(rank, true) : (
+                        <span className="text-sm font-bold text-gray-500">#{rank}</span>
+                      )}
+                    </div>
+                    <span className={`font-medium text-sm truncate max-w-[150px] ${isUserTeam ? 'text-purple-700 dark:text-purple-300' : 'dark:text-white'}`}>
+                      {team.name}
+                    </span>
+                  </div>
+                  <span className="font-bold text-purple-600 dark:text-purple-400 text-sm">
+                    {team.validatedScore || 0}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Pagination compacte */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t dark:border-gray-700">
+            <button
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="p-1 rounded disabled:opacity-50"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="p-1 rounded disabled:opacity-50"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Version complète (non embedded)
+  const containerClass = "min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 dark:from-gray-900 dark:to-gray-800 p-4";
 
   return (
     <div className={containerClass}>

@@ -47,7 +47,7 @@ const AdminContent = ({
 
   // Grouper les quiz par groupe
   const quizGroups = quizzes.reduce((acc, quiz) => {
-    const group = quiz.group || 'Sans groupe';
+    const group = quiz.groupName || 'Sans groupe';
     if (!acc[group]) acc[group] = [];
     acc[group].push(quiz);
     return acc;
