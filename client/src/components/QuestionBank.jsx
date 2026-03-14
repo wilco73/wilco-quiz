@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useRef } from 'react';
-import QuestionEditor from './QuestionEditor';
-import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download, ChevronLeft, ChevronRight, FileUp, RefreshCw, PlusCircle, Replace } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import QuestionEditor from './QuestionEditor';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
 const QuestionBank = ({ questions, onSave }) => {
   const [localQuestions, setLocalQuestions] = useState(questions || []);
   const [editingQuestion, setEditingQuestion] = useState(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -16,7 +19,14 @@ const QuestionBank = ({ questions, onSave }) => {
   const fileInputRef = useRef(null);
   const questionsPerPage = 10;
   const toast = useToast();
-  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  
+  // État pour la modale d'import CSV
+  const [importModal, setImportModal] = useState({
+    isOpen: false,
+    questions: [],
+    isImporting: false,
+    progress: 0
+  });
 
   const [formData, setFormData] = useState({
     text: '',
@@ -146,7 +156,7 @@ const QuestionBank = ({ questions, onSave }) => {
         const importedQuestions = [];
         let errors = [];
 
-        // ========== ÉTAPE 1 : PARSER TOUTES LES QUESTIONS ==========
+        // Parser toutes les questions
         dataLines.forEach((line, index) => {
           try {
             const values = parseCSVLine(line, detectedDelimiter);
@@ -168,7 +178,6 @@ const QuestionBank = ({ questions, onSave }) => {
               return;
             }
 
-            // Parser les tags (séparés par |)
             const tags = tagsStr ? tagsStr.split('|').map(t => t.trim()).filter(Boolean) : [];
 
             const question = {
@@ -177,7 +186,7 @@ const QuestionBank = ({ questions, onSave }) => {
               category: category || '',
               tags: tags,
               text: text.trim(),
-              answer: answer ?.trim() || '',
+              answer: answer?.trim() || '',
               media: media || '',
               mediaType: mediaType || '',
               points: parseInt(points) || 1,
@@ -210,10 +219,9 @@ const QuestionBank = ({ questions, onSave }) => {
           }
         });
 
-        // Afficher les erreurs de parsing s'il y en a
         if (errors.length > 0) {
           console.error('Erreurs d\'import:', errors);
-          toast.warning(`Import terminé avec ${errors.length} erreur(s)`);
+          toast.warning(`Parsing terminé avec ${errors.length} erreur(s)`);
         }
 
         if (importedQuestions.length === 0) {
@@ -221,182 +229,132 @@ const QuestionBank = ({ questions, onSave }) => {
           return;
         }
 
-        // ========== ÉTAPE 2 : CHOISIR LE MODE D'IMPORT ==========
-        const confirmMessage =
-          `Importer ${importedQuestions.length} question(s) ?\n\n` +
-          `Choisissez le mode d'import :\n\n` +
-          `1. FUSIONNER (recommandé)\n` +
-          `   → Met à jour les questions existantes (même ID)\n` +
-          `   → Ajoute les nouvelles questions\n` +
-          `   → Conserve les autres questions\n\n` +
-          `2. AJOUTER\n` +
-          `   → Ajoute uniquement les nouvelles\n` +
-          `   → Ignore les doublons (même ID)\n\n` +
-          `3. REMPLACER\n` +
-          `   → Supprime TOUT et importe uniquement le CSV\n\n` +
-          `Cliquez :\n` +
-          `- OK pour FUSIONNER\n` +
-          `- Annuler pour choisir`;
+        // Ouvrir la modale pour choisir le mode d'import
+        setImportModal({
+          isOpen: true,
+          questions: importedQuestions,
+          isImporting: false,
+          progress: 0
+        });
 
-        const primaryChoice = window.confirm(confirmMessage);
-
-        let mode;
-        if (primaryChoice) {
-          // Choix 1 : FUSIONNER
-          mode = 'update';
-        } else {
-          // Demander entre AJOUTER ou REMPLACER
-          const secondChoice = window.confirm(
-            'Choisissez :\n\n' +
-            '- OK pour AJOUTER (ignore doublons)\n' +
-            '- Annuler pour REMPLACER (supprime tout)'
-          );
-          mode = secondChoice ? 'add' : 'replace';
-        }
-
-        // ========== ÉTAPE 3 : DÉCIDER BATCH OU PAS ==========
-        const BATCH_SIZE = 200; // Seuil pour batch
-        const needsBatch = importedQuestions.length > BATCH_SIZE;
-
-        try {
-          if (needsBatch) {
-            // ========== GROS CSV : IMPORT PAR BATCH ==========
-            console.log(`📦 Import par batch: ${importedQuestions.length} questions`);
-
-            // Désactiver le bouton d'import pendant le traitement
-            const importButton = document.querySelector('input[type="file"][accept=".csv"]');
-            if (importButton) importButton.disabled = true;
-
-            // Découper en batches
-            const batches = [];
-            for (let i = 0; i < importedQuestions.length; i += BATCH_SIZE) {
-              batches.push(importedQuestions.slice(i, i + BATCH_SIZE));
-            }
-
-            let totalAdded = 0;
-            let totalUpdated = 0;
-
-            // Envoyer chaque batch
-            for (let i = 0; i < batches.length; i++) {
-              const batch = batches[i];
-              const isFirstBatch = i === 0;
-
-              toast.info(`📦 Import batch ${i + 1}/${batches.length} (${batch.length} questions)...`);
-
-              const response = await fetch(
-                `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/merge`,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    questions: batch,
-                    // Premier batch : mode choisi, batches suivants : toujours 'add'
-                    mode: isFirstBatch ? mode : 'add'
-                  })
-                }
-              );
-
-              if (!response.ok) {
-                throw new Error(`Erreur batch ${i + 1}: ${response.statusText}`);
-              }
-
-              const result = await response.json();
-              totalAdded += result.stats.added || 0;
-              totalUpdated += result.stats.updated || 0;
-            }
-
-            // Message de succès détaillé
-            let successMessage;
-            if (mode === 'update') {
-              successMessage =
-                `✅ Import terminé !\n\n` +
-                `• ${totalAdded} ajoutée(s)\n` +
-                `• ${totalUpdated} mise(s) à jour\n` +
-                `• Total : ${totalAdded + totalUpdated} questions importées`;
-            } else if (mode === 'add') {
-              successMessage =
-                `✅ ${totalAdded} question(s) ajoutée(s)\n` +
-                `• ${importedQuestions.length - totalAdded} ignorée(s) (doublons)`;
-            } else {
-              successMessage =
-                `✅ ${importedQuestions.length} question(s) importée(s)\n` +
-                `• Anciennes questions supprimées`;
-            }
-
-            toast.success(successMessage);
-
-            // Rafraîchir pour obtenir les données du serveur
-            setTimeout(() => {
-              window.location.reload();
-            }, 1500);
-
-            // Réactiver le bouton
-            if (importButton) importButton.disabled = false;
-
-          } else {
-            // ========== PETIT CSV : IMPORT DIRECT ==========
-            console.log(`⚡ Import direct: ${importedQuestions.length} questions`);
-
-            const response = await fetch(
-              `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/merge`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  questions: importedQuestions,
-                  mode: mode
-                })
-              }
-            );
-
-            if (!response.ok) {
-              throw new Error(`Erreur lors de l'import: ${response.statusText}`);
-            }
-
-            const result = await response.json();
-
-            // Message de succès détaillé
-            let successMessage;
-            if (mode === 'update') {
-              successMessage =
-                `✅ Import terminé !\n\n` +
-                `• ${result.stats.added} ajoutée(s)\n` +
-                `• ${result.stats.updated} mise(s) à jour\n` +
-                `• Total : ${result.stats.total} questions`;
-            } else if (mode === 'add') {
-              successMessage =
-                `✅ ${result.stats.added} question(s) ajoutée(s)\n` +
-                `• ${importedQuestions.length - result.stats.added} ignorée(s) (doublons)\n` +
-                `• Total : ${result.stats.total} questions`;
-            } else {
-              successMessage =
-                `✅ ${importedQuestions.length} question(s) importée(s)\n` +
-                `• Anciennes questions supprimées\n` +
-                `• Total : ${result.stats.total} questions`;
-            }
-
-            toast.success(successMessage);
-
-            // Rafraîchir pour obtenir les données du serveur
-            setTimeout(() => {
-              window.location.reload();
-            }, 1500);
-          }
-
-        } catch (error) {
-          console.error('Erreur import CSV:', error);
-          toast.error(`Erreur lors de l'import: ${error.message}`);
-
-          // Réactiver le bouton en cas d'erreur
-          const importButton = document.querySelector('input[type="file"][accept=".csv"]');
-          if (importButton) importButton.disabled = false;
+        // Reset le champ file
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
         }
 
       } catch (error) {
-        console.error('Erreur import CSV:', error);
-        toast.error('Erreur lors de l\'import du fichier CSV');
+        console.error('Erreur parsing CSV:', error);
+        toast.error('Erreur lors de la lecture du fichier CSV');
       }
     };
+
+    reader.readAsText(file);
+  };
+
+  // ✅ Exécuter l'import avec le mode choisi
+  const executeImport = async (mode) => {
+    const importedQuestions = importModal.questions;
+    
+    setImportModal(prev => ({ ...prev, isImporting: true, progress: 0 }));
+
+    const BATCH_SIZE = 200;
+    const needsBatch = importedQuestions.length > BATCH_SIZE;
+
+    try {
+      if (needsBatch) {
+        // Import par batch
+        console.log(`📦 Import par batch: ${importedQuestions.length} questions`);
+
+        const batches = [];
+        for (let i = 0; i < importedQuestions.length; i += BATCH_SIZE) {
+          batches.push(importedQuestions.slice(i, i + BATCH_SIZE));
+        }
+
+        let totalAdded = 0;
+        let totalUpdated = 0;
+
+        for (let i = 0; i < batches.length; i++) {
+          const batch = batches[i];
+          const isFirstBatch = i === 0;
+          
+          setImportModal(prev => ({ 
+            ...prev, 
+            progress: Math.round((i / batches.length) * 100) 
+          }));
+
+          const response = await fetch(`${API_URL}/questions/merge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              questions: batch,
+              mode: isFirstBatch ? mode : 'add'
+            })
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Erreur batch ${i + 1}: ${response.statusText}`);
+          }
+
+          const result = await response.json();
+          totalAdded += result.stats?.added || 0;
+          totalUpdated += result.stats?.updated || 0;
+        }
+
+        setImportModal(prev => ({ ...prev, progress: 100 }));
+
+        // Message de succès
+        if (mode === 'update') {
+          toast.success(`✅ Import terminé ! ${totalAdded} ajoutée(s), ${totalUpdated} mise(s) à jour`);
+        } else if (mode === 'add') {
+          toast.success(`✅ ${totalAdded} question(s) ajoutée(s)`);
+        } else {
+          toast.success(`✅ ${importedQuestions.length} question(s) importée(s) (remplacement)`);
+        }
+
+      } else {
+        // Import direct
+        console.log(`⚡ Import direct: ${importedQuestions.length} questions`);
+
+        const response = await fetch(`${API_URL}/questions/merge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            questions: importedQuestions,
+            mode: mode
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Erreur: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        setImportModal(prev => ({ ...prev, progress: 100 }));
+
+        if (mode === 'update') {
+          toast.success(`✅ Import terminé ! ${result.stats?.added || 0} ajoutée(s), ${result.stats?.updated || 0} mise(s) à jour`);
+        } else if (mode === 'add') {
+          toast.success(`✅ ${result.stats?.added || 0} question(s) ajoutée(s)`);
+        } else {
+          toast.success(`✅ ${importedQuestions.length} question(s) importée(s) (remplacement)`);
+        }
+      }
+
+      // Fermer la modale et rafraîchir
+      setImportModal({ isOpen: false, questions: [], isImporting: false, progress: 0 });
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+
+    } catch (error) {
+      console.error('Erreur import CSV:', error);
+      toast.error(`Erreur: ${error.message}`);
+      setImportModal(prev => ({ ...prev, isImporting: false }));
+    }
+  };
 
     reader.readAsText(file, 'UTF-8');
     event.target.value = ''; // Reset input pour permettre de réimporter le même fichier
@@ -649,6 +607,26 @@ const QuestionBank = ({ questions, onSave }) => {
     setIsEditorOpen(true);
   };
 
+  const handleNewQuestion = () => {
+    setEditingQuestion(null);
+    setIsEditorOpen(true);
+  };
+
+  const handleEditorClose = () => {
+    setIsEditorOpen(false);
+    setEditingQuestion(null);
+  };
+
+  const handleEditorSave = (savedQuestion, action) => {
+    if (action === 'update') {
+      setLocalQuestions(localQuestions.map(q => 
+        q.id === savedQuestion.id ? savedQuestion : q
+      ));
+    } else {
+      setLocalQuestions([...localQuestions, savedQuestion]);
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!window.confirm('Supprimer cette question ?')) return;
 
@@ -695,26 +673,6 @@ const QuestionBank = ({ questions, onSave }) => {
       choices: newChoices,
       correctChoice: formData.correctChoice >= newChoices.length ? 0 : formData.correctChoice
     });
-  };
-
-  const handleNewQuestion = () => {
-    setEditingQuestion(null);
-    setIsEditorOpen(true);
-  };
-
-  const handleEditorClose = () => {
-    setIsEditorOpen(false);
-    setEditingQuestion(null);
-  };
-
-  const handleEditorSave = (savedQuestion, action) => {
-    if (action === 'update') {
-      setLocalQuestions(localQuestions.map(q => 
-        q.id === savedQuestion.id ? savedQuestion : q
-      ));
-    } else {
-      setLocalQuestions([...localQuestions, savedQuestion]);
-    }
   };
 
   // ✅ FILTRAGE avec catégorie, type et tags
@@ -951,7 +909,7 @@ const QuestionBank = ({ questions, onSave }) => {
 
   return (
     <div className="space-y-6">
-
+      {/* Panneau d'édition latéral */}
       <QuestionEditor
         question={editingQuestion}
         isOpen={isEditorOpen}
@@ -960,10 +918,160 @@ const QuestionBank = ({ questions, onSave }) => {
         categories={categories}
         allTags={allTags}
       />
+
+      {/* Modale d'import CSV */}
+      {importModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <FileUp className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-bold text-white">Import CSV</h2>
+                </div>
+                {!importModal.isImporting && (
+                  <button 
+                    onClick={() => setImportModal({ isOpen: false, questions: [], isImporting: false, progress: 0 })}
+                    className="text-white/80 hover:text-white"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                )}
+              </div>
+              <p className="text-blue-100 text-sm mt-1">
+                {importModal.questions.length} question(s) prête(s) à importer
+              </p>
+            </div>
+
+            {/* Contenu */}
+            <div className="p-6">
+              {importModal.isImporting ? (
+                // Affichage pendant l'import
+                <div className="text-center py-8">
+                  <div className="relative w-24 h-24 mx-auto mb-4">
+                    <div className="absolute inset-0 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
+                    <div 
+                      className="absolute inset-0 border-4 border-purple-600 rounded-full transition-all duration-300"
+                      style={{
+                        clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%)`,
+                        transform: `rotate(${(importModal.progress / 100) * 360}deg)`
+                      }}
+                    ></div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-2xl font-bold text-purple-600">{importModal.progress}%</span>
+                    </div>
+                  </div>
+                  <p className="text-gray-600 dark:text-gray-400">Import en cours...</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                    Ne fermez pas cette fenêtre
+                  </p>
+                </div>
+              ) : (
+                // Choix du mode d'import
+                <div className="space-y-4">
+                  <p className="text-gray-600 dark:text-gray-400 text-center mb-6">
+                    Choisissez comment importer vos questions :
+                  </p>
+
+                  {/* Option Fusionner */}
+                  <button
+                    onClick={() => executeImport('update')}
+                    className="w-full p-4 border-2 border-green-200 dark:border-green-700 rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20 transition text-left group"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="p-2 bg-green-100 dark:bg-green-900/50 rounded-lg group-hover:bg-green-200 dark:group-hover:bg-green-800/50 transition">
+                        <RefreshCw className="w-6 h-6 text-green-600 dark:text-green-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-green-700 dark:text-green-400 flex items-center gap-2">
+                          Fusionner
+                          <span className="text-xs bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 px-2 py-0.5 rounded">Recommandé</span>
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Met à jour les questions existantes (même ID) et ajoute les nouvelles.
+                          Conserve les autres questions.
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Option Ajouter */}
+                  <button
+                    onClick={() => executeImport('add')}
+                    className="w-full p-4 border-2 border-blue-200 dark:border-blue-700 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition text-left group"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg group-hover:bg-blue-200 dark:group-hover:bg-blue-800/50 transition">
+                        <PlusCircle className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-blue-700 dark:text-blue-400">Ajouter uniquement</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Ajoute uniquement les nouvelles questions.
+                          Ignore les doublons (même ID).
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Option Remplacer */}
+                  <button
+                    onClick={() => {
+                      if (window.confirm('⚠️ Attention ! Cette action va SUPPRIMER TOUTES les questions existantes et les remplacer par celles du CSV. Êtes-vous sûr ?')) {
+                        executeImport('replace');
+                      }
+                    }}
+                    className="w-full p-4 border-2 border-red-200 dark:border-red-700 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition text-left group"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-lg group-hover:bg-red-200 dark:group-hover:bg-red-800/50 transition">
+                        <Replace className="w-6 h-6 text-red-600 dark:text-red-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-red-700 dark:text-red-400 flex items-center gap-2">
+                          Remplacer tout
+                          <span className="text-xs bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 px-2 py-0.5 rounded">Dangereux</span>
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Supprime TOUTES les questions existantes et importe uniquement le CSV.
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {!importModal.isImporting && (
+              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setImportModal({ isOpen: false, questions: [], isImporting: false, progress: 0 })}
+                  className="w-full py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
+                >
+                  Annuler
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold dark:text-white">Banque de Questions</h2>
+
           <div className="flex gap-2 items-center">
+            {/* Bouton Nouvelle Question */}
+            <button
+              onClick={handleNewQuestion}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold"
+            >
+              <Plus className="w-4 h-4" />
+              Nouvelle Question
+            </button>
+
             {/* Sélecteur de délimiteur CSV */}
             <select
               value={csvDelimiter}
@@ -985,7 +1093,7 @@ const QuestionBank = ({ questions, onSave }) => {
             </button>
 
             <button
-              onClick={() => fileInputRef.current ?.click()}
+              onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2 px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition"
               title="Importer des questions depuis un fichier CSV"
             >
@@ -1010,14 +1118,6 @@ const QuestionBank = ({ questions, onSave }) => {
             </button>
 
             <button
-              onClick={handleNewQuestion}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold"
-            >
-              <Plus className="w-4 h-4" />
-              Nouvelle Question
-            </button>
-
-            <button
               onClick={() => setShowPreview(!showPreview)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
                 showPreview
@@ -1030,6 +1130,267 @@ const QuestionBank = ({ questions, onSave }) => {
             </button>
           </div>
         </div>
+
+        {/* Formulaire d'ajout/édition */}
+        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
+          <h3 className="font-bold mb-3 dark:text-white">{editingQuestion ? 'Modifier' : 'Nouvelle'} Question</h3>
+
+          <div className="space-y-3">
+            <select
+              value={formData.type}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            >
+              <option value="text">Texte</option>
+              <option value="qcm">QCM (Choix Multiple)</option>
+              <option value="image">Image</option>
+              <option value="video">Vidéo</option>
+              <option value="audio">Audio</option>
+            </select>
+
+            <input
+              type="text"
+              placeholder="Catégorie (ex: Musique, Cinéma, Sport...)"
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            />
+
+            {/* Champ Tags */}
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Ajouter un tag (appuyez Entrée)"
+                  value={formData.tagsInput || ''}
+                  onChange={(e) => setFormData({ ...formData, tagsInput: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && formData.tagsInput?.trim()) {
+                      e.preventDefault();
+                      const newTag = formData.tagsInput.trim();
+                      if (!formData.tags.includes(newTag)) {
+                        setFormData({
+                          ...formData,
+                          tags: [...formData.tags, newTag],
+                          tagsInput: ''
+                        });
+                      } else {
+                        setFormData({ ...formData, tagsInput: '' });
+                      }
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (formData.tagsInput?.trim()) {
+                      const newTag = formData.tagsInput.trim();
+                      if (!formData.tags.includes(newTag)) {
+                        setFormData({
+                          ...formData,
+                          tags: [...formData.tags, newTag],
+                          tagsInput: ''
+                        });
+                      } else {
+                        setFormData({ ...formData, tagsInput: '' });
+                      }
+                    }
+                  }}
+                  className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                >
+                  +
+                </button>
+              </div>
+              {formData.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {formData.tags.map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 text-sm rounded"
+                    >
+                      #{tag}
+                      <button
+                        type="button"
+                        onClick={() => setFormData({
+                          ...formData,
+                          tags: formData.tags.filter((_, i) => i !== idx)
+                        })}
+                        className="text-green-500 hover:text-red-500 font-bold"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <textarea
+              placeholder="Question"
+              value={formData.text}
+              onChange={(e) => setFormData({ ...formData, text: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              rows="3"
+            />
+
+            {/* ✅ NOUVEAU: Afficher sélection média pour TOUS les types sauf 'text' */}
+            {formData.type !== 'text' && (
+              <>
+              {/* ✅ Pour QCM, permettre de choisir le type de média */ }
+                {formData.type === 'qcm' && (
+                  <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Type de média (optionnel)
+                    </label>
+              <select
+                value={formData.mediaType || 'none'}
+                onChange={(e) => {
+                  const newMediaType = e.target.value === 'none' ? '' : e.target.value;
+                  setFormData({
+                    ...formData,
+                    mediaType: newMediaType,
+                    media: newMediaType ? formData.media : ''
+                  });
+                }}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value="none">Aucun média</option>
+                <option value="image">Image</option>
+                <option value="video">Vidéo</option>
+                <option value="audio">Audio</option>
+              </select>
+            </div>
+            )}
+
+                {/* ✅ Pour questions non-QCM, garder l'ancien comportement */}
+            {formData.type !== 'qcm' && (
+              <select
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value="image">Question avec Image</option>
+                <option value="video">Question avec Vidéo</option>
+                <option value="audio">Question avec Audio</option>
+              </select>
+            )}
+
+            {/* ✅ Afficher input URL si un média est sélectionné */}
+            {((formData.type === 'qcm' && formData.mediaType) || formData.type !== 'qcm') && (
+                  <>
+              <input
+                type="text"
+                placeholder="URL du média (image, vidéo ou audio)"
+                value={formData.media}
+                onChange={(e) => setFormData({ ...formData, media: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              />
+
+              <MediaPreview
+                type={formData.type === 'qcm' ? formData.mediaType : formData.type}
+                url={formData.media}
+                id={editingQuestion ?.id || 'new'} 
+              />
+                  </>
+                )}
+              </>
+          )}
+
+            {formData.type === 'qcm' ? (
+            <div className="space-y-3 bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
+              <p className="font-semibold text-sm dark:text-white flex items-center gap-2">
+                <ListChecks className="w-4 h-4" />
+                Choix de réponses
+                </p>
+              {formData.choices.map((choice, index) => (
+                <div key={index} className="flex gap-2">
+                  <input
+                    type="radio"
+                    name="correctChoice"
+                    checked={formData.correctChoice === index}
+                    onChange={() => setFormData({ ...formData, correctChoice: index })}
+                    className="mt-3"
+                    title="Bonne réponse"
+                  />
+                  <input
+                    type="text"
+                    placeholder={`Choix ${index + 1}`}
+                    value={choice}
+                    onChange={(e) => updateChoice(index, e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  />
+                  {formData.choices.length > 2 && (
+                    <button
+                      onClick={() => removeChoice(index)}
+                      className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {formData.choices.length < 6 && (
+                <button
+                  onClick={addChoice}
+                  className="w-full py-2 border-2 border-dashed border-blue-300 dark:border-blue-600 rounded-lg text-blue-600 dark:text-blue-400 hover:border-blue-500 flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Ajouter un choix
+                  </button>
+              )}
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                ℹ️ Cochez le bouton radio pour indiquer la bonne réponse
+                </p>
+            </div>
+          ) : (
+              <input
+                type="text"
+                placeholder="Réponse correcte"
+                value={formData.answer}
+                onChange={(e) => setFormData({ ...formData, answer: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              />
+            )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="number"
+              placeholder="Points"
+              value={formData.points}
+              onChange={(e) => setFormData({ ...formData, points: parseInt(e.target.value) || 1 })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              min="1"
+            />
+            <input
+              type="number"
+              placeholder="Timer (secondes)"
+              value={formData.timer}
+              onChange={(e) => setFormData({ ...formData, timer: parseInt(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              min="0"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="flex-1 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 flex items-center justify-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              {editingQuestion ? 'Mettre à jour' : 'Ajouter'}
+            </button>
+            {editingQuestion && (
+              <button
+                onClick={resetForm}
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Filtres et recherche */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -1159,7 +1520,7 @@ const QuestionBank = ({ questions, onSave }) => {
       {/* Pagination */}
       {renderPagination()}
     </div>
-    </div>
+    </div >
   );
 };
 
