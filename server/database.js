@@ -1890,6 +1890,485 @@ async function getDrawingLobbyResults(lobbyId) {
   return { lobby, drawings, scores, ranking };
 }
 
+// ==================== MYSTERY GRID (Case Mystère) ====================
+
+// Récupérer toutes les grilles mystères
+async function getAllMysteryGrids() {
+  const { data, error } = await supabase
+    .from('mystery_grids')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  
+  // Récupérer les types pour chaque grille
+  const grids = await Promise.all(data.map(async (grid) => {
+    const types = await getMysteryGridTypes(grid.id);
+    const totalOccurrences = types.reduce((sum, t) => sum + t.occurrence, 0);
+    return {
+      id: grid.id,
+      title: grid.title,
+      gridSize: grid.grid_size,
+      defaultSoundUrl: grid.default_sound_url,
+      thumbnailDefault: grid.thumbnail_default,
+      types,
+      totalOccurrences,
+      isValid: totalOccurrences === grid.grid_size,
+      createdAt: grid.created_at,
+      updatedAt: grid.updated_at
+    };
+  }));
+  
+  return grids;
+}
+
+// Récupérer une grille par ID
+async function getMysteryGridById(gridId) {
+  const { data, error } = await supabase
+    .from('mystery_grids')
+    .select('*')
+    .eq('id', gridId)
+    .single();
+  
+  if (error) return null;
+  
+  const types = await getMysteryGridTypes(gridId);
+  const totalOccurrences = types.reduce((sum, t) => sum + t.occurrence, 0);
+  
+  return {
+    id: data.id,
+    title: data.title,
+    gridSize: data.grid_size,
+    defaultSoundUrl: data.default_sound_url,
+    thumbnailDefault: data.thumbnail_default,
+    types,
+    totalOccurrences,
+    isValid: totalOccurrences === data.grid_size,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at
+  };
+}
+
+// Créer une grille mystère
+async function createMysteryGrid(gridData) {
+  const { data, error } = await supabase
+    .from('mystery_grids')
+    .insert({
+      title: gridData.title,
+      grid_size: gridData.gridSize,
+      default_sound_url: gridData.defaultSoundUrl || null,
+      thumbnail_default: gridData.thumbnailDefault || null
+    })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  
+  return {
+    id: data.id,
+    title: data.title,
+    gridSize: data.grid_size,
+    defaultSoundUrl: data.default_sound_url,
+    thumbnailDefault: data.thumbnail_default,
+    types: [],
+    totalOccurrences: 0,
+    isValid: false,
+    createdAt: data.created_at
+  };
+}
+
+// Mettre à jour une grille mystère
+async function updateMysteryGrid(gridId, gridData) {
+  const updateData = {};
+  if (gridData.title !== undefined) updateData.title = gridData.title;
+  if (gridData.gridSize !== undefined) updateData.grid_size = gridData.gridSize;
+  if (gridData.defaultSoundUrl !== undefined) updateData.default_sound_url = gridData.defaultSoundUrl;
+  if (gridData.thumbnailDefault !== undefined) updateData.thumbnail_default = gridData.thumbnailDefault;
+  
+  const { data, error } = await supabase
+    .from('mystery_grids')
+    .update(updateData)
+    .eq('id', gridId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  
+  return getMysteryGridById(gridId);
+}
+
+// Supprimer une grille mystère
+async function deleteMysteryGrid(gridId) {
+  const { error } = await supabase
+    .from('mystery_grids')
+    .delete()
+    .eq('id', gridId);
+  
+  if (error) throw error;
+  return true;
+}
+
+// Récupérer les types d'une grille
+async function getMysteryGridTypes(gridId) {
+  const { data, error } = await supabase
+    .from('mystery_grid_types')
+    .select('*')
+    .eq('grid_id', gridId)
+    .order('created_at');
+  
+  if (error) throw error;
+  
+  return data.map(t => ({
+    id: t.id,
+    gridId: t.grid_id,
+    name: t.name,
+    imageUrl: t.image_url,
+    thumbnailUrl: t.thumbnail_url,
+    soundUrl: t.sound_url,
+    occurrence: t.occurrence,
+    createdAt: t.created_at
+  }));
+}
+
+// Créer un type de case
+async function createMysteryGridType(gridId, typeData) {
+  const { data, error } = await supabase
+    .from('mystery_grid_types')
+    .insert({
+      grid_id: gridId,
+      name: typeData.name,
+      image_url: typeData.imageUrl || null,
+      thumbnail_url: typeData.thumbnailUrl || null,
+      sound_url: typeData.soundUrl || null,
+      occurrence: typeData.occurrence || 1
+    })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  
+  return {
+    id: data.id,
+    gridId: data.grid_id,
+    name: data.name,
+    imageUrl: data.image_url,
+    thumbnailUrl: data.thumbnail_url,
+    soundUrl: data.sound_url,
+    occurrence: data.occurrence,
+    createdAt: data.created_at
+  };
+}
+
+// Mettre à jour un type de case
+async function updateMysteryGridType(typeId, typeData) {
+  const updateData = {};
+  if (typeData.name !== undefined) updateData.name = typeData.name;
+  if (typeData.imageUrl !== undefined) updateData.image_url = typeData.imageUrl;
+  if (typeData.thumbnailUrl !== undefined) updateData.thumbnail_url = typeData.thumbnailUrl;
+  if (typeData.soundUrl !== undefined) updateData.sound_url = typeData.soundUrl;
+  if (typeData.occurrence !== undefined) updateData.occurrence = typeData.occurrence;
+  
+  const { data, error } = await supabase
+    .from('mystery_grid_types')
+    .update(updateData)
+    .eq('id', typeId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  
+  return {
+    id: data.id,
+    gridId: data.grid_id,
+    name: data.name,
+    imageUrl: data.image_url,
+    thumbnailUrl: data.thumbnail_url,
+    soundUrl: data.sound_url,
+    occurrence: data.occurrence,
+    createdAt: data.created_at
+  };
+}
+
+// Supprimer un type de case
+async function deleteMysteryGridType(typeId) {
+  const { error } = await supabase
+    .from('mystery_grid_types')
+    .delete()
+    .eq('id', typeId);
+  
+  if (error) throw error;
+  return true;
+}
+
+// ==================== MYSTERY LOBBIES ====================
+
+// Récupérer tous les lobbies mystère
+async function getAllMysteryLobbies() {
+  const { data, error } = await supabase
+    .from('mystery_lobbies')
+    .select('*, mystery_grids(title)')
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  
+  return data.map(l => ({
+    id: l.id,
+    gridId: l.grid_id,
+    gridTitle: l.mystery_grids?.title,
+    status: l.status,
+    gameState: l.game_state,
+    participants: l.participants || [],
+    currentReveal: l.current_reveal,
+    mutedParticipants: l.muted_participants || {},
+    createdAt: l.created_at,
+    finishedAt: l.finished_at
+  }));
+}
+
+// Récupérer un lobby par ID
+async function getMysteryLobbyById(lobbyId) {
+  const { data, error } = await supabase
+    .from('mystery_lobbies')
+    .select('*, mystery_grids(*)')
+    .eq('id', lobbyId)
+    .single();
+  
+  if (error) return null;
+  
+  // Récupérer les types de la grille
+  const types = data.mystery_grids ? await getMysteryGridTypes(data.grid_id) : [];
+  
+  return {
+    id: data.id,
+    gridId: data.grid_id,
+    grid: data.mystery_grids ? {
+      id: data.mystery_grids.id,
+      title: data.mystery_grids.title,
+      gridSize: data.mystery_grids.grid_size,
+      defaultSoundUrl: data.mystery_grids.default_sound_url,
+      thumbnailDefault: data.mystery_grids.thumbnail_default,
+      types
+    } : null,
+    status: data.status,
+    gameState: data.game_state,
+    participants: data.participants || [],
+    currentReveal: data.current_reveal,
+    mutedParticipants: data.muted_participants || {},
+    createdAt: data.created_at,
+    finishedAt: data.finished_at
+  };
+}
+
+// Créer un lobby mystère
+async function createMysteryLobby(gridId) {
+  const grid = await getMysteryGridById(gridId);
+  if (!grid) throw new Error('Grille non trouvée');
+  if (!grid.isValid) throw new Error('La grille n\'est pas valide (nombre de cases incorrect)');
+  
+  // Générer l'état initial du jeu avec les cases mélangées
+  const cells = [];
+  grid.types.forEach(type => {
+    for (let i = 0; i < type.occurrence; i++) {
+      cells.push({
+        typeId: type.id,
+        revealed: false
+      });
+    }
+  });
+  
+  // Mélanger les cases (Fisher-Yates)
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+  
+  // Ajouter les index
+  const gameState = {
+    cells: cells.map((cell, index) => ({ ...cell, index })),
+    revealedCount: 0,
+    totalCells: cells.length
+  };
+  
+  const lobbyId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
+  const { data, error } = await supabase
+    .from('mystery_lobbies')
+    .insert({
+      id: lobbyId,
+      grid_id: gridId,
+      status: 'waiting',
+      game_state: gameState,
+      participants: [],
+      muted_participants: {}
+    })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  
+  return getMysteryLobbyById(lobbyId);
+}
+
+// Rejoindre un lobby mystère
+async function joinMysteryLobby(lobbyId, odId, pseudo, teamName) {
+  const lobby = await getMysteryLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  
+  // Vérifier si déjà participant
+  const existing = lobby.participants.find(p => p.odId === odId);
+  if (existing) return lobby;
+  
+  const participants = [...lobby.participants, {
+    odId,
+    pseudo,
+    teamName,
+    joinedAt: new Date().toISOString()
+  }];
+  
+  const { error } = await supabase
+    .from('mystery_lobbies')
+    .update({ participants })
+    .eq('id', lobbyId);
+  
+  if (error) throw error;
+  
+  return getMysteryLobbyById(lobbyId);
+}
+
+// Quitter un lobby mystère
+async function leaveMysteryLobby(lobbyId, odId) {
+  const lobby = await getMysteryLobbyById(lobbyId);
+  if (!lobby) return null;
+  
+  const participants = lobby.participants.filter(p => p.odId !== odId);
+  
+  const { error } = await supabase
+    .from('mystery_lobbies')
+    .update({ participants })
+    .eq('id', lobbyId);
+  
+  if (error) throw error;
+  
+  return getMysteryLobbyById(lobbyId);
+}
+
+// Démarrer un lobby mystère
+async function startMysteryLobby(lobbyId) {
+  const { data, error } = await supabase
+    .from('mystery_lobbies')
+    .update({ status: 'playing' })
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  
+  return getMysteryLobbyById(lobbyId);
+}
+
+// Révéler une case
+async function revealMysteryCell(lobbyId, cellIndex) {
+  const lobby = await getMysteryLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  if (lobby.status !== 'playing') throw new Error('Le jeu n\'est pas en cours');
+  
+  const gameState = lobby.gameState;
+  const cell = gameState.cells.find(c => c.index === cellIndex);
+  
+  if (!cell) throw new Error('Case non trouvée');
+  if (cell.revealed) throw new Error('Case déjà révélée');
+  
+  // Trouver le type de la case
+  const cellType = lobby.grid.types.find(t => t.id === cell.typeId);
+  if (!cellType) throw new Error('Type de case non trouvé');
+  
+  // Marquer comme révélée
+  cell.revealed = true;
+  gameState.revealedCount++;
+  
+  // Préparer les infos de révélation
+  const currentReveal = {
+    index: cellIndex,
+    typeId: cell.typeId,
+    name: cellType.name,
+    imageUrl: cellType.imageUrl,
+    thumbnailUrl: cellType.thumbnailUrl || cellType.imageUrl || lobby.grid.thumbnailDefault,
+    soundUrl: cellType.soundUrl || lobby.grid.defaultSoundUrl
+  };
+  
+  const { error } = await supabase
+    .from('mystery_lobbies')
+    .update({ 
+      game_state: gameState,
+      current_reveal: currentReveal
+    })
+    .eq('id', lobbyId);
+  
+  if (error) throw error;
+  
+  return {
+    lobby: await getMysteryLobbyById(lobbyId),
+    reveal: currentReveal,
+    allRevealed: gameState.revealedCount === gameState.totalCells
+  };
+}
+
+// Fermer la modale de révélation
+async function closeMysteryReveal(lobbyId) {
+  const { error } = await supabase
+    .from('mystery_lobbies')
+    .update({ current_reveal: null })
+    .eq('id', lobbyId);
+  
+  if (error) throw error;
+  
+  return getMysteryLobbyById(lobbyId);
+}
+
+// Toggle mute pour un participant
+async function toggleMysteryMute(lobbyId, odId, muted) {
+  const lobby = await getMysteryLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  
+  const mutedParticipants = { ...lobby.mutedParticipants, [odId]: muted };
+  
+  const { error } = await supabase
+    .from('mystery_lobbies')
+    .update({ muted_participants: mutedParticipants })
+    .eq('id', lobbyId);
+  
+  if (error) throw error;
+  
+  return getMysteryLobbyById(lobbyId);
+}
+
+// Terminer un lobby mystère
+async function finishMysteryLobby(lobbyId) {
+  const { error } = await supabase
+    .from('mystery_lobbies')
+    .update({ 
+      status: 'finished',
+      current_reveal: null,
+      finished_at: new Date().toISOString()
+    })
+    .eq('id', lobbyId);
+  
+  if (error) throw error;
+  
+  return getMysteryLobbyById(lobbyId);
+}
+
+// Supprimer un lobby mystère
+async function deleteMysteryLobby(lobbyId) {
+  const { error } = await supabase
+    .from('mystery_lobbies')
+    .delete()
+    .eq('id', lobbyId);
+  
+  if (error) throw error;
+  return true;
+}
+
 // ==================== EXPORTS ====================
 
 module.exports = {
@@ -2024,5 +2503,29 @@ module.exports = {
   isSuperAdmin,
   updateParticipantRole,
   getParticipantsByRole,
-  getAdminParticipants
+  getAdminParticipants,
+  
+  // Mystery Grids (Case Mystère)
+  getAllMysteryGrids,
+  getMysteryGridById,
+  createMysteryGrid,
+  updateMysteryGrid,
+  deleteMysteryGrid,
+  getMysteryGridTypes,
+  createMysteryGridType,
+  updateMysteryGridType,
+  deleteMysteryGridType,
+  
+  // Mystery Lobbies
+  getAllMysteryLobbies,
+  getMysteryLobbyById,
+  createMysteryLobby,
+  joinMysteryLobby,
+  leaveMysteryLobby,
+  startMysteryLobby,
+  revealMysteryCell,
+  closeMysteryReveal,
+  toggleMysteryMute,
+  finishMysteryLobby,
+  deleteMysteryLobby
 };

@@ -15,6 +15,7 @@ import DrawingWordBank from './DrawingWordBank';
 import DrawingReferenceBank from './DrawingReferenceBank';
 import DrawingLobbyManager from './DrawingLobbyManager';
 import UserManagement from './UserManagement';
+import MysteryGridManager from './MysteryGridManager';
 
 /**
  * AdminContent - Contenu de l'interface admin (sans le layout)
@@ -543,6 +544,17 @@ const AdminContent = ({
         <UserManagement
           socket={socket}
           currentUser={currentUser}
+        />
+      );
+
+    case 'admin-mystery':
+      return (
+        <MysteryGridManager
+          socket={socket}
+          onJoinLobby={(lobby) => {
+            // Naviguer vers la vue mystery
+            window.dispatchEvent(new CustomEvent('mystery:joinLobby', { detail: lobby }));
+          }}
         />
       );
 

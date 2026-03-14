@@ -10,6 +10,7 @@ const teamsRoutes = require('./teams');
 const participantsRoutes = require('./participants');
 const quizzesRoutes = require('./quizzes');
 const drawingRoutes = require('./drawing');
+const mysteryRoutes = require('./mystery');
 
 /**
  * Configure toutes les routes avec les dépendances nécessaires
@@ -68,6 +69,9 @@ function setup(app, dependencies) {
     req.url = '/drawings' + req.url;
     drawingRoutes(req, res, next);
   });
+  
+  // Routes Mystery Grid (Case Mystère)
+  app.use('/api/mystery', mysteryRoutes);
 }
 
 module.exports = { setup };

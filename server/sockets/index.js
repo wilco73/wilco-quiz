@@ -11,6 +11,8 @@ const quizHandlers = require('./quiz');
 const drawingHandlers = require('./drawing');
 const pictionaryHandlers = require('./pictionary');
 const relayHandlers = require('./relay');
+const mysteryHandlers = require('./mystery');
+const db = require('../database');
 
 /**
  * Configure Socket.IO et enregistre tous les handlers
@@ -39,6 +41,7 @@ function setup(io) {
     drawingHandlers.register(socket, io);
     pictionaryHandlers.register(socket, io);
     relayHandlers.register(socket, io);
+    mysteryHandlers(io, socket, db);
     
     // Handler de déconnexion
     socket.on('disconnect', async () => {

@@ -16,6 +16,7 @@ import HistoryView from './components/HistoryView';
 import DrawingLobbyView from './components/DrawingLobbyView';
 import RelayLobbyView from './components/RelayLobbyView';
 import MonitoringWidget from './components/MonitoringWidget';
+import MysteryGameView from './components/MysteryGameView';
 import { useToast } from './components/ToastProvider';
 import './App.css';
 
@@ -37,6 +38,7 @@ const App = () => {
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [currentDrawingLobby, setCurrentDrawingLobby] = useState(null);
   const [showMonitoringWidget, setShowMonitoringWidget] = useState(false);
+  const [currentMysteryLobby, setCurrentMysteryLobby] = useState(null);
   
   const hasReconnected = useRef(false);
   const draftTimeoutRef = useRef(null);
@@ -237,6 +239,26 @@ const App = () => {
     
     socket.on('drawingLobby:deleted', handleDrawingLobbyDeleted);
     
+    // Listener pour les mystery lobbies
+    const handleMysteryLobbyDeleted = (data) => {
+      if (currentMysteryLobby?.id === data.lobbyId) {
+        setCurrentMysteryLobby(null);
+        setView('admin-mystery');
+        toast.info('Le lobby mystère a été supprimé');
+      }
+    };
+    
+    socket.on('mystery:lobbyDeleted', handleMysteryLobbyDeleted);
+    
+    // Écouter l'événement personnalisé pour rejoindre un mystery lobby
+    const handleJoinMysteryLobby = (event) => {
+      const lobby = event.detail;
+      setCurrentMysteryLobby(lobby);
+      setView('mystery-game');
+    };
+    
+    window.addEventListener('mystery:joinLobby', handleJoinMysteryLobby);
+    
     return () => {
       console.log('[APP] Nettoyage des event listeners');
       socket.off('quiz:started', handleQuizStarted);
@@ -246,6 +268,8 @@ const App = () => {
       socket.off('lobby:deleted', handleLobbyDeleted);
       socket.off('lobby:stopped', handleLobbyStopped);
       socket.off('drawingLobby:deleted', handleDrawingLobbyDeleted);
+      socket.off('mystery:lobbyDeleted', handleMysteryLobbyDeleted);
+      window.removeEventListener('mystery:joinLobby', handleJoinMysteryLobby);
     };
   }, [socketReady, isAdmin, hasAnswered, toast, currentLobby?.id, currentQuiz, socket, currentDrawingLobby?.id]);
 
@@ -584,6 +608,10 @@ const App = () => {
             quizzes={quizzes}
             onJoinLobby={handleJoinLobby}
             onJoinDrawingLobby={handleJoinDrawingLobby}
+            onJoinMysteryLobby={(lobby) => {
+              setCurrentMysteryLobby(lobby);
+              setView('mystery-game');
+            }}
           />
         );
       
@@ -633,6 +661,7 @@ const App = () => {
       case 'admin-questions':
       case 'admin-drawing':
       case 'admin-lobbies':
+      case 'admin-mystery':
       case 'admin-monitoring':
       case 'admin-validation':
       case 'admin-users':
@@ -752,6 +781,20 @@ const App = () => {
             }}
           />
         )
+      )}
+      
+      {/* Vue Mystery Game */}
+      {view === 'mystery-game' && currentMysteryLobby && (
+        <MysteryGameView
+          lobby={currentMysteryLobby}
+          socket={socket}
+          currentUser={currentUser}
+          isAdmin={currentUser?.isAdmin || currentUser?.isSuperAdmin}
+          onLeave={() => {
+            setCurrentMysteryLobby(null);
+            setView('admin-mystery');
+          }}
+        />
       )}
       
       {/* Widget de Monitoring Flottant - visible pour les admins */}

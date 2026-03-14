@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Users, Play, Clock, Palette, Shuffle, BookOpen } from 'lucide-react';
+import { Users, Play, Clock, Palette, Shuffle, BookOpen, Grid } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -12,10 +12,12 @@ const LobbyList = ({
   lobbies, 
   quizzes, 
   onJoinLobby, 
-  onJoinDrawingLobby 
+  onJoinDrawingLobby,
+  onJoinMysteryLobby
 }) => {
   const availableLobbies = lobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
   const [drawingLobbies, setDrawingLobbies] = useState([]);
+  const [mysteryLobbies, setMysteryLobbies] = useState([]);
   
   // Charger les lobbies de dessin
   useEffect(() => {
@@ -31,6 +33,25 @@ const LobbyList = ({
     
     fetchDrawingLobbies();
     const interval = setInterval(fetchDrawingLobbies, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Charger les lobbies mystery
+  useEffect(() => {
+    const fetchMysteryLobbies = async () => {
+      try {
+        const res = await fetch(`${API_URL}/mystery/lobbies`);
+        const data = await res.json();
+        if (data.success) {
+          setMysteryLobbies(data.lobbies.filter(l => l.status === 'waiting' || l.status === 'playing'));
+        }
+      } catch (error) {
+        console.error('Erreur chargement mystery lobbies:', error);
+      }
+    };
+    
+    fetchMysteryLobbies();
+    const interval = setInterval(fetchMysteryLobbies, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -290,6 +311,83 @@ const LobbyList = ({
           </div>
         )}
       </section>
+
+      {/* Section Cases Mystères */}
+      {mysteryLobbies.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+            <Grid className="w-5 h-5 text-indigo-600" />
+            Cases Mystères
+          </h2>
+          
+          <div className="grid gap-4">
+            {mysteryLobbies.map(lobby => {
+              const isPlaying = lobby.status === 'playing';
+              const isInLobby = lobby.participants?.some(p => p.odId === currentUser?.id);
+              const revealedCount = lobby.gameState?.revealedCount || 0;
+              const totalCells = lobby.gameState?.totalCells || 0;
+              
+              return (
+                <div 
+                  key={lobby.id} 
+                  className={`
+                    bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 
+                    rounded-xl shadow-sm hover:shadow-md transition-all border border-indigo-200 dark:border-indigo-700
+                    ${isPlaying ? 'ring-2 ring-indigo-400 dark:ring-indigo-500' : ''}
+                  `}
+                >
+                  <div className="p-5">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          <Grid className="w-5 h-5 text-indigo-600" />
+                          {lobby.gridTitle || 'Cases Mystères'}
+                        </h3>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
+                          {totalCells} cases à découvrir
+                        </p>
+                      </div>
+                      
+                      {isPlaying && (
+                        <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-sm rounded-full font-semibold animate-pulse">
+                          🔮 En cours
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                        <span className="flex items-center gap-1">
+                          <Users className="w-4 h-4" />
+                          {lobby.participants?.length || 0} spectateur{(lobby.participants?.length || 0) > 1 ? 's' : ''}
+                        </span>
+                        {isPlaying && totalCells > 0 && (
+                          <span className="text-indigo-600 dark:text-indigo-400 font-medium">
+                            {revealedCount}/{totalCells} révélées
+                          </span>
+                        )}
+                      </div>
+                      
+                      <button
+                        onClick={() => onJoinMysteryLobby?.(lobby)}
+                        className={`
+                          px-4 py-2 rounded-lg font-semibold transition-colors
+                          ${isInLobby 
+                            ? 'bg-green-600 hover:bg-green-700 text-white'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                          }
+                        `}
+                      >
+                        {isInLobby ? 'Rejoindre' : 'Regarder'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </div>
   );
 };
