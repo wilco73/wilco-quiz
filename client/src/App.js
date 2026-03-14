@@ -736,6 +736,7 @@ const App = () => {
           quizzes={quizzes}
           questions={questions}
           socket={socket}
+          currentUser={currentUser}
           onBack={currentUser ? () => setView('lobby-list') : null}
           onLogout={handleLogout}
           onRefreshData={handleRefreshData}

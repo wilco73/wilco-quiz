@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, RotateCcw, Monitor, Check, BookOpen, Trash, Trophy, FileQuestion, Play, Edit, Trash2, Users, Shuffle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, FolderOpen, Clock, Palette } from 'lucide-react';
+import { LogOut, RotateCcw, Monitor, Check, BookOpen, Trash, Trophy, FileQuestion, Play, Edit, Trash2, Users, Shuffle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, X, FolderOpen, Clock, Palette, Crown } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import * as api from '../services/api';
 import QuestionBank from './QuestionBank';
@@ -14,6 +14,7 @@ import DrawingReferenceBank from './DrawingReferenceBank';
 import DrawingCanvas from './DrawingCanvas';
 import DrawingLobbyManager from './DrawingLobbyManager';
 import { PictionaryConfig } from './PictionaryGame';
+import UserManagement from './UserManagement';
 
 // Composant de pagination réutilisable
 const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, totalItems }) => {
@@ -257,6 +258,7 @@ const AdminDashboard = ({
   questions,
   lobbies,
   socket,
+  currentUser,
   onUpdateParticipant,
   onDeleteTeam,
   onRefreshData,
@@ -452,7 +454,7 @@ const AdminDashboard = ({
     }
   };
 
-  const tabs = [
+  const baseTabs = [
     { id: 'dashboard', label: 'Tableau de bord', icon: Trophy },
     { id: 'participants', label: 'Participants', icon: Users },
     { id: 'questions', label: 'Banque de Questions', icon: FileQuestion },
@@ -461,6 +463,11 @@ const AdminDashboard = ({
     { id: 'monitoring', label: 'Suivi Direct', icon: Monitor },
     { id: 'validation', label: 'Validation', icon: Check }
   ];
+  
+  // Ajouter l'onglet Utilisateurs pour superadmin
+  const tabs = currentUser?.isSuperAdmin 
+    ? [...baseTabs, { id: 'users', label: 'Utilisateurs', icon: Crown }]
+    : baseTabs;
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
@@ -848,6 +855,13 @@ const AdminDashboard = ({
               lobbies={lobbies}
               quizzes={quizzes}
               onValidateAnswer={onValidateAnswer}
+            />
+          )}
+
+          {activeTab === 'users' && currentUser?.isSuperAdmin && (
+            <UserManagement
+              socket={socket}
+              currentUser={currentUser}
             />
           )}
         </div>

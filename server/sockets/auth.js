@@ -161,6 +161,27 @@ function register(socket, io) {
     
     callback({ success: true, user });
   });
+  
+  /**
+   * Récupérer tous les utilisateurs (superadmin only)
+   */
+  socket.on('auth:getAllUsers', async (data, callback) => {
+    const { requesterId } = data;
+    
+    // Vérifier que le demandeur est superadmin
+    const requester = await db.getParticipantById(requesterId);
+    if (!requester || !db.isSuperAdmin(requester.role)) {
+      callback({ success: false, message: 'Permission refusée' });
+      return;
+    }
+    
+    try {
+      const participants = await db.getAllParticipants();
+      callback({ success: true, users: participants });
+    } catch (error) {
+      callback({ success: false, message: error.message });
+    }
+  });
 }
 
 module.exports = { register };
