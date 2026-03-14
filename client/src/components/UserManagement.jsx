@@ -19,14 +19,30 @@ const UserManagement = ({ socket, currentUser }) => {
 
   // Charger les utilisateurs
   const loadUsers = () => {
-    if (!socket || !currentUser?.id) return;
+    if (!socket || !currentUser?.id) {
+      console.log('[UserManagement] Socket ou currentUser manquant', { socket: !!socket, currentUser });
+      setLoading(false);
+      return;
+    }
     
+    console.log('[UserManagement] Chargement des utilisateurs...', { requesterId: currentUser.id });
     setLoading(true);
+    
+    // Timeout de sécurité
+    const timeout = setTimeout(() => {
+      console.log('[UserManagement] Timeout - pas de réponse du serveur');
+      toast.error('Timeout - le serveur ne répond pas');
+      setLoading(false);
+    }, 10000);
+    
     socket.emit('auth:getAllUsers', { requesterId: currentUser.id }, (response) => {
-      if (response.success) {
-        setUsers(response.users);
+      clearTimeout(timeout);
+      console.log('[UserManagement] Réponse reçue:', response);
+      
+      if (response?.success) {
+        setUsers(response.users || []);
       } else {
-        toast.error(response.message || 'Erreur lors du chargement');
+        toast.error(response?.message || 'Erreur lors du chargement');
       }
       setLoading(false);
     });

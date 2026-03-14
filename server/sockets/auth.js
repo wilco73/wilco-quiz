@@ -166,20 +166,34 @@ function register(socket, io) {
    * Récupérer tous les utilisateurs (superadmin only)
    */
   socket.on('auth:getAllUsers', async (data, callback) => {
-    const { requesterId } = data;
-    
-    // Vérifier que le demandeur est superadmin
-    const requester = await db.getParticipantById(requesterId);
-    if (!requester || !db.isSuperAdmin(requester.role)) {
-      callback({ success: false, message: 'Permission refusée' });
-      return;
-    }
+    console.log('[AUTH] auth:getAllUsers appelé avec:', data);
     
     try {
+      const { requesterId } = data;
+      
+      if (!requesterId) {
+        console.log('[AUTH] auth:getAllUsers - requesterId manquant');
+        callback({ success: false, message: 'requesterId manquant' });
+        return;
+      }
+      
+      // Vérifier que le demandeur est superadmin
+      const requester = await db.getParticipantById(requesterId);
+      console.log('[AUTH] auth:getAllUsers - requester:', requester?.pseudo, requester?.role);
+      
+      if (!requester || !db.isSuperAdmin(requester.role)) {
+        console.log('[AUTH] auth:getAllUsers - Permission refusée');
+        callback({ success: false, message: 'Permission refusée' });
+        return;
+      }
+      
       const participants = await db.getAllParticipants();
-      callback({ success: true, users: participants });
+      console.log('[AUTH] auth:getAllUsers - participants récupérés:', participants?.length);
+      
+      callback({ success: true, users: participants || [] });
     } catch (error) {
-      callback({ success: false, message: error.message });
+      console.error('[AUTH] auth:getAllUsers - Erreur:', error);
+      callback({ success: false, message: error.message || 'Erreur serveur' });
     }
   });
 }
