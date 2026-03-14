@@ -25,7 +25,10 @@ module.exports = function(io, socket, db) {
   socket.on('mystery:joinLobby', async (data, callback) => {
     try {
       const { lobbyId, odId, pseudo, teamName } = data;
+      console.log('[MYSTERY] joinLobby - lobbyId:', lobbyId, 'odId:', odId, 'pseudo:', pseudo);
+      
       const lobby = await db.joinMysteryLobby(lobbyId, odId, pseudo, teamName);
+      console.log('[MYSTERY] joinLobby - après join, participants:', lobby?.participants?.length);
       
       // Rejoindre la room socket
       socket.join(`mystery:${lobbyId}`);
@@ -177,6 +180,9 @@ module.exports = function(io, socket, db) {
       socket.join(`mystery:${lobbyId}`);
       
       const lobby = await db.getMysteryLobbyById(lobbyId);
+      console.log('[MYSTERY] joinMonitoring - lobbyId:', lobbyId);
+      console.log('[MYSTERY] joinMonitoring - participants:', lobby?.participants?.length || 0, lobby?.participants);
+      
       if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MYSTERY] Erreur join monitoring:', error);

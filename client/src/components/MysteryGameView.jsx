@@ -16,59 +16,74 @@ const MysteryGameView = ({
   isAdmin, 
   onLeave 
 }) => {
-  const [gameState, setGameState] = useState(lobby?.gameState || {});
-  const [participants, setParticipants] = useState(lobby?.participants || []);
-  const [currentReveal, setCurrentReveal] = useState(lobby?.currentReveal || null);
-  const [status, setStatus] = useState(lobby?.status || 'waiting');
+  const [loading, setLoading] = useState(true);
+  const [gameState, setGameState] = useState({});
+  const [participants, setParticipants] = useState([]);
+  const [currentReveal, setCurrentReveal] = useState(null);
+  const [status, setStatus] = useState('waiting');
   const [isMuted, setIsMuted] = useState(false);
-  const [revealAnimation, setRevealAnimation] = useState(null); // { index, phase: 'flip' | 'show' }
-  const [grid, setGrid] = useState(lobby?.grid || null);
+  const [revealAnimation, setRevealAnimation] = useState(null);
+  const [grid, setGrid] = useState(null);
   
   const audioRef = useRef(null);
   const toast = useToast();
 
-  // Rejoindre le lobby au montage
+  // Rejoindre le lobby au montage et charger les données FRAÎCHES
   useEffect(() => {
     if (!socket || !lobby?.id || !currentUser) return;
     
-    // Les joueurs rejoignent le lobby, les admins utilisent le monitoring
-    if (isAdmin) {
-      socket.emit('mystery:joinMonitoring', { lobbyId: lobby.id }, (response) => {
+    const loadLobbyData = async () => {
+      setLoading(true);
+      
+      // Les joueurs rejoignent le lobby, les admins utilisent le monitoring
+      if (isAdmin) {
+        const response = await socket.mysteryJoinMonitoring(lobby.id);
+        console.log('[MYSTERY] Admin joined monitoring, response:', response);
         if (response.success && response.lobby) {
+          console.log('[MYSTERY] Admin - participants reçus:', response.lobby.participants?.length);
           setGameState(response.lobby.gameState || {});
           setParticipants(response.lobby.participants || []);
-          setStatus(response.lobby.status);
+          setStatus(response.lobby.status || 'waiting');
           setGrid(response.lobby.grid);
           setCurrentReveal(response.lobby.currentReveal);
+        } else {
+          // Fallback sur les données du prop si erreur
+          setGameState(lobby.gameState || {});
+          setParticipants(lobby.participants || []);
+          setStatus(lobby.status || 'waiting');
+          setGrid(lobby.grid);
         }
-      });
-    } else {
-      // Joueur - rejoindre en tant que participant
-      socket.emit('mystery:joinLobby', { 
-        lobbyId: lobby.id, 
-        odId: currentUser.id,
-        pseudo: currentUser.pseudo,
-        teamName: currentUser.teamName
-      }, (response) => {
+      } else {
+        // Joueur - rejoindre en tant que participant
+        const response = await socket.mysteryJoinLobby(
+          lobby.id, 
+          currentUser.id,
+          currentUser.pseudo,
+          currentUser.teamName
+        );
         if (response.success && response.lobby) {
           setGameState(response.lobby.gameState || {});
           setParticipants(response.lobby.participants || []);
-          setStatus(response.lobby.status);
+          setStatus(response.lobby.status || 'waiting');
           setGrid(response.lobby.grid);
           setCurrentReveal(response.lobby.currentReveal);
         } else {
           toast.error(response.message || 'Erreur connexion');
         }
-      });
-    }
+      }
+      
+      setLoading(false);
+    };
+    
+    loadLobbyData();
     
     // Cleanup - quitter le lobby
     return () => {
       if (!isAdmin && currentUser) {
-        socket.emit('mystery:leaveLobby', { lobbyId: lobby.id, odId: currentUser.id }, () => {});
+        socket.mysteryLeaveLobby(lobby.id, currentUser.id);
       }
     };
-  }, [socket, lobby?.id, currentUser, isAdmin]);
+  }, [socket, lobby?.id, currentUser?.id, isAdmin]);
 
   // Écouter les événements socket
   useEffect(() => {
@@ -183,49 +198,41 @@ const MysteryGameView = ({
   const cols = getGridColumns();
 
   // Actions admin
-  const handleStartGame = () => {
-    socket.emit('mystery:startGame', { lobbyId: lobby.id }, (response) => {
-      if (!response.success) {
-        toast.error(response.message || 'Erreur');
-      }
-    });
+  const handleStartGame = async () => {
+    const response = await socket.mysteryStartGame(lobby.id);
+    if (!response.success) {
+      toast.error(response.message || 'Erreur');
+    }
   };
 
-  const handleRevealCell = (cellIndex) => {
+  const handleRevealCell = async (cellIndex) => {
     if (!isAdmin || status !== 'playing') return;
     
     const cell = gameState.cells?.find(c => c.index === cellIndex);
     if (!cell || cell.revealed) return;
     
-    socket.emit('mystery:revealCell', { lobbyId: lobby.id, cellIndex }, (response) => {
-      if (!response.success) {
-        toast.error(response.message || 'Erreur');
-      }
-    });
+    const response = await socket.mysteryRevealCell(lobby.id, cellIndex);
+    if (!response.success) {
+      toast.error(response.message || 'Erreur');
+    }
   };
 
   const handleCloseReveal = () => {
-    socket.emit('mystery:closeReveal', { lobbyId: lobby.id }, () => {});
+    socket.mysteryCloseReveal(lobby.id);
   };
 
-  const handleFinishGame = () => {
+  const handleFinishGame = async () => {
     if (!window.confirm('Terminer la partie ?')) return;
-    socket.emit('mystery:finishGame', { lobbyId: lobby.id }, (response) => {
-      if (!response.success) {
-        toast.error(response.message || 'Erreur');
-      }
-    });
+    const response = await socket.mysteryFinishGame(lobby.id);
+    if (!response.success) {
+      toast.error(response.message || 'Erreur');
+    }
   };
 
   const handleToggleMute = () => {
     const newMuted = !isMuted;
     setIsMuted(newMuted);
-    
-    socket.emit('mystery:toggleMute', { 
-      lobbyId: lobby.id, 
-      odId: currentUser?.odId, 
-      muted: newMuted 
-    }, () => {});
+    socket.mysteryToggleMute(lobby.id, currentUser?.id, newMuted);
   };
 
   // Trouver les infos d'une cellule
@@ -304,6 +311,18 @@ const MysteryGameView = ({
       </button>
     );
   };
+
+  // === ÉCRAN DE CHARGEMENT ===
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-300 border-t-purple-600 mx-auto mb-4" />
+          <p className="text-purple-200 text-lg">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
   // === ÉCRAN D'ATTENTE ===
   if (status === 'waiting') {

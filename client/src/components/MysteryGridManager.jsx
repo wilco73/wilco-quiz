@@ -223,32 +223,30 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
   // === LOBBIES ===
   
   const handleCreateLobby = async (gridId) => {
-    if (!socket?.emit) {
+    if (!socket?.mysteryCreateLobby) {
       toast.error('Connexion non établie');
       return;
     }
-    socket.emit('mystery:createLobby', { gridId }, (response) => {
-      if (response.success) {
-        toast.success('Lobby créé !');
-      } else {
-        toast.error(response.message || 'Erreur');
-      }
-    });
+    const response = await socket.mysteryCreateLobby(gridId);
+    if (response.success) {
+      toast.success('Lobby créé !');
+    } else {
+      toast.error(response.message || 'Erreur');
+    }
   };
 
   const handleDeleteLobby = async (lobbyId) => {
     if (!window.confirm('Supprimer ce lobby ?')) return;
-    if (!socket?.emit) {
+    if (!socket?.mysteryDeleteLobby) {
       toast.error('Connexion non établie');
       return;
     }
-    socket.emit('mystery:deleteLobby', { lobbyId }, (response) => {
-      if (response.success) {
-        toast.success('Lobby supprimé');
-      } else {
-        toast.error(response.message || 'Erreur');
-      }
-    });
+    const response = await socket.mysteryDeleteLobby(lobbyId);
+    if (response.success) {
+      toast.success('Lobby supprimé');
+    } else {
+      toast.error(response.message || 'Erreur');
+    }
   };
 
   if (loading) {

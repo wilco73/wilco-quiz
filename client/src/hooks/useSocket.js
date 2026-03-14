@@ -364,10 +364,86 @@ export function useSocket() {
     });
   }, []);
   
-  // Emit générique pour le dessin
-  const emit = useCallback((event, data) => {
+  // ==================== MYSTERY GRID ====================
+  
+  const mysteryCreateLobby = useCallback((gridId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('mystery:createLobby', { gridId }, resolve);
+    });
+  }, []);
+  
+  const mysteryJoinLobby = useCallback((lobbyId, odId, pseudo, teamName) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('mystery:joinLobby', { lobbyId, odId, pseudo, teamName }, resolve);
+    });
+  }, []);
+  
+  const mysteryLeaveLobby = useCallback((lobbyId, odId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('mystery:leaveLobby', { lobbyId, odId }, resolve);
+    });
+  }, []);
+  
+  const mysteryJoinMonitoring = useCallback((lobbyId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('mystery:joinMonitoring', { lobbyId }, resolve);
+    });
+  }, []);
+  
+  const mysteryStartGame = useCallback((lobbyId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('mystery:startGame', { lobbyId }, resolve);
+    });
+  }, []);
+  
+  const mysteryRevealCell = useCallback((lobbyId, cellIndex) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('mystery:revealCell', { lobbyId, cellIndex }, resolve);
+    });
+  }, []);
+  
+  const mysteryCloseReveal = useCallback((lobbyId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('mystery:closeReveal', { lobbyId }, resolve);
+    });
+  }, []);
+  
+  const mysteryFinishGame = useCallback((lobbyId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('mystery:finishGame', { lobbyId }, resolve);
+    });
+  }, []);
+  
+  const mysteryDeleteLobby = useCallback((lobbyId) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('mystery:deleteLobby', { lobbyId }, resolve);
+    });
+  }, []);
+  
+  const mysteryToggleMute = useCallback((lobbyId, odId, muted) => {
+    return new Promise((resolve) => {
+      if (!socketRef.current?.connected) { resolve({ success: false }); return; }
+      socketRef.current.emit('mystery:toggleMute', { lobbyId, odId, muted }, resolve);
+    });
+  }, []);
+  
+  // Emit générique pour le dessin (avec support callback optionnel)
+  const emit = useCallback((event, data, callback) => {
     if (socketRef.current?.connected) {
-      socketRef.current.emit(event, data);
+      if (callback) {
+        socketRef.current.emit(event, data, callback);
+      } else {
+        socketRef.current.emit(event, data);
+      }
     }
   }, []);
   
@@ -433,6 +509,17 @@ export function useSocket() {
     relaySaveDrawing,
     relayEnd,
     relayJoinMonitoring,
+    // Mystery Grid
+    mysteryCreateLobby,
+    mysteryJoinLobby,
+    mysteryLeaveLobby,
+    mysteryJoinMonitoring,
+    mysteryStartGame,
+    mysteryRevealCell,
+    mysteryCloseReveal,
+    mysteryFinishGame,
+    mysteryDeleteLobby,
+    mysteryToggleMute,
     // Generic
     emit,
     // Events

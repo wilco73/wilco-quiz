@@ -243,7 +243,12 @@ const App = () => {
     const handleMysteryLobbyDeleted = (data) => {
       if (currentMysteryLobby?.id === data.lobbyId) {
         setCurrentMysteryLobby(null);
-        setView('admin-mystery');
+        // Rediriger vers la bonne vue selon le rôle
+        if (currentUser?.isAdmin || currentUser?.isSuperAdmin) {
+          setView('admin-mystery');
+        } else {
+          setView('lobby-list');
+        }
         toast.info('Le lobby mystère a été supprimé');
       }
     };
@@ -792,7 +797,12 @@ const App = () => {
           isAdmin={currentUser?.isAdmin || currentUser?.isSuperAdmin}
           onLeave={() => {
             setCurrentMysteryLobby(null);
-            setView('admin-mystery');
+            // Rediriger vers la bonne vue selon le rôle
+            if (currentUser?.isAdmin || currentUser?.isSuperAdmin) {
+              setView('admin-mystery');
+            } else {
+              setView('lobby-list');
+            }
           }}
         />
       )}
