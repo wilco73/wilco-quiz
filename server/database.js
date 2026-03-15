@@ -520,14 +520,19 @@ async function saveAllParticipants(participants) {
 // ==================== QUESTIONS ====================
 
 async function getAllQuestions() {
-  const { data, error } = await supabase
+  // Supabase a une limite par défaut de 1000 lignes
+  // On récupère toutes les questions avec une limite plus élevée
+  const { data, error, count } = await supabase
     .from('questions')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(0, 9999); // Récupérer jusqu'à 10000 questions
   
   if (error) throw error;
   
-  return data.map(q => ({
+  console.log(`[DB] getAllQuestions: ${data?.length || 0} questions récupérées (total en base: ${count})`);
+  
+  return (data || []).map(q => ({
     id: q.id,
     text: q.text,
     answer: q.answer,
