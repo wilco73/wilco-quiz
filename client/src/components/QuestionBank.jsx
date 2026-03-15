@@ -357,10 +357,6 @@ const QuestionBank = ({ questions, onSave }) => {
     }
   };
 
-    reader.readAsText(file, 'UTF-8');
-    event.target.value = ''; // Reset input pour permettre de réimporter le même fichier
-  };
-
   // ✅ Parser CSV avec délimiteur spécifique
   const parseCSVLine = (line, delimiter = ',') => {
     const result = [];
@@ -1392,8 +1388,8 @@ const QuestionBank = ({ questions, onSave }) => {
 
       {/* Pagination */}
       {renderPagination()}
+      </div>
     </div>
-    </div >
   );
 };
 
