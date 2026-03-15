@@ -107,7 +107,7 @@ const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
                         <span className="text-sm font-bold text-gray-500">#{rank}</span>
                       )}
                     </div>
-                    <span className={`font-medium text-sm truncate max-w-[150px] ${isUserTeam ? 'text-purple-700 dark:text-purple-300' : 'dark:text-white'}`}>
+                    <span className={`font-medium text-sm truncate max-w-[300px] ${isUserTeam ? 'text-purple-700 dark:text-purple-300' : 'dark:text-white'}`}>
                       {team.name}
                     </span>
                   </div>
