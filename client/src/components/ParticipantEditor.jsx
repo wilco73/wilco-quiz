@@ -21,7 +21,7 @@ const ParticipantEditor = ({
     newPassword: '',
     confirmPassword: ''
   });
-  const [loading, setSaving] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [pseudoError, setPseudoError] = useState('');
   const [checkingPseudo, setCheckingPseudo] = useState(false);
   const toast = useToast();
@@ -294,10 +294,10 @@ const ParticipantEditor = ({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={loading || !!pseudoError}
+              disabled={saving || !!pseudoError}
               className="flex-1 py-3 px-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? (
+              {saving ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Enregistrement...
