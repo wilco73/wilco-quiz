@@ -35,6 +35,7 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
     occurrence: 1
   });
   const [showAddType, setShowAddType] = useState(null); // gridId ou null
+  const [editingType, setEditingType] = useState(null); // { gridId, type } ou null
   
   const toast = useToast();
 
@@ -200,6 +201,33 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
       }
     } catch (error) {
       toast.error('Erreur ajout');
+    }
+  };
+
+  const handleUpdateType = async (typeId, gridId, updates) => {
+    try {
+      const res = await fetch(`${API_URL}/mystery/types/${typeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        // Recharger la grille
+        const gridRes = await fetch(`${API_URL}/mystery/grids/${gridId}`);
+        const gridData = await gridRes.json();
+        if (gridData.success) {
+          setGrids(prev => prev.map(g => g.id === gridId ? gridData.grid : g));
+        }
+        
+        setEditingType(null);
+        toast.success('Type mis à jour');
+      } else {
+        toast.error(data.message || 'Erreur mise à jour');
+      }
+    } catch (error) {
+      toast.error('Erreur mise à jour');
     }
   };
 
@@ -616,38 +644,128 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                         {grid.types?.map(type => (
-                          <div key={type.id} className="bg-white dark:bg-gray-800 rounded-lg p-3 border dark:border-gray-700 flex items-center gap-3">
-                            {/* Thumbnail */}
-                            <div className="w-12 h-12 rounded bg-gray-200 dark:bg-gray-700 flex-shrink-0 overflow-hidden">
-                              {(type.thumbnailUrl || type.imageUrl) ? (
-                                <img 
-                                  src={type.thumbnailUrl || type.imageUrl} 
-                                  alt={type.name}
-                                  className="w-full h-full object-cover"
+                          <div key={type.id}>
+                            {/* Mode édition */}
+                            {editingType?.type?.id === type.id ? (
+                              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border-2 border-blue-400 dark:border-blue-600 space-y-2">
+                                <input
+                                  type="text"
+                                  value={editingType.type.name}
+                                  onChange={(e) => setEditingType({
+                                    ...editingType,
+                                    type: { ...editingType.type, name: e.target.value }
+                                  })}
+                                  placeholder="Nom du type"
+                                  className="w-full px-2 py-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                 />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <ImageIcon className="w-6 h-6 text-gray-400" />
+                                <input
+                                  type="url"
+                                  value={editingType.type.imageUrl || ''}
+                                  onChange={(e) => setEditingType({
+                                    ...editingType,
+                                    type: { ...editingType.type, imageUrl: e.target.value }
+                                  })}
+                                  placeholder="URL image"
+                                  className="w-full px-2 py-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                />
+                                <input
+                                  type="url"
+                                  value={editingType.type.thumbnailUrl || ''}
+                                  onChange={(e) => setEditingType({
+                                    ...editingType,
+                                    type: { ...editingType.type, thumbnailUrl: e.target.value }
+                                  })}
+                                  placeholder="URL thumbnail"
+                                  className="w-full px-2 py-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                />
+                                <input
+                                  type="url"
+                                  value={editingType.type.soundUrl || ''}
+                                  onChange={(e) => setEditingType({
+                                    ...editingType,
+                                    type: { ...editingType.type, soundUrl: e.target.value }
+                                  })}
+                                  placeholder="URL son"
+                                  className="w-full px-2 py-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                />
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-gray-600 dark:text-gray-400">Occurrences:</label>
+                                  <input
+                                    type="number"
+                                    value={editingType.type.occurrence}
+                                    onChange={(e) => setEditingType({
+                                      ...editingType,
+                                      type: { ...editingType.type, occurrence: parseInt(e.target.value) || 1 }
+                                    })}
+                                    min="1"
+                                    className="w-16 px-2 py-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                  />
                                 </div>
-                              )}
-                            </div>
-                            
-                            {/* Infos */}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium dark:text-white truncate">{type.name}</p>
-                              <div className="flex items-center gap-2 text-xs text-gray-500">
-                                <span>×{type.occurrence}</span>
-                                {type.soundUrl && <Music className="w-3 h-3" />}
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleUpdateType(type.id, grid.id, {
+                                      name: editingType.type.name,
+                                      imageUrl: editingType.type.imageUrl,
+                                      thumbnailUrl: editingType.type.thumbnailUrl,
+                                      soundUrl: editingType.type.soundUrl,
+                                      occurrence: editingType.type.occurrence
+                                    })}
+                                    className="flex-1 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                                  >
+                                    Sauver
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingType(null)}
+                                    className="flex-1 px-2 py-1 bg-gray-300 dark:bg-gray-600 rounded text-xs"
+                                  >
+                                    Annuler
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                            
-                            {/* Actions */}
-                            <button
-                              onClick={() => handleDeleteType(type.id, grid.id)}
-                              className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            ) : (
+                              /* Mode affichage */
+                              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border dark:border-gray-700 flex items-center gap-3">
+                                {/* Thumbnail */}
+                                <div className="w-12 h-12 rounded bg-gray-200 dark:bg-gray-700 flex-shrink-0 overflow-hidden">
+                                  {(type.thumbnailUrl || type.imageUrl) ? (
+                                    <img 
+                                      src={type.thumbnailUrl || type.imageUrl} 
+                                      alt={type.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Infos */}
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium dark:text-white truncate">{type.name}</p>
+                                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                                    <span>×{type.occurrence}</span>
+                                    {type.soundUrl && <Music className="w-3 h-3" />}
+                                  </div>
+                                </div>
+                                
+                                {/* Actions */}
+                                <button
+                                  onClick={() => setEditingType({ gridId: grid.id, type: { ...type } })}
+                                  className="p-1 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
+                                  title="Modifier"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteType(type.id, grid.id)}
+                                  className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"
+                                  title="Supprimer"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

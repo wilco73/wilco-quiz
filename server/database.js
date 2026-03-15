@@ -428,6 +428,13 @@ async function updateParticipantPassword(participantId, newPassword) {
     .eq('id', participantId);
 }
 
+async function updateParticipantPseudo(participantId, newPseudo) {
+  await supabase
+    .from('participants')
+    .update({ pseudo: newPseudo })
+    .eq('id', participantId);
+}
+
 async function deleteParticipant(participantId) {
   // Supprimer des lobbies d'abord
   await supabase.from('lobby_participants').delete().eq('participant_id', participantId);
@@ -2426,6 +2433,7 @@ module.exports = {
   updateParticipantTeam,
   updateParticipantAvatar,
   updateParticipantPassword,
+  updateParticipantPseudo,
   deleteParticipant,
   verifyParticipantPassword,
   saveAllParticipants,

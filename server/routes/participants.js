@@ -130,13 +130,23 @@ router.put('/:id/team', async (req, res) => {
 // Changer le mot de passe d'un participant
 router.put('/:id/password', async (req, res) => {
   const { id } = req.params;
-  const { currentPassword, newPassword } = req.body;
+  const { currentPassword, newPassword, password } = req.body;
   
   const participant = await db.getParticipantById(id);
   if (!participant) {
     return res.json({ success: false, message: 'Participant introuvable' });
   }
   
+  // Si password est fourni directement (admin), pas besoin de vérifier l'ancien
+  if (password) {
+    if (password.length < 4) {
+      return res.json({ success: false, message: 'Le mot de passe doit contenir au moins 4 caractères' });
+    }
+    await db.updateParticipantPassword(id, password);
+    return res.json({ success: true, message: 'Mot de passe modifié avec succès' });
+  }
+  
+  // Sinon, vérifier l'ancien mot de passe
   if (!db.verifyPasswordSync(currentPassword, participant.password)) {
     return res.json({ success: false, message: 'Mot de passe actuel incorrect' });
   }
@@ -148,6 +158,44 @@ router.put('/:id/password', async (req, res) => {
   await db.updateParticipantPassword(id, newPassword);
   
   res.json({ success: true, message: 'Mot de passe modifié avec succès' });
+});
+
+// Vérifier si un pseudo existe déjà
+router.get('/check-pseudo', async (req, res) => {
+  const { pseudo } = req.query;
+  
+  if (!pseudo) {
+    return res.json({ exists: false });
+  }
+  
+  const existing = await db.getParticipantByPseudo(pseudo.trim());
+  res.json({ exists: !!existing });
+});
+
+// Modifier le pseudo d'un participant (superadmin uniquement)
+router.put('/:id/pseudo', async (req, res) => {
+  const { id } = req.params;
+  const { pseudo } = req.body;
+  
+  if (!pseudo || !pseudo.trim()) {
+    return res.json({ success: false, message: 'Le pseudo est requis' });
+  }
+  
+  const participant = await db.getParticipantById(id);
+  if (!participant) {
+    return res.json({ success: false, message: 'Participant introuvable' });
+  }
+  
+  // Vérifier que le pseudo n'existe pas déjà
+  const existing = await db.getParticipantByPseudo(pseudo.trim());
+  if (existing && existing.odId !== id) {
+    return res.json({ success: false, message: 'Ce pseudo existe déjà' });
+  }
+  
+  await db.updateParticipantPseudo(id, pseudo.trim());
+  
+  if (broadcastGlobalState) await broadcastGlobalState();
+  res.json({ success: true, participant: await db.getParticipantById(id) });
 });
 
 // Changer l'avatar d'un participant

@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download, ChevronLeft, ChevronRight, FileUp, RefreshCw, PlusCircle, Replace } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import QuestionEditor from './QuestionEditor';
+import ImportModal from './ImportModal';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -920,143 +921,15 @@ const QuestionBank = ({ questions, onSave }) => {
       />
 
       {/* Modale d'import CSV */}
-      {importModal.isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <FileUp className="w-6 h-6 text-white" />
-                  <h2 className="text-xl font-bold text-white">Import CSV</h2>
-                </div>
-                {!importModal.isImporting && (
-                  <button 
-                    onClick={() => setImportModal({ isOpen: false, questions: [], isImporting: false, progress: 0 })}
-                    className="text-white/80 hover:text-white"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                )}
-              </div>
-              <p className="text-blue-100 text-sm mt-1">
-                {importModal.questions.length} question(s) prête(s) à importer
-              </p>
-            </div>
-
-            {/* Contenu */}
-            <div className="p-6">
-              {importModal.isImporting ? (
-                // Affichage pendant l'import
-                <div className="text-center py-8">
-                  <div className="relative w-24 h-24 mx-auto mb-4">
-                    <div className="absolute inset-0 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
-                    <div 
-                      className="absolute inset-0 border-4 border-purple-600 rounded-full transition-all duration-300"
-                      style={{
-                        clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%)`,
-                        transform: `rotate(${(importModal.progress / 100) * 360}deg)`
-                      }}
-                    ></div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-2xl font-bold text-purple-600">{importModal.progress}%</span>
-                    </div>
-                  </div>
-                  <p className="text-gray-600 dark:text-gray-400">Import en cours...</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                    Ne fermez pas cette fenêtre
-                  </p>
-                </div>
-              ) : (
-                // Choix du mode d'import
-                <div className="space-y-4">
-                  <p className="text-gray-600 dark:text-gray-400 text-center mb-6">
-                    Choisissez comment importer vos questions :
-                  </p>
-
-                  {/* Option Fusionner */}
-                  <button
-                    onClick={() => executeImport('update')}
-                    className="w-full p-4 border-2 border-green-200 dark:border-green-700 rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20 transition text-left group"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="p-2 bg-green-100 dark:bg-green-900/50 rounded-lg group-hover:bg-green-200 dark:group-hover:bg-green-800/50 transition">
-                        <RefreshCw className="w-6 h-6 text-green-600 dark:text-green-400" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-bold text-green-700 dark:text-green-400 flex items-center gap-2">
-                          Fusionner
-                          <span className="text-xs bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 px-2 py-0.5 rounded">Recommandé</span>
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          Met à jour les questions existantes (même ID) et ajoute les nouvelles.
-                          Conserve les autres questions.
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Option Ajouter */}
-                  <button
-                    onClick={() => executeImport('add')}
-                    className="w-full p-4 border-2 border-blue-200 dark:border-blue-700 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition text-left group"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg group-hover:bg-blue-200 dark:group-hover:bg-blue-800/50 transition">
-                        <PlusCircle className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-bold text-blue-700 dark:text-blue-400">Ajouter uniquement</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          Ajoute uniquement les nouvelles questions.
-                          Ignore les doublons (même ID).
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Option Remplacer */}
-                  <button
-                    onClick={() => {
-                      if (window.confirm('⚠️ Attention ! Cette action va SUPPRIMER TOUTES les questions existantes et les remplacer par celles du CSV. Êtes-vous sûr ?')) {
-                        executeImport('replace');
-                      }
-                    }}
-                    className="w-full p-4 border-2 border-red-200 dark:border-red-700 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition text-left group"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-lg group-hover:bg-red-200 dark:group-hover:bg-red-800/50 transition">
-                        <Replace className="w-6 h-6 text-red-600 dark:text-red-400" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-bold text-red-700 dark:text-red-400 flex items-center gap-2">
-                          Remplacer tout
-                          <span className="text-xs bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 px-2 py-0.5 rounded">Dangereux</span>
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          Supprime TOUTES les questions existantes et importe uniquement le CSV.
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            {!importModal.isImporting && (
-              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  onClick={() => setImportModal({ isOpen: false, questions: [], isImporting: false, progress: 0 })}
-                  className="w-full py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
-                >
-                  Annuler
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <ImportModal
+        isOpen={importModal.isOpen}
+        onClose={() => setImportModal({ isOpen: false, questions: [], isImporting: false, progress: 0 })}
+        onImport={executeImport}
+        itemCount={importModal.questions.length}
+        itemType="question"
+        isImporting={importModal.isImporting}
+        progress={importModal.progress}
+      />
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
         <div className="flex justify-between items-center mb-4">

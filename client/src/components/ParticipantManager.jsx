@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { normalizeTeamName, validateTeamName, findTeamByName } from '../utils/helpers';
 import { useToast } from './ToastProvider';
+import ParticipantEditor from './ParticipantEditor';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -40,11 +41,13 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
   );
 };
 
-const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDeleteTeam, onRefreshData, compact = false }) => {
+const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDeleteTeam, onRefreshData, compact = false, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTeam, setFilterTeam] = useState('');
   const [editingParticipant, setEditingParticipant] = useState(null);
   const [newTeamName, setNewTeamName] = useState('');
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [selectedParticipant, setSelectedParticipant] = useState(null);
   const toast = useToast();
   
   // Pagination - plus d'éléments en mode compact
@@ -789,7 +792,7 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
                                         <Users className="w-3 h-3" />
                                       </button>
                                       <button
-                                        onClick={() => { setEditingParticipantFull(participant); setEditParticipantData({ teamName: participant.teamName || '', newPassword: '' }); }}
+                                        onClick={() => { setSelectedParticipant(participant); setIsEditorOpen(true); }}
                                         className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
                                         title="Modifier"
                                       >
@@ -847,8 +850,8 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
                                 </button>
                                 <button
                                   onClick={() => {
-                                    setEditingParticipantFull(participant);
-                                    setEditParticipantData({ teamName: participant.teamName || '', newPassword: '' });
+                                    setSelectedParticipant(participant);
+                                    setIsEditorOpen(true);
                                   }}
                                   className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900"
                                   title="Modifier"
@@ -972,6 +975,20 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
           </div>
         </div>
       )}
+      
+      {/* Panneau d'édition participant */}
+      <ParticipantEditor
+        participant={selectedParticipant}
+        isOpen={isEditorOpen}
+        onClose={() => { setIsEditorOpen(false); setSelectedParticipant(null); }}
+        onSave={() => {
+          onRefreshData?.();
+          setIsEditorOpen(false);
+          setSelectedParticipant(null);
+        }}
+        teams={teams}
+        isSuperAdmin={currentUser?.isSuperAdmin}
+      />
     </div>
   );
 };

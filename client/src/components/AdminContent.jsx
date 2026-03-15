@@ -447,7 +447,9 @@ const AdminContent = ({
           participants={participants}
           onUpdateParticipant={onUpdateParticipant}
           onDeleteTeam={onDeleteTeam}
+          onRefreshData={onRefreshData}
           compact={true}
+          currentUser={currentUser}
         />
       );
 

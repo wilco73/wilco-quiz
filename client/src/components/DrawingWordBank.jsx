@@ -4,6 +4,7 @@ import {
   Tag, Filter, X, Check, AlertCircle, CheckSquare, Square
 } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import ImportModal from './ImportModal';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -20,6 +21,14 @@ const DrawingWordBank = () => {
   // Sélection multiple
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selectMode, setSelectMode] = useState(false);
+  
+  // Import modal
+  const [importModal, setImportModal] = useState({
+    isOpen: false,
+    words: [],
+    isImporting: false,
+    progress: 0
+  });
   
   // Formulaire
   const [showForm, setShowForm] = useState(false);
@@ -318,9 +327,6 @@ const DrawingWordBank = () => {
         const importedWords = [];
         const errors = [];
         
-        // Créer un Set des mots existants normalisés pour détecter les doublons
-        const existingNormalized = new Set(words.map(w => normalizeText(w.word)));
-        
         dataLines.forEach((line, index) => {
           try {
             const values = parseCSVLine(line, detectedDelimiter);
@@ -348,6 +354,7 @@ const DrawingWordBank = () => {
         
         if (errors.length > 0) {
           console.warn('Erreurs d\'import:', errors);
+          toast.warning(`Parsing avec ${errors.length} erreur(s)`);
         }
         
         if (importedWords.length === 0) {
@@ -355,65 +362,13 @@ const DrawingWordBank = () => {
           return;
         }
         
-        // Demander le mode d'import
-        const mode = window.prompt(
-          `Importer ${importedWords.length} mot(s) ?\n\n` +
-          `Choisissez le mode d'import :\n\n` +
-          `1 = AJOUTER (garde les existants, ignore les doublons)\n` +
-          `2 = REMPLACER (supprime tout et importe)\n\n` +
-          `Tapez 1 ou 2 :`,
-          '1'
-        );
-        
-        if (!mode || !['1', '2'].includes(mode)) {
-          toast.info('Import annulé');
-          return;
-        }
-        
-        let wordsToImport = importedWords;
-        let duplicatesIgnored = 0;
-        
-        if (mode === '1') {
-          // Mode AJOUTER : filtrer les doublons
-          wordsToImport = importedWords.filter(w => {
-            const normalized = normalizeText(w.word);
-            if (existingNormalized.has(normalized)) {
-              duplicatesIgnored++;
-              return false;
-            }
-            existingNormalized.add(normalized); // Éviter les doublons dans le fichier lui-même
-            return true;
-          });
-        }
-        
-        if (wordsToImport.length === 0 && duplicatesIgnored > 0) {
-          toast.info(`Tous les mots (${duplicatesIgnored}) sont déjà présents`);
-          return;
-        }
-        
-        // Envoyer au serveur
-        const res = await fetch(`${API_URL}/drawing-words/import`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            words: wordsToImport,
-            mode: mode === '2' ? 'replace' : 'add'
-          })
+        // Ouvrir la modale pour choisir le mode
+        setImportModal({
+          isOpen: true,
+          words: importedWords,
+          isImporting: false,
+          progress: 0
         });
-        
-        const result = await res.json();
-        
-        if (result.success) {
-          let message = `✅ ${result.added} mot(s) importé(s)`;
-          if (duplicatesIgnored > 0) {
-            message += `\n• ${duplicatesIgnored} doublon(s) ignoré(s)`;
-          }
-          message += `\n• Total : ${result.total} mot(s)`;
-          toast.success(message);
-          fetchWords();
-        } else {
-          toast.error(result.message || 'Erreur lors de l\'import');
-        }
         
       } catch (error) {
         console.error('Erreur import CSV:', error);
@@ -423,6 +378,74 @@ const DrawingWordBank = () => {
     
     reader.readAsText(file, 'UTF-8');
     event.target.value = '';
+  };
+  
+  // Exécuter l'import avec le mode choisi
+  const executeWordImport = async (mode) => {
+    const importedWords = importModal.words;
+    
+    // Créer un Set des mots existants normalisés pour détecter les doublons
+    const existingNormalized = new Set(words.map(w => normalizeText(w.word)));
+    
+    setImportModal(prev => ({ ...prev, isImporting: true, progress: 0 }));
+    
+    try {
+      let wordsToImport = importedWords;
+      let duplicatesIgnored = 0;
+      
+      if (mode === 'add' || mode === 'update') {
+        // Filtrer les doublons
+        wordsToImport = importedWords.filter(w => {
+          const normalized = normalizeText(w.word);
+          if (existingNormalized.has(normalized)) {
+            duplicatesIgnored++;
+            return false;
+          }
+          existingNormalized.add(normalized);
+          return true;
+        });
+      }
+      
+      if (wordsToImport.length === 0 && duplicatesIgnored > 0) {
+        toast.info(`Tous les mots (${duplicatesIgnored}) sont déjà présents`);
+        setImportModal({ isOpen: false, words: [], isImporting: false, progress: 0 });
+        return;
+      }
+      
+      setImportModal(prev => ({ ...prev, progress: 50 }));
+      
+      // Envoyer au serveur
+      const res = await fetch(`${API_URL}/drawing-words/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          words: wordsToImport,
+          mode: mode === 'replace' ? 'replace' : 'add'
+        })
+      });
+      
+      const result = await res.json();
+      
+      setImportModal(prev => ({ ...prev, progress: 100 }));
+      
+      if (result.success) {
+        let message = `✅ ${result.added} mot(s) importé(s)`;
+        if (duplicatesIgnored > 0) {
+          message += ` (${duplicatesIgnored} doublon(s) ignoré(s))`;
+        }
+        toast.success(message);
+        fetchWords();
+      } else {
+        toast.error(result.message || 'Erreur lors de l\'import');
+      }
+      
+      setImportModal({ isOpen: false, words: [], isImporting: false, progress: 0 });
+      
+    } catch (error) {
+      console.error('Erreur import:', error);
+      toast.error('Erreur lors de l\'import');
+      setImportModal(prev => ({ ...prev, isImporting: false }));
+    }
   };
   
   // ========== TEMPLATE CSV ==========
@@ -467,6 +490,17 @@ const DrawingWordBank = () => {
   
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+      {/* Modale d'import */}
+      <ImportModal
+        isOpen={importModal.isOpen}
+        onClose={() => setImportModal({ isOpen: false, words: [], isImporting: false, progress: 0 })}
+        onImport={executeWordImport}
+        itemCount={importModal.words.length}
+        itemType="mot"
+        isImporting={importModal.isImporting}
+        progress={importModal.progress}
+      />
+      
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-2xl font-bold dark:text-white">📝 Banque de mots Pictionary</h2>
