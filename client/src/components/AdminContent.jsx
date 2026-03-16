@@ -151,7 +151,8 @@ const AdminContent = ({
 
   // === MODAL SALLE D'ATTENTE ===
   
-  const WaitingRoomModal = () => {
+  // Rendu de la modale WaitingRoom
+  const renderWaitingRoomModal = () => {
     if (!selectedLobby) return null;
     const quiz = quizzes.find(q => q.id === selectedLobby.quizId);
     
@@ -206,9 +207,10 @@ const AdminContent = ({
     );
   };
 
-  // === MODAL EDITEUR QUIZ ===
+  // === RENDU SELON L'ONGLET ===
   
-  const QuizEditorModal = () => {
+  // Rendu de la modale QuizEditor (en dehors du switch pour éviter le remontage)
+  const renderQuizEditorModal = () => {
     if (!editingQuiz && !creatingQuiz) return null;
     
     return (
@@ -235,15 +237,13 @@ const AdminContent = ({
       </div>
     );
   };
-
-  // === RENDU SELON L'ONGLET ===
   
   switch (activeTab) {
     case 'admin-dashboard':
       return (
         <div className="space-y-6">
-          <WaitingRoomModal />
-          <QuizEditorModal />
+          {renderWaitingRoomModal()}
+          {renderQuizEditorModal()}
           
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold dark:text-white">Tableau de bord</h1>
