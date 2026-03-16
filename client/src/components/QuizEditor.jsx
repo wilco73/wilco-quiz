@@ -50,7 +50,9 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
   };
 
   const addRandomQuestions = () => {
-    let pool = availableQuestions;
+    // Calculer les questions disponibles en excluant celles déjà sélectionnées
+    const currentSelectedIds = new Set(selectedQuestions.map(q => q.id));
+    let pool = questions.filter(q => !currentSelectedIds.has(q.id));
     
     if (randomCategory) {
       pool = pool.filter(q => q.category === randomCategory);
@@ -65,10 +67,11 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
     const randomSelected = shuffled.slice(0, count);
     
-    setSelectedQuestions([...selectedQuestions, ...randomSelected]);
+    // Utiliser la forme fonctionnelle pour éviter les problèmes de closure
+    setSelectedQuestions(prev => [...prev, ...randomSelected]);
     setShowRandomPicker(false);
     
-    toast.info(`${count} question(s) ajoutée(s) aléatoirement`);
+    toast.success(`${count} question(s) ajoutée(s) aléatoirement`);
   };
 
   const handleSave = () => {
