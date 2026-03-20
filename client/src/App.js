@@ -35,7 +35,7 @@ const App = () => {
   const [currentQuiz, setCurrentQuiz] = useState(null);
   const [myAnswer, setMyAnswer] = useState('');
   const [hasAnswered, setHasAnswered] = useState(false);
-  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isAppReconnecting, setIsAppReconnecting] = useState(false);
   const [currentDrawingLobby, setCurrentDrawingLobby] = useState(null);
   const [showMonitoringWidget, setShowMonitoringWidget] = useState(false);
   const [currentMysteryLobby, setCurrentMysteryLobby] = useState(null);
@@ -315,7 +315,7 @@ const App = () => {
       // Attendre que les lobbies soient charges
       if (savedSession.currentLobbyId) {
         if (lobbies.length > 0) {
-          setIsReconnecting(true);
+          setIsAppReconnecting(true);
           reconnectToLobby(savedSession.currentLobbyId, user);
           hasReconnected.current = true;
         }
@@ -338,7 +338,7 @@ const App = () => {
     if (!lobby) {
       console.log('[APP] Lobby introuvable, redirection vers liste');
       setView('lobby-list');
-      setIsReconnecting(false);
+      setIsAppReconnecting(false);
       saveSession({ currentUser: user });
       return;
     }
@@ -382,7 +382,7 @@ const App = () => {
       saveSession({ currentUser: user });
     }
     
-    setIsReconnecting(false);
+    setIsAppReconnecting(false);
   };
 
   // === HANDLERS ===
@@ -601,7 +601,7 @@ const App = () => {
     return <ReconnectingScreen />;
   }
   
-  if (isReconnecting) {
+  if (isReconnecting || isAppReconnecting) {
     return <ReconnectingScreen />;
   }
 
