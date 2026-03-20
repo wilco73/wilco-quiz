@@ -42,6 +42,19 @@ const BroadcastPanel = ({
   
   const toast = useToast();
 
+  // Sélectionner un média et appliquer ses options par défaut
+  const handleSelectMedia = (media) => {
+    setSelectedMedia(media);
+    // Appliquer les valeurs par défaut du média si disponibles
+    if (media) {
+      setOptions(prev => ({
+        ...prev,
+        autoplay: media.autoplay !== false,
+        volume: media.default_volume || 80
+      }));
+    }
+  };
+
   // Charger les médias de la grille
   useEffect(() => {
     if (gridId && activeTab === 'grid') {
@@ -319,7 +332,7 @@ const BroadcastPanel = ({
                   key={item.id} 
                   item={item} 
                   selected={selectedMedia?.id === item.id}
-                  onSelect={setSelectedMedia}
+                  onSelect={handleSelectMedia}
                 />
               ))
             )}
@@ -354,7 +367,7 @@ const BroadcastPanel = ({
                     key={item.id} 
                     item={item} 
                     selected={selectedMedia?.id === item.id}
-                    onSelect={setSelectedMedia}
+                    onSelect={handleSelectMedia}
                   />
                 ))
               )}

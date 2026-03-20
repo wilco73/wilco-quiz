@@ -2447,7 +2447,7 @@ async function getMediaById(id) {
 }
 
 // Créer un média
-async function createMedia({ name, type, url, thumbnailUrl, tags, durationSeconds, fileSize, createdBy }) {
+async function createMedia({ name, type, url, thumbnailUrl, tags, durationSeconds, fileSize, createdBy, autoplay, defaultVolume }) {
   const { data, error } = await supabase
     .from('media_library')
     .insert({
@@ -2458,7 +2458,9 @@ async function createMedia({ name, type, url, thumbnailUrl, tags, durationSecond
       tags: tags || [],
       duration_seconds: durationSeconds,
       file_size: fileSize,
-      created_by: createdBy
+      created_by: createdBy,
+      autoplay: autoplay !== false,
+      default_volume: defaultVolume !== undefined ? defaultVolume : 80
     })
     .select()
     .single();
@@ -2468,11 +2470,13 @@ async function createMedia({ name, type, url, thumbnailUrl, tags, durationSecond
 }
 
 // Modifier un média
-async function updateMedia(id, { name, tags, thumbnailUrl }) {
+async function updateMedia(id, { name, tags, thumbnailUrl, autoplay, defaultVolume }) {
   const updates = {};
   if (name !== undefined) updates.name = name;
   if (tags !== undefined) updates.tags = tags;
   if (thumbnailUrl !== undefined) updates.thumbnail_url = thumbnailUrl;
+  if (autoplay !== undefined) updates.autoplay = autoplay;
+  if (defaultVolume !== undefined) updates.default_volume = defaultVolume;
   
   const { data, error } = await supabase
     .from('media_library')

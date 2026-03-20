@@ -314,7 +314,9 @@ const AddMediaModal = ({ onClose, onSave, toast }) => {
     type: 'image',
     url: '',
     thumbnailUrl: '',
-    tags: ''
+    tags: '',
+    autoplay: true,
+    defaultVolume: 80
   });
   const [saving, setSaving] = useState(false);
 
@@ -336,7 +338,9 @@ const AddMediaModal = ({ onClose, onSave, toast }) => {
           type: formData.type,
           url: formData.url.trim(),
           thumbnailUrl: formData.thumbnailUrl.trim() || null,
-          tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean)
+          tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
+          autoplay: formData.autoplay,
+          defaultVolume: formData.defaultVolume
         })
       });
       
@@ -354,9 +358,12 @@ const AddMediaModal = ({ onClose, onSave, toast }) => {
     setSaving(false);
   };
 
+  // Afficher les options audio/vidéo uniquement pour ces types
+  const showMediaOptions = formData.type === 'audio' || formData.type === 'video';
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
           <h3 className="text-lg font-bold dark:text-white">Ajouter un média</h3>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
@@ -422,6 +429,37 @@ const AddMediaModal = ({ onClose, onSave, toast }) => {
             />
           </div>
           
+          {/* Options pour audio/vidéo */}
+          {showMediaOptions && (
+            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-3">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Options de lecture</p>
+              
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.autoplay}
+                  onChange={(e) => setFormData({ ...formData, autoplay: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm dark:text-gray-300">Lecture automatique</span>
+              </label>
+              
+              <div>
+                <label className="block text-sm mb-1 dark:text-gray-300">
+                  Volume par défaut : {formData.defaultVolume}%
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={formData.defaultVolume}
+                  onChange={(e) => setFormData({ ...formData, defaultVolume: parseInt(e.target.value) })}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-600"
+                />
+              </div>
+            </div>
+          )}
+          
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
@@ -449,9 +487,14 @@ const EditMediaModal = ({ media, onClose, onSave, toast }) => {
   const [formData, setFormData] = useState({
     name: media.name,
     tags: (media.tags || []).join(', '),
-    thumbnailUrl: media.thumbnail_url || ''
+    thumbnailUrl: media.thumbnail_url || '',
+    autoplay: media.autoplay !== false, // true par défaut
+    defaultVolume: media.default_volume || 80
   });
   const [saving, setSaving] = useState(false);
+
+  // Afficher les options audio/vidéo uniquement pour ces types
+  const showMediaOptions = media.type === 'audio' || media.type === 'video';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -464,7 +507,9 @@ const EditMediaModal = ({ media, onClose, onSave, toast }) => {
         body: JSON.stringify({
           name: formData.name.trim(),
           tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
-          thumbnailUrl: formData.thumbnailUrl.trim() || null
+          thumbnailUrl: formData.thumbnailUrl.trim() || null,
+          autoplay: formData.autoplay,
+          defaultVolume: formData.defaultVolume
         })
       });
       
@@ -484,7 +529,7 @@ const EditMediaModal = ({ media, onClose, onSave, toast }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
           <h3 className="text-lg font-bold dark:text-white">Modifier le média</h3>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
@@ -522,6 +567,37 @@ const EditMediaModal = ({ media, onClose, onSave, toast }) => {
               className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
+          
+          {/* Options pour audio/vidéo */}
+          {showMediaOptions && (
+            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-3">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Options de lecture</p>
+              
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.autoplay}
+                  onChange={(e) => setFormData({ ...formData, autoplay: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm dark:text-gray-300">Lecture automatique</span>
+              </label>
+              
+              <div>
+                <label className="block text-sm mb-1 dark:text-gray-300">
+                  Volume par défaut : {formData.defaultVolume}%
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={formData.defaultVolume}
+                  onChange={(e) => setFormData({ ...formData, defaultVolume: parseInt(e.target.value) })}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-600"
+                />
+              </div>
+            </div>
+          )}
           
           <div className="flex justify-end gap-3 pt-2">
             <button

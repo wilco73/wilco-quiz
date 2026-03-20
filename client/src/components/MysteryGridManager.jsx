@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Grid, Plus, Edit, Trash2, Play, X, Save, Upload, Music, Image as ImageIcon,
-  AlertTriangle, Check, ChevronDown, ChevronUp, Eye, Users, MessageSquare
+  AlertTriangle, Check, ChevronDown, ChevronUp, Eye, Users, MessageSquare,
+  Video, Search, Link2, Unlink
 } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import BroadcastPanel from './BroadcastPanel';
@@ -19,6 +20,13 @@ const MysteryGridManager = ({ socket, currentUser, onJoinLobby }) => {
   const [expandedGridId, setExpandedGridId] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedLobbyForBroadcast, setSelectedLobbyForBroadcast] = useState(null);
+  
+  // Gestion des médias de grille
+  const [showMediaManager, setShowMediaManager] = useState(null); // gridId ou null
+  const [gridMedia, setGridMedia] = useState([]); // médias liés à la grille actuelle
+  const [availableMedia, setAvailableMedia] = useState([]); // médias disponibles dans la médiathèque
+  const [mediaSearchTerm, setMediaSearchTerm] = useState('');
+  const [loadingMedia, setLoadingMedia] = useState(false);
   
   // Formulaire nouvelle grille
   const [newGrid, setNewGrid] = useState({
@@ -266,6 +274,94 @@ const MysteryGridManager = ({ socket, currentUser, onJoinLobby }) => {
     }
   };
 
+  // === MÉDIAS DE GRILLE ===
+  
+  const openMediaManager = async (gridId) => {
+    setShowMediaManager(gridId);
+    setLoadingMedia(true);
+    try {
+      // Charger les médias liés à cette grille
+      const gridRes = await fetch(`${API_URL}/media/grid/${gridId}`);
+      const gridData = await gridRes.json();
+      if (gridData.success) {
+        setGridMedia(gridData.media || []);
+      }
+      
+      // Charger tous les médias disponibles
+      const allRes = await fetch(`${API_URL}/media?limit=50`);
+      const allData = await allRes.json();
+      if (allData.success) {
+        setAvailableMedia(allData.media || []);
+      }
+    } catch (error) {
+      toast.error('Erreur chargement médias');
+    }
+    setLoadingMedia(false);
+  };
+  
+  const handleAddMediaToGrid = async (mediaId) => {
+    try {
+      const res = await fetch(`${API_URL}/media/grid/${showMediaManager}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaId, sortOrder: gridMedia.length })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setGridMedia(data.media || []);
+        toast.success('Média ajouté à la grille');
+      } else {
+        toast.error(data.message || 'Erreur');
+      }
+    } catch (error) {
+      toast.error('Erreur ajout média');
+    }
+  };
+  
+  const handleRemoveMediaFromGrid = async (mediaId) => {
+    try {
+      const res = await fetch(`${API_URL}/media/grid/${showMediaManager}/${mediaId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setGridMedia(prev => prev.filter(m => m.id !== mediaId));
+        toast.success('Média retiré de la grille');
+      } else {
+        toast.error(data.message || 'Erreur');
+      }
+    } catch (error) {
+      toast.error('Erreur suppression média');
+    }
+  };
+  
+  const searchAvailableMedia = async () => {
+    setLoadingMedia(true);
+    try {
+      const params = new URLSearchParams({ limit: '50' });
+      if (mediaSearchTerm) params.append('search', mediaSearchTerm);
+      
+      const res = await fetch(`${API_URL}/media?${params}`);
+      const data = await res.json();
+      if (data.success) {
+        setAvailableMedia(data.media || []);
+      }
+    } catch (error) {
+      toast.error('Erreur recherche');
+    }
+    setLoadingMedia(false);
+  };
+  
+  // Icône selon le type de média
+  const getMediaIcon = (type) => {
+    switch (type) {
+      case 'image': return <ImageIcon className="w-4 h-4" />;
+      case 'video': return <Video className="w-4 h-4" />;
+      case 'audio': return <Music className="w-4 h-4" />;
+      default: return <ImageIcon className="w-4 h-4" />;
+    }
+  };
+
   // === LOBBIES ===
   
   const handleCreateLobby = async (gridId) => {
@@ -487,6 +583,14 @@ const MysteryGridManager = ({ socket, currentUser, onJoinLobby }) => {
                     title="Modifier"
                   >
                     <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => openMediaManager(grid.id)}
+                    className="flex items-center gap-1 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                    title="Gérer les médias de cette grille"
+                  >
+                    <Link2 className="w-4 h-4" />
+                    Médias
                   </button>
                   <button
                     onClick={() => handleCreateLobby(grid.id)}
@@ -833,6 +937,162 @@ const MysteryGridManager = ({ socket, currentUser, onJoinLobby }) => {
           senderPseudo={currentUser?.pseudo}
           availableLobbies={lobbies.filter(l => l.status !== 'finished')}
         />
+      )}
+      
+      {/* Modale de gestion des médias de grille */}
+      {showMediaManager && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
+              <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
+                <Link2 className="w-5 h-5 text-indigo-600" />
+                Médias de la grille : {grids.find(g => g.id === showMediaManager)?.title}
+              </h3>
+              <button 
+                onClick={() => {
+                  setShowMediaManager(null);
+                  setGridMedia([]);
+                  setMediaSearchTerm('');
+                }}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Contenu */}
+            <div className="flex-1 overflow-hidden flex">
+              {/* Colonne gauche : Médias liés à la grille */}
+              <div className="w-1/2 border-r dark:border-gray-700 flex flex-col">
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 border-b dark:border-gray-700">
+                  <h4 className="font-semibold text-indigo-800 dark:text-indigo-300">
+                    Médias liés ({gridMedia.length})
+                  </h4>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400">
+                    Ces médias apparaîtront dans l'onglet "Grille" du panel de broadcast
+                  </p>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                  {loadingMedia ? (
+                    <div className="flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+                    </div>
+                  ) : gridMedia.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">Aucun média lié</p>
+                  ) : (
+                    gridMedia.map(media => (
+                      <div key={media.id} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        {/* Thumbnail */}
+                        <div className="w-12 h-12 bg-gray-200 dark:bg-gray-600 rounded overflow-hidden flex-shrink-0">
+                          {media.thumbnail_url || media.url ? (
+                            <img src={media.thumbnail_url || media.url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              {getMediaIcon(media.type)}
+                            </div>
+                          )}
+                        </div>
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium dark:text-white truncate">{media.name}</p>
+                          <p className="text-xs text-gray-500 capitalize">{media.type}</p>
+                        </div>
+                        {/* Actions */}
+                        <button
+                          onClick={() => handleRemoveMediaFromGrid(media.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"
+                          title="Retirer de la grille"
+                        >
+                          <Unlink className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              
+              {/* Colonne droite : Médiathèque */}
+              <div className="w-1/2 flex flex-col">
+                <div className="p-3 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
+                  <h4 className="font-semibold dark:text-white mb-2">Médiathèque</h4>
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Rechercher..."
+                        value={mediaSearchTerm}
+                        onChange={(e) => setMediaSearchTerm(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && searchAvailableMedia()}
+                        className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white"
+                      />
+                    </div>
+                    <button
+                      onClick={searchAvailableMedia}
+                      className="px-3 py-2 bg-gray-200 dark:bg-gray-600 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500"
+                    >
+                      <Search className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                  {loadingMedia ? (
+                    <div className="flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600" />
+                    </div>
+                  ) : availableMedia.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">Aucun média trouvé</p>
+                  ) : (
+                    availableMedia
+                      .filter(m => !gridMedia.some(gm => gm.id === m.id))
+                      .map(media => (
+                        <div key={media.id} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                          {/* Thumbnail */}
+                          <div className="w-12 h-12 bg-gray-200 dark:bg-gray-600 rounded overflow-hidden flex-shrink-0">
+                            {media.thumbnail_url || media.url ? (
+                              <img src={media.thumbnail_url || media.url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                {getMediaIcon(media.type)}
+                              </div>
+                            )}
+                          </div>
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium dark:text-white truncate">{media.name}</p>
+                            <p className="text-xs text-gray-500 capitalize">{media.type}</p>
+                          </div>
+                          {/* Actions */}
+                          <button
+                            onClick={() => handleAddMediaToGrid(media.id)}
+                            className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded"
+                            title="Ajouter à la grille"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="p-4 border-t dark:border-gray-700 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowMediaManager(null);
+                  setGridMedia([]);
+                  setMediaSearchTerm('');
+                }}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

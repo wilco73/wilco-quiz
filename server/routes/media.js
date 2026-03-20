@@ -67,7 +67,7 @@ router.get('/:id', async (req, res) => {
 // Créer un nouveau média
 router.post('/', async (req, res) => {
   try {
-    const { name, type, url, thumbnailUrl, tags, durationSeconds, fileSize, createdBy } = req.body;
+    const { name, type, url, thumbnailUrl, tags, durationSeconds, fileSize, createdBy, autoplay, defaultVolume } = req.body;
     
     if (!name || !type || !url) {
       return res.status(400).json({ success: false, message: 'name, type et url sont requis' });
@@ -85,7 +85,9 @@ router.post('/', async (req, res) => {
       tags: tags || [],
       durationSeconds,
       fileSize,
-      createdBy
+      createdBy,
+      autoplay: autoplay !== false, // true par défaut
+      defaultVolume: defaultVolume !== undefined ? defaultVolume : 80
     });
     
     res.json({ success: true, media });
@@ -99,9 +101,9 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, tags, thumbnailUrl } = req.body;
+    const { name, tags, thumbnailUrl, autoplay, defaultVolume } = req.body;
     
-    const media = await db.updateMedia(id, { name, tags, thumbnailUrl });
+    const media = await db.updateMedia(id, { name, tags, thumbnailUrl, autoplay, defaultVolume });
     
     if (!media) {
       return res.status(404).json({ success: false, message: 'Média introuvable' });
