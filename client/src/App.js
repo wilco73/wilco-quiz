@@ -53,19 +53,7 @@ const App = () => {
   
   // Raccourcis vers l'etat global Socket
   const { lobbies, teams, participants, quizzes, questions } = socket.globalState;
-  const { timerState, isConnected, currentLobbyState, currentMysteryLobbyState, socketReady, isReconnecting } = socket;
-
-  // ========== RECONNEXION MYSTERY LOBBY ==========
-  // Quand currentMysteryLobbyState est défini (après reconnexion), afficher MysteryGameView
-  useEffect(() => {
-    if (currentMysteryLobbyState && !isReconnecting) {
-      console.log('[APP] Reconnexion mystery détectée, affichage MysteryGameView');
-      setCurrentMysteryLobby(currentMysteryLobbyState);
-      setView('mystery-game');
-      // Reset l'état pour éviter les re-triggers
-      socket.setCurrentMysteryLobbyState?.(null);
-    }
-  }, [currentMysteryLobbyState, isReconnecting, socket]);
+  const { timerState, isConnected, currentLobbyState, socketReady } = socket;
 
   // ========== SAUVEGARDE URGENTE QUAND TIMER BAS ==========
   // Envoyer immédiatement le brouillon quand il reste peu de temps
@@ -601,7 +589,7 @@ const App = () => {
     return <ReconnectingScreen />;
   }
   
-  if (isReconnecting || isAppReconnecting) {
+  if (isAppReconnecting) {
     return <ReconnectingScreen />;
   }
 

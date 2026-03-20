@@ -639,11 +639,8 @@ export function useSocket() {
     connectionError,
     globalState,
     currentLobbyState,
-    currentMysteryLobbyState,
     timerState,
     setCurrentLobbyState,
-    setCurrentMysteryLobbyState,
-    isReconnecting,
     // Auth
     login,
     getUser,
