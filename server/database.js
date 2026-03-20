@@ -2150,6 +2150,7 @@ async function getAllMysteryLobbies() {
     participants: l.participants || [],
     currentReveal: l.current_reveal,
     mutedParticipants: l.muted_participants || {},
+    createdBy: l.created_by,
     createdAt: l.created_at,
     finishedAt: l.finished_at
   }));
@@ -2184,13 +2185,14 @@ async function getMysteryLobbyById(lobbyId) {
     participants: data.participants || [],
     currentReveal: data.current_reveal,
     mutedParticipants: data.muted_participants || {},
+    createdBy: data.created_by,
     createdAt: data.created_at,
     finishedAt: data.finished_at
   };
 }
 
 // Créer un lobby mystère
-async function createMysteryLobby(gridId) {
+async function createMysteryLobby(gridId, createdBy = null) {
   const grid = await getMysteryGridById(gridId);
   if (!grid) throw new Error('Grille non trouvée');
   if (!grid.isValid) throw new Error('La grille n\'est pas valide (nombre de cases incorrect)');
@@ -2229,7 +2231,8 @@ async function createMysteryLobby(gridId) {
       status: 'waiting',
       game_state: gameState,
       participants: [],
-      muted_participants: {}
+      muted_participants: {},
+      created_by: createdBy
     })
     .select()
     .single();

@@ -518,10 +518,10 @@ export function useSocket() {
   
   // ==================== MYSTERY GRID ====================
   
-  const mysteryCreateLobby = useCallback((gridId) => {
+  const mysteryCreateLobby = useCallback((gridId, odId) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
-      socketRef.current.emit('mystery:createLobby', { gridId }, resolve);
+      socketRef.current.emit('mystery:createLobby', { gridId, odId }, resolve);
     });
   }, []);
   
@@ -546,38 +546,38 @@ export function useSocket() {
     });
   }, []);
   
-  const mysteryStartGame = useCallback((lobbyId) => {
+  const mysteryStartGame = useCallback((lobbyId, odId, role) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
-      socketRef.current.emit('mystery:startGame', { lobbyId }, resolve);
+      socketRef.current.emit('mystery:startGame', { lobbyId, odId, role }, resolve);
     });
   }, []);
   
-  const mysteryRevealCell = useCallback((lobbyId, cellIndex) => {
+  const mysteryRevealCell = useCallback((lobbyId, cellIndex, odId, role) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
-      socketRef.current.emit('mystery:revealCell', { lobbyId, cellIndex }, resolve);
+      socketRef.current.emit('mystery:revealCell', { lobbyId, cellIndex, odId, role }, resolve);
     });
   }, []);
   
-  const mysteryCloseReveal = useCallback((lobbyId) => {
+  const mysteryCloseReveal = useCallback((lobbyId, odId, role) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
-      socketRef.current.emit('mystery:closeReveal', { lobbyId }, resolve);
+      socketRef.current.emit('mystery:closeReveal', { lobbyId, odId, role }, resolve);
     });
   }, []);
   
-  const mysteryFinishGame = useCallback((lobbyId) => {
+  const mysteryFinishGame = useCallback((lobbyId, odId, role) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
-      socketRef.current.emit('mystery:finishGame', { lobbyId }, resolve);
+      socketRef.current.emit('mystery:finishGame', { lobbyId, odId, role }, resolve);
     });
   }, []);
   
-  const mysteryDeleteLobby = useCallback((lobbyId) => {
+  const mysteryDeleteLobby = useCallback((lobbyId, odId, role) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
-      socketRef.current.emit('mystery:deleteLobby', { lobbyId }, resolve);
+      socketRef.current.emit('mystery:deleteLobby', { lobbyId, odId, role }, resolve);
     });
   }, []);
   

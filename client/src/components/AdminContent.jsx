@@ -554,6 +554,7 @@ const AdminContent = ({
       return (
         <MysteryGridManager
           socket={socket}
+          currentUser={currentUser}
           onJoinLobby={(lobby) => {
             // Naviguer vers la vue mystery
             window.dispatchEvent(new CustomEvent('mystery:joinLobby', { detail: lobby }));

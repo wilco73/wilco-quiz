@@ -10,7 +10,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 /**
  * MysteryGridManager - Interface admin pour créer et gérer les grilles mystères
  */
-const MysteryGridManager = ({ socket, onJoinLobby }) => {
+const MysteryGridManager = ({ socket, currentUser, onJoinLobby }) => {
   const [grids, setGrids] = useState([]);
   const [lobbies, setLobbies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +38,13 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
   const [editingType, setEditingType] = useState(null); // { gridId, type } ou null
   
   const toast = useToast();
+  
+  // Calculer le rôle de l'utilisateur
+  const getUserRole = () => {
+    if (currentUser?.isSuperAdmin) return 'superadmin';
+    if (currentUser?.isAdmin) return 'admin';
+    return 'user';
+  };
 
   // Charger les données
   useEffect(() => {
@@ -255,7 +262,7 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
       toast.error('Connexion non établie');
       return;
     }
-    const response = await socket.mysteryCreateLobby(gridId);
+    const response = await socket.mysteryCreateLobby(gridId, currentUser?.id);
     if (response.success) {
       toast.success('Lobby créé !');
     } else {
@@ -269,7 +276,7 @@ const MysteryGridManager = ({ socket, onJoinLobby }) => {
       toast.error('Connexion non établie');
       return;
     }
-    const response = await socket.mysteryDeleteLobby(lobbyId);
+    const response = await socket.mysteryDeleteLobby(lobbyId, currentUser?.id, getUserRole());
     if (response.success) {
       toast.success('Lobby supprimé');
     } else {

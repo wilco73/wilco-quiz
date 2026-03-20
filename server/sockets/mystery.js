@@ -5,11 +5,29 @@
 
 module.exports = function(io, socket, db) {
   
+  /**
+   * Vérifie si l'utilisateur a les droits d'action sur le lobby
+   * @param {object} lobby - Le lobby
+   * @param {string} odId - L'ID de l'utilisateur
+   * @param {string} role - Le rôle de l'utilisateur (user, admin, superadmin)
+   * @returns {boolean}
+   */
+  const canControlLobby = (lobby, odId, role) => {
+    // Superadmin peut tout faire
+    if (role === 'superadmin') return true;
+    
+    // Le créateur du lobby peut contrôler
+    if (lobby.createdBy === odId) return true;
+    
+    // Les autres (y compris admin non-créateur) ne peuvent pas
+    return false;
+  };
+  
   // Créer un lobby mystère
   socket.on('mystery:createLobby', async (data, callback) => {
     try {
-      const { gridId } = data;
-      const lobby = await db.createMysteryLobby(gridId);
+      const { gridId, odId } = data;
+      const lobby = await db.createMysteryLobby(gridId, odId);
       
       // Notifier tout le monde
       io.emit('mystery:lobbyCreated', lobby);
@@ -67,27 +85,53 @@ module.exports = function(io, socket, db) {
     }
   });
   
-  // Démarrer le jeu
+  // Démarrer le jeu (vérification des permissions)
   socket.on('mystery:startGame', async (data, callback) => {
     try {
-      const { lobbyId } = data;
-      const lobby = await db.startMysteryLobby(lobbyId);
+      const { lobbyId, odId, role } = data;
+      
+      // Vérifier les permissions
+      const lobby = await db.getMysteryLobbyById(lobbyId);
+      if (!lobby) {
+        if (callback) callback({ success: false, message: 'Lobby non trouvé' });
+        return;
+      }
+      
+      if (!canControlLobby(lobby, odId, role)) {
+        if (callback) callback({ success: false, message: 'Vous n\'êtes pas autorisé à démarrer cette partie' });
+        return;
+      }
+      
+      const updatedLobby = await db.startMysteryLobby(lobbyId);
       
       // Notifier tout le monde
-      io.to(`mystery:${lobbyId}`).emit('mystery:gameStarted', lobby);
-      io.emit('mystery:lobbyUpdated', lobby);
+      io.to(`mystery:${lobbyId}`).emit('mystery:gameStarted', updatedLobby);
+      io.emit('mystery:lobbyUpdated', updatedLobby);
       
-      if (callback) callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby: updatedLobby });
     } catch (error) {
       console.error('[MYSTERY] Erreur start game:', error);
       if (callback) callback({ success: false, message: error.message });
     }
   });
   
-  // Révéler une case (admin uniquement)
+  // Révéler une case (vérification des permissions)
   socket.on('mystery:revealCell', async (data, callback) => {
     try {
-      const { lobbyId, cellIndex } = data;
+      const { lobbyId, cellIndex, odId, role } = data;
+      
+      // Vérifier les permissions
+      const lobby = await db.getMysteryLobbyById(lobbyId);
+      if (!lobby) {
+        if (callback) callback({ success: false, message: 'Lobby non trouvé' });
+        return;
+      }
+      
+      if (!canControlLobby(lobby, odId, role)) {
+        if (callback) callback({ success: false, message: 'Vous n\'êtes pas autorisé à révéler les cases' });
+        return;
+      }
+      
       const result = await db.revealMysteryCell(lobbyId, cellIndex);
       
       // Notifier tous les participants avec animation
@@ -112,13 +156,26 @@ module.exports = function(io, socket, db) {
     }
   });
   
-  // Fermer la modale de révélation
+  // Fermer la modale de révélation (vérification des permissions)
   socket.on('mystery:closeReveal', async (data, callback) => {
     try {
-      const { lobbyId } = data;
-      const lobby = await db.closeMysteryReveal(lobbyId);
+      const { lobbyId, odId, role } = data;
       
-      io.to(`mystery:${lobbyId}`).emit('mystery:revealClosed', lobby);
+      // Vérifier les permissions
+      const lobby = await db.getMysteryLobbyById(lobbyId);
+      if (!lobby) {
+        if (callback) callback({ success: false, message: 'Lobby non trouvé' });
+        return;
+      }
+      
+      if (!canControlLobby(lobby, odId, role)) {
+        if (callback) callback({ success: false, message: 'Vous n\'êtes pas autorisé à fermer cette révélation' });
+        return;
+      }
+      
+      const updatedLobby = await db.closeMysteryReveal(lobbyId);
+      
+      io.to(`mystery:${lobbyId}`).emit('mystery:revealClosed', updatedLobby);
       
       if (callback) callback({ success: true });
     } catch (error) {
@@ -141,26 +198,52 @@ module.exports = function(io, socket, db) {
     }
   });
   
-  // Terminer le jeu manuellement
+  // Terminer le jeu manuellement (vérification des permissions)
   socket.on('mystery:finishGame', async (data, callback) => {
     try {
-      const { lobbyId } = data;
-      const lobby = await db.finishMysteryLobby(lobbyId);
+      const { lobbyId, odId, role } = data;
       
-      io.to(`mystery:${lobbyId}`).emit('mystery:gameFinished', lobby);
-      io.emit('mystery:lobbyUpdated', lobby);
+      // Vérifier les permissions
+      const lobby = await db.getMysteryLobbyById(lobbyId);
+      if (!lobby) {
+        if (callback) callback({ success: false, message: 'Lobby non trouvé' });
+        return;
+      }
       
-      if (callback) callback({ success: true, lobby });
+      if (!canControlLobby(lobby, odId, role)) {
+        if (callback) callback({ success: false, message: 'Vous n\'êtes pas autorisé à terminer cette partie' });
+        return;
+      }
+      
+      const finishedLobby = await db.finishMysteryLobby(lobbyId);
+      
+      io.to(`mystery:${lobbyId}`).emit('mystery:gameFinished', finishedLobby);
+      io.emit('mystery:lobbyUpdated', finishedLobby);
+      
+      if (callback) callback({ success: true, lobby: finishedLobby });
     } catch (error) {
       console.error('[MYSTERY] Erreur finish game:', error);
       if (callback) callback({ success: false, message: error.message });
     }
   });
   
-  // Supprimer un lobby
+  // Supprimer un lobby (vérification des permissions)
   socket.on('mystery:deleteLobby', async (data, callback) => {
     try {
-      const { lobbyId } = data;
+      const { lobbyId, odId, role } = data;
+      
+      // Vérifier les permissions
+      const lobby = await db.getMysteryLobbyById(lobbyId);
+      if (!lobby) {
+        if (callback) callback({ success: false, message: 'Lobby non trouvé' });
+        return;
+      }
+      
+      if (!canControlLobby(lobby, odId, role)) {
+        if (callback) callback({ success: false, message: 'Vous n\'êtes pas autorisé à supprimer ce lobby' });
+        return;
+      }
+      
       await db.deleteMysteryLobby(lobbyId);
       
       io.to(`mystery:${lobbyId}`).emit('mystery:lobbyDeleted', { lobbyId });

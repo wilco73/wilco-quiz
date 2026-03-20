@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   Grid, X, Users, Play, StopCircle, Volume2, VolumeX, 
   ArrowLeft, Crown, Sparkles, Eye
@@ -27,6 +27,19 @@ const MysteryGameView = ({
   
   const audioRef = useRef(null);
   const toast = useToast();
+
+  // Déterminer si l'utilisateur peut contrôler ce lobby
+  // Seuls le créateur du lobby OU un superadmin peuvent contrôler
+  const canControl = useMemo(() => {
+    // Superadmin peut tout contrôler
+    if (currentUser?.isSuperAdmin) return true;
+    
+    // Le créateur du lobby peut contrôler
+    if (lobby?.createdBy === currentUser?.id) return true;
+    
+    // Les autres (y compris admin non-créateur) ne peuvent pas
+    return false;
+  }, [currentUser?.isSuperAdmin, currentUser?.id, lobby?.createdBy]);
 
   // Rejoindre le lobby au montage et charger les données FRAÎCHES
   useEffect(() => {
@@ -197,33 +210,40 @@ const MysteryGameView = ({
 
   const cols = getGridColumns();
 
-  // Actions admin
+  // Calculer le rôle de l'utilisateur
+  const getUserRole = () => {
+    if (currentUser?.isSuperAdmin) return 'superadmin';
+    if (currentUser?.isAdmin) return 'admin';
+    return 'user';
+  };
+
+  // Actions admin (créateur ou superadmin uniquement)
   const handleStartGame = async () => {
-    const response = await socket.mysteryStartGame(lobby.id);
+    const response = await socket.mysteryStartGame(lobby.id, currentUser?.id, getUserRole());
     if (!response.success) {
       toast.error(response.message || 'Erreur');
     }
   };
 
   const handleRevealCell = async (cellIndex) => {
-    if (!isAdmin || status !== 'playing') return;
+    if (!canControl || status !== 'playing') return;
     
     const cell = gameState.cells?.find(c => c.index === cellIndex);
     if (!cell || cell.revealed) return;
     
-    const response = await socket.mysteryRevealCell(lobby.id, cellIndex);
+    const response = await socket.mysteryRevealCell(lobby.id, cellIndex, currentUser?.id, getUserRole());
     if (!response.success) {
       toast.error(response.message || 'Erreur');
     }
   };
 
   const handleCloseReveal = () => {
-    socket.mysteryCloseReveal(lobby.id);
+    socket.mysteryCloseReveal(lobby.id, currentUser?.id, getUserRole());
   };
 
   const handleFinishGame = async () => {
     if (!window.confirm('Terminer la partie ?')) return;
-    const response = await socket.mysteryFinishGame(lobby.id);
+    const response = await socket.mysteryFinishGame(lobby.id, currentUser?.id, getUserRole());
     if (!response.success) {
       toast.error(response.message || 'Erreur');
     }
@@ -258,12 +278,12 @@ const MysteryGameView = ({
       <button
         key={index}
         onClick={() => handleRevealCell(index)}
-        disabled={!isAdmin || status !== 'playing' || isRevealed}
+        disabled={!canControl || status !== 'playing' || isRevealed}
         className={`
           w-full h-full rounded-xl border-3 transition-all duration-300 relative overflow-hidden shadow-lg
           ${isRevealed 
             ? 'bg-gradient-to-br from-purple-200 to-indigo-200 dark:from-purple-800/50 dark:to-indigo-800/50 border-purple-400 dark:border-purple-500' 
-            : isAdmin && status === 'playing'
+            : canControl && status === 'playing'
               ? 'bg-gradient-to-br from-purple-500 via-indigo-500 to-purple-600 border-purple-300 hover:scale-[1.02] hover:shadow-2xl hover:border-yellow-400 cursor-pointer'
               : 'bg-gradient-to-br from-purple-500 via-indigo-500 to-purple-600 border-purple-300'
           }
@@ -302,8 +322,8 @@ const MysteryGameView = ({
           </div>
         )}
         
-        {/* Overlay hover pour admin */}
-        {isAdmin && status === 'playing' && !isRevealed && (
+        {/* Overlay hover pour contrôleur (créateur ou superadmin) */}
+        {canControl && status === 'playing' && !isRevealed && (
           <div className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
             <Eye className="w-10 h-10 md:w-14 md:h-14 text-white drop-shadow-lg" />
           </div>
@@ -367,8 +387,8 @@ const MysteryGameView = ({
               </div>
             </div>
 
-            {/* Bouton start (admin) */}
-            {isAdmin ? (
+            {/* Bouton start (créateur ou superadmin uniquement) */}
+            {canControl ? (
               <button
                 onClick={handleStartGame}
                 disabled={participants.length === 0}
@@ -412,10 +432,10 @@ const MysteryGameView = ({
         </div>
         
         <div className="flex items-center gap-2">
-          {isAdmin && (
+          {canControl && (
             <span className="px-2 py-0.5 bg-yellow-500 text-black rounded text-xs font-bold flex items-center gap-1">
               <Crown className="w-3 h-3" />
-              Admin
+              Maître
             </span>
           )}
           <button
@@ -424,7 +444,7 @@ const MysteryGameView = ({
           >
             {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
-          {isAdmin && status === 'playing' && (
+          {canControl && status === 'playing' && (
             <button
               onClick={handleFinishGame}
               className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
@@ -476,7 +496,7 @@ const MysteryGameView = ({
       {currentReveal && (
         <div 
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={isAdmin ? handleCloseReveal : undefined}
+          onClick={canControl ? handleCloseReveal : undefined}
         >
           <div 
             className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl p-6 md:p-8 max-w-lg w-full text-center animate-bounce-in shadow-2xl"
@@ -516,8 +536,8 @@ const MysteryGameView = ({
               <Sparkles className="w-8 h-8 text-yellow-400" />
             </h2>
             
-            {/* Bouton fermer (admin) */}
-            {isAdmin && (
+            {/* Bouton fermer (créateur ou superadmin) */}
+            {canControl && (
               <button
                 onClick={handleCloseReveal}
                 className="mt-4 px-6 py-3 bg-white text-purple-700 rounded-xl font-bold hover:bg-purple-100 transition-colors"
@@ -526,7 +546,7 @@ const MysteryGameView = ({
               </button>
             )}
             
-            {!isAdmin && (
+            {!canControl && (
               <p className="text-purple-200 text-sm mt-4">
                 En attente de l'admin...
               </p>

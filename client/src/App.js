@@ -597,7 +597,7 @@ const App = () => {
   const layoutViews = [
     'lobby-list', 'history', 'profile', 'scoreboard',
     'admin-dashboard', 'admin-participants', 'admin-questions', 
-    'admin-drawing', 'admin-lobbies', 'admin-mystery','admin-media',
+    'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
     'admin-monitoring', 'admin-validation', 'admin-users'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
