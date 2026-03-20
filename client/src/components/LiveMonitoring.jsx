@@ -10,6 +10,7 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
   const [showAnswers, setShowAnswers] = useState(false);
   const joinedLobbyRef = useRef(null);
   const [pastedParticipants, setPastedParticipants] = useState({}); // { odId: { questionId: true } }
+  const [zoomedImage, setZoomedImage] = useState(null); // URL de l'image zoomée
 
   // Rejoindre la room du lobby actif pour recevoir les events timer
   useEffect(() => {
@@ -247,13 +248,16 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
           </div>
           
           <div className="bg-white dark:bg-gray-800 rounded-lg p-2 border border-purple-200 dark:border-purple-600">
-            {(currentQuestion.type === 'image' || currentQuestion.type === 'qcm') && (
+            {(currentQuestion.type === 'image' || currentQuestion.type === 'qcm') && currentQuestion.media && (
               <div className="text-center">
                 <img 
                   src={currentQuestion.media} 
                   alt="Question" 
-                  className="max-h-32 w-auto rounded mx-auto border border-gray-300 dark:border-gray-600"
+                  className="max-h-32 w-auto rounded mx-auto border border-gray-300 dark:border-gray-600 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => setZoomedImage(currentQuestion.media)}
+                  title="Cliquer pour agrandir"
                 />
+                <p className="text-xs text-gray-500 mt-1">Cliquer pour agrandir</p>
               </div>
             )}
             
@@ -444,6 +448,32 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
           </div>
         </div>
       </div>
+      
+      {/* Modale de zoom d'image */}
+      {zoomedImage && (
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 cursor-pointer"
+          onClick={() => setZoomedImage(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]">
+            <img 
+              src={zoomedImage} 
+              alt="Image agrandie" 
+              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button 
+              onClick={() => setZoomedImage(null)}
+              className="absolute -top-3 -right-3 w-8 h-8 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              ✕
+            </button>
+            <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-sm">
+              Cliquer à l'extérieur ou sur ✕ pour fermer
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

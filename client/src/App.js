@@ -230,13 +230,15 @@ const App = () => {
       if (currentLobby?.id === data.lobbyId) {
         // Vérifier si l'utilisateur est un participant
         const isParticipant = data.lobby?.participants?.some(p => p.participantId === currentUser?.id);
-        setCurrentLobby(data.lobby);
-        socket.setCurrentLobbyState({ lobby: data.lobby, quiz: currentQuiz });
+        // Le lobby est supprimé quand on l'arrête, donc on reset tout
+        setCurrentLobby(null);
+        setCurrentQuiz(null);
+        socket.setCurrentLobbyState(null);
         setMyAnswer('');
         setHasAnswered(false);
         if (isParticipant) {
-          setView('lobby');
-          toast.info('Le quiz a ete arrete par l\'administrateur');
+          setView('lobby-list');
+          toast.info('Le quiz a été arrêté par l\'administrateur');
         }
       }
     };
