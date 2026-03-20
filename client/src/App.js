@@ -133,6 +133,28 @@ const App = () => {
     }
   }, [currentLobbyState, view, isAdmin, currentUser]);
 
+  // Synchroniser currentLobby avec les lobbies globaux (fallback pour les participants)
+  // Utile quand un participant ne reçoit pas lobby:state directement
+  useEffect(() => {
+    if (currentLobby && lobbies.length > 0 && view === 'results') {
+      const updatedFromGlobal = lobbies.find(l => l.id === currentLobby.id);
+      if (updatedFromGlobal) {
+        // Comparer les validations pour voir si c'est plus récent
+        const countGlobalValidations = updatedFromGlobal.participants?.reduce((acc, p) => {
+          return acc + Object.keys(p.validationsByQuestionId || {}).length;
+        }, 0) || 0;
+        const countLocalValidations = currentLobby.participants?.reduce((acc, p) => {
+          return acc + Object.keys(p.validationsByQuestionId || {}).length;
+        }, 0) || 0;
+        
+        if (countGlobalValidations > countLocalValidations) {
+          console.log('[APP] Sync depuis lobbies global - validations:', countLocalValidations, '->', countGlobalValidations);
+          setCurrentLobby(updatedFromGlobal);
+        }
+      }
+    }
+  }, [lobbies, currentLobby?.id, view]);
+
   // Ecouter les evenements Socket - attendre que socketReady soit true
   useEffect(() => {
     if (!socketReady) {
