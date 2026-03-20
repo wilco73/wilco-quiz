@@ -11,6 +11,7 @@ const participantsRoutes = require('./participants');
 const quizzesRoutes = require('./quizzes');
 const drawingRoutes = require('./drawing');
 const mysteryRoutes = require('./mystery');
+const mediaRoutes = require('./media');
 
 /**
  * Configure toutes les routes avec les dépendances nécessaires
@@ -24,6 +25,7 @@ function setup(app, dependencies) {
   participantsRoutes.init(broadcasts || { participants: broadcastGlobalState, teams: broadcastGlobalState });
   quizzesRoutes.init(broadcasts || { quizzes: broadcastGlobalState, questions: broadcastGlobalState, lobbies: broadcastGlobalState });
   drawingRoutes.init(broadcasts || { global: broadcastGlobalState }, io);
+  mediaRoutes.init(broadcasts || { global: broadcastGlobalState }, io);
   
   // Monter les routes
   app.use('/api', authRoutes);
@@ -73,6 +75,9 @@ function setup(app, dependencies) {
   
   // Routes Mystery Grid (Case Mystère)
   app.use('/api/mystery', mysteryRoutes);
+  
+  // Routes Médiathèque et Broadcast
+  app.use('/api/media', mediaRoutes);
 }
 
 module.exports = { setup };

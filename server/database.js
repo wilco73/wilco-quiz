@@ -2399,6 +2399,190 @@ async function deleteMysteryLobby(lobbyId) {
   return true;
 }
 
+// ==================== MEDIA LIBRARY ====================
+
+// Rechercher des médias avec pagination
+async function searchMedia(searchTerm = '', mediaType = '', tag = '', limit = 20, offset = 0) {
+  let query = supabase
+    .from('media_library')
+    .select('*', { count: 'exact' });
+  
+  if (searchTerm) {
+    query = query.or(`name.ilike.%${searchTerm}%,tags.cs.["${searchTerm}"]`);
+  }
+  
+  if (mediaType) {
+    query = query.eq('type', mediaType);
+  }
+  
+  if (tag) {
+    query = query.contains('tags', [tag]);
+  }
+  
+  const { data, error, count } = await query
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+  
+  if (error) throw error;
+  
+  return {
+    media: data || [],
+    total: count || 0
+  };
+}
+
+// Récupérer un média par ID
+async function getMediaById(id) {
+  const { data, error } = await supabase
+    .from('media_library')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
+// Créer un média
+async function createMedia({ name, type, url, thumbnailUrl, tags, durationSeconds, fileSize, createdBy }) {
+  const { data, error } = await supabase
+    .from('media_library')
+    .insert({
+      name,
+      type,
+      url,
+      thumbnail_url: thumbnailUrl,
+      tags: tags || [],
+      duration_seconds: durationSeconds,
+      file_size: fileSize,
+      created_by: createdBy
+    })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+// Modifier un média
+async function updateMedia(id, { name, tags, thumbnailUrl }) {
+  const updates = {};
+  if (name !== undefined) updates.name = name;
+  if (tags !== undefined) updates.tags = tags;
+  if (thumbnailUrl !== undefined) updates.thumbnail_url = thumbnailUrl;
+  
+  const { data, error } = await supabase
+    .from('media_library')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+// Supprimer un média
+async function deleteMedia(id) {
+  const { error } = await supabase
+    .from('media_library')
+    .delete()
+    .eq('id', id);
+  
+  if (error) throw error;
+  return true;
+}
+
+// Récupérer les médias associés à une grille mystère
+async function getGridMedia(gridId) {
+  const { data, error } = await supabase
+    .from('mystery_grid_media')
+    .select(`
+      id,
+      sort_order,
+      media:media_id (
+        id, name, type, url, thumbnail_url, tags, duration_seconds
+      )
+    `)
+    .eq('grid_id', gridId)
+    .order('sort_order', { ascending: true });
+  
+  if (error) throw error;
+  
+  // Aplatir la structure
+  return (data || []).map(item => ({
+    linkId: item.id,
+    sortOrder: item.sort_order,
+    ...item.media
+  }));
+}
+
+// Ajouter un média à une grille
+async function addMediaToGrid(gridId, mediaId, sortOrder = 0) {
+  const { data, error } = await supabase
+    .from('mystery_grid_media')
+    .insert({
+      grid_id: gridId,
+      media_id: mediaId,
+      sort_order: sortOrder
+    })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+// Retirer un média d'une grille
+async function removeMediaFromGrid(gridId, mediaId) {
+  const { error } = await supabase
+    .from('mystery_grid_media')
+    .delete()
+    .eq('grid_id', gridId)
+    .eq('media_id', mediaId);
+  
+  if (error) throw error;
+  return true;
+}
+
+// Sauvegarder un broadcast dans l'historique
+async function saveBroadcast({ lobbyId, lobbyType, senderId, senderPseudo, message, mediaId, options }) {
+  const { data, error } = await supabase
+    .from('broadcast_history')
+    .insert({
+      lobby_id: lobbyId,
+      lobby_type: lobbyType,
+      sender_id: senderId,
+      sender_pseudo: senderPseudo,
+      message,
+      media_id: mediaId,
+      options: options || {}
+    })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+// Récupérer l'historique des broadcasts d'un lobby
+async function getBroadcastHistory(lobbyId, limit = 20) {
+  const { data, error } = await supabase
+    .from('broadcast_history')
+    .select(`
+      *,
+      media:media_id (
+        id, name, type, url, thumbnail_url
+      )
+    `)
+    .eq('lobby_id', lobbyId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  
+  if (error) throw error;
+  return data || [];
+}
+
 // ==================== EXPORTS ====================
 
 module.exports = {
@@ -2558,5 +2742,17 @@ module.exports = {
   closeMysteryReveal,
   toggleMysteryMute,
   finishMysteryLobby,
-  deleteMysteryLobby
+  deleteMysteryLobby,
+  
+  // Media Library
+  searchMedia,
+  getMediaById,
+  createMedia,
+  updateMedia,
+  deleteMedia,
+  getGridMedia,
+  addMediaToGrid,
+  removeMediaFromGrid,
+  saveBroadcast,
+  getBroadcastHistory
 };
