@@ -327,6 +327,10 @@ const LobbyList = ({
               const revealedCount = lobby.gameState?.revealedCount || 0;
               const totalCells = lobby.gameState?.totalCells || 0;
               
+              // Tout le monde rejoint comme participant
+              // Le bouton est "Reprendre" si déjà dans le lobby, sinon "Rejoindre"
+              const buttonText = isInLobby ? 'Reprendre' : 'Rejoindre';
+              
               return (
                 <div 
                   key={lobby.id} 
@@ -359,7 +363,7 @@ const LobbyList = ({
                       <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
                         <span className="flex items-center gap-1">
                           <Users className="w-4 h-4" />
-                          {lobby.participants?.length || 0} spectateur{(lobby.participants?.length || 0) > 1 ? 's' : ''}
+                          {lobby.participants?.length || 0} joueur{(lobby.participants?.length || 0) > 1 ? 's' : ''}
                         </span>
                         {isPlaying && totalCells > 0 && (
                           <span className="text-indigo-600 dark:text-indigo-400 font-medium">
@@ -378,7 +382,7 @@ const LobbyList = ({
                           }
                         `}
                       >
-                        {isInLobby ? 'Rejoindre' : 'Regarder'}
+                        {buttonText}
                       </button>
                     </div>
                   </div>

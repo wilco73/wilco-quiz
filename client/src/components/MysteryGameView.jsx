@@ -55,59 +55,37 @@ const MysteryGameView = ({
   }, [currentUser?.isSuperAdmin, currentUser?.id, lobbyCreatedBy]);
 
   // Rejoindre le lobby au montage et charger les données FRAÎCHES
+  const hasLoadedRef = useRef(false);
+  
   useEffect(() => {
     if (!socket || !lobby?.id || !currentUser) return;
+    if (hasLoadedRef.current) return; // Éviter les appels multiples
     
-    // Calculer une fois au montage si on doit rejoindre comme participant
-    // Créateur OU simple user = participant
-    // Admin non-créateur = monitoring seulement
-    const userIsCreator = currentUser.id === lobby.createdBy;
-    const shouldJoinAsParticipant = userIsCreator || !isAdmin;
-    
-    let hasJoined = false;
+    hasLoadedRef.current = true;
     
     const loadLobbyData = async () => {
       setLoading(true);
       
-      if (shouldJoinAsParticipant) {
-        // Rejoindre en tant que participant (créateur ou user)
-        const response = await socket.mysteryJoinLobby(
-          lobby.id, 
-          currentUser.id,
-          currentUser.pseudo,
-          currentUser.teamName
-        );
-        if (response.success && response.lobby) {
-          hasJoined = true;
-          setGameState(response.lobby.gameState || {});
-          setParticipants(response.lobby.participants || []);
-          setStatus(response.lobby.status || 'waiting');
-          setGrid(response.lobby.grid);
-          setCurrentReveal(response.lobby.currentReveal);
-          if (response.lobby.createdBy) setLobbyCreatedBy(response.lobby.createdBy);
-        } else {
-          toast?.error?.(response.message || 'Erreur connexion');
-        }
+      // TOUT LE MONDE rejoint comme participant (créateur, admin, user)
+      // Seule différence : qui peut CONTRÔLER la partie (créateur ou superadmin)
+      console.log('[MYSTERY] Joining as participant:', currentUser.id, currentUser.pseudo);
+      const response = await socket.mysteryJoinLobby(
+        lobby.id, 
+        currentUser.id,
+        currentUser.pseudo,
+        currentUser.teamName
+      );
+      console.log('[MYSTERY] Join response:', response);
+      
+      if (response.success && response.lobby) {
+        setGameState(response.lobby.gameState || {});
+        setParticipants(response.lobby.participants || []);
+        setStatus(response.lobby.status || 'waiting');
+        setGrid(response.lobby.grid);
+        setCurrentReveal(response.lobby.currentReveal);
+        if (response.lobby.createdBy) setLobbyCreatedBy(response.lobby.createdBy);
       } else {
-        // Admin non-créateur - rejoindre en monitoring seulement
-        const response = await socket.mysteryJoinMonitoring(lobby.id);
-        console.log('[MYSTERY] Admin joined monitoring, response:', response);
-        if (response.success && response.lobby) {
-          hasJoined = true;
-          console.log('[MYSTERY] Admin - participants reçus:', response.lobby.participants?.length);
-          setGameState(response.lobby.gameState || {});
-          setParticipants(response.lobby.participants || []);
-          setStatus(response.lobby.status || 'waiting');
-          setGrid(response.lobby.grid);
-          setCurrentReveal(response.lobby.currentReveal);
-          if (response.lobby.createdBy) setLobbyCreatedBy(response.lobby.createdBy);
-        } else {
-          // Fallback sur les données du prop si erreur
-          setGameState(lobby.gameState || {});
-          setParticipants(lobby.participants || []);
-          setStatus(lobby.status || 'waiting');
-          setGrid(lobby.grid);
-        }
+        toast?.error?.(response.message || 'Erreur connexion');
       }
       
       setLoading(false);
@@ -117,7 +95,8 @@ const MysteryGameView = ({
     
     // Cleanup - quitter le lobby
     return () => {
-      if (shouldJoinAsParticipant && currentUser && hasJoined) {
+      hasLoadedRef.current = false;
+      if (currentUser) {
         socket.mysteryLeaveLobby(lobby.id, currentUser.id);
       }
     };
