@@ -1,25 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Image, Video, Music, Search, Plus, Trash2, Tag, X, 
   ChevronLeft, ChevronRight, Upload, Edit2, Check, Filter
 } from 'lucide-react';
+import { useToast } from './ToastProvider';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
-
-// Toast fallback si le contexte n'est pas disponible
-const useToastSafe = () => {
-  try {
-    const { useToast } = require('./ToastProvider');
-    return useToast();
-  } catch {
-    return {
-      success: (msg) => console.log('[Toast Success]', msg),
-      error: (msg) => console.error('[Toast Error]', msg),
-      warning: (msg) => console.warn('[Toast Warning]', msg),
-      info: (msg) => console.info('[Toast Info]', msg)
-    };
-  }
-};
 
 const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds = [], compact = false }) => {
   const [media, setMedia] = useState([]);
@@ -31,8 +17,8 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMedia, setEditingMedia] = useState(null);
   
-  // Toast avec fallback
-  const toast = useToastSafe();
+  // Toast - appelé inconditionnellement
+  const toast = useToast();
 
   // Charger les médias
   const loadMedia = useCallback(async () => {
@@ -87,13 +73,13 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
       const data = await res.json();
       
       if (data.success) {
-        toast.success('Média supprimé');
+        toast?.success?.('Média supprimé');
         loadMedia();
       } else {
-        toast.error(data.message || 'Erreur');
+        toast?.error?.(data.message || 'Erreur');
       }
     } catch (err) {
-      toast.error('Erreur lors de la suppression');
+      toast?.error?.('Erreur lors de la suppression');
     }
   };
 
