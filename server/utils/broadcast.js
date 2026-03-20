@@ -34,6 +34,7 @@ async function broadcastLobbiesUpdate(io) {
   const allLobbies = await db.getAllLobbies();
   const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
   
+  console.log(`[BROADCAST] lobbiesUpdate - ${lobbies.length} lobbies, participants: ${lobbies.map(l => l.participants?.length || 0).join(',')}`);
   io.emit('global:lobbiesUpdate', { lobbies });
 }
 

@@ -248,7 +248,8 @@ function register(socket, io) {
       totalQuestions: questions.length
     });
     
-    // Pas besoin de broadcast global ici, l'état du lobby est envoyé directement
+    // Broadcast pour que l'admin voie la progression
+    await broadcastLobbiesUpdate(io);
     callback({ success: true, questionIndex: nextIndex });
   });
   
@@ -340,8 +341,9 @@ function register(socket, io) {
       autoValidated
     });
     
-    // Broadcast ciblé : seulement le lobby + équipes si score a changé
+    // Broadcast ciblé : lobby pour les joueurs + lobbies pour l'admin
     await broadcastLobbyState(io, lobbyId);
+    await broadcastLobbiesUpdate(io);
     if (autoValidated) {
       await broadcastTeamsUpdate(io);
     }
@@ -375,6 +377,7 @@ function register(socket, io) {
     });
     
     await broadcastLobbyState(io, lobbyId);
+    await broadcastLobbiesUpdate(io);
     // Broadcast équipes si le score a changé
     if (isCorrect) {
       await broadcastTeamsUpdate(io);

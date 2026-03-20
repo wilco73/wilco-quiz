@@ -201,10 +201,12 @@ export function useSocket() {
     
     // Mises à jour ciblées (optimisation bande passante)
     socket.on('global:lobbiesUpdate', (data) => {
+      console.log('[SOCKET] global:lobbiesUpdate reçu -', data.lobbies?.length, 'lobbies');
       setGlobalState(prev => ({ ...prev, lobbies: data.lobbies }));
     });
     
     socket.on('global:teamsUpdate', (data) => {
+      console.log('[SOCKET] global:teamsUpdate reçu');
       setGlobalState(prev => ({ ...prev, teams: data.teams }));
     });
     
