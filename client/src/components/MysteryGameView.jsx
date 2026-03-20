@@ -55,13 +55,20 @@ const MysteryGameView = ({
   }, [currentUser?.isSuperAdmin, currentUser?.id, lobbyCreatedBy]);
 
   // Rejoindre le lobby au montage et charger les données FRAÎCHES
-  const hasLoadedRef = useRef(false);
+  const hasJoinedRef = useRef(false);
+  const currentLobbyIdRef = useRef(null);
   
   useEffect(() => {
     if (!socket || !lobby?.id || !currentUser) return;
-    if (hasLoadedRef.current) return; // Éviter les appels multiples
     
-    hasLoadedRef.current = true;
+    // Si on a déjà rejoint CE lobby, ne pas re-joindre
+    if (hasJoinedRef.current && currentLobbyIdRef.current === lobby.id) {
+      console.log('[MYSTERY] Already joined this lobby, skipping');
+      return;
+    }
+    
+    currentLobbyIdRef.current = lobby.id;
+    hasJoinedRef.current = true;
     
     const loadLobbyData = async () => {
       setLoading(true);
@@ -93,15 +100,27 @@ const MysteryGameView = ({
     
     loadLobbyData();
     
-    // Cleanup - quitter le lobby
+    // Cleanup - quitter le lobby SEULEMENT si on quitte vraiment (unmount final)
     return () => {
-      hasLoadedRef.current = false;
-      if (currentUser) {
-        socket.mysteryLeaveLobby(lobby.id, currentUser.id);
-      }
+      // On ne reset pas hasJoinedRef ici pour éviter les re-joins en boucle
+      // Le leave sera appelé quand l'utilisateur clique sur "Quitter"
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, lobby?.id, currentUser?.id]);
+  
+  // Effet séparé pour gérer le cleanup quand on quitte vraiment le composant
+  useEffect(() => {
+    return () => {
+      // Cleanup final quand le composant est vraiment démonté
+      if (hasJoinedRef.current && currentLobbyIdRef.current && socket && currentUser) {
+        console.log('[MYSTERY] Final cleanup - leaving lobby');
+        socket.mysteryLeaveLobby(currentLobbyIdRef.current, currentUser.id);
+        hasJoinedRef.current = false;
+        currentLobbyIdRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Écouter les événements socket
   useEffect(() => {
@@ -260,6 +279,17 @@ const MysteryGameView = ({
     socket.mysteryToggleMute(lobby.id, currentUser?.id, newMuted);
   };
 
+  // Quitter le lobby proprement
+  const handleLeave = () => {
+    if (socket && currentUser && lobby?.id) {
+      console.log('[MYSTERY] User leaving lobby');
+      socket.mysteryLeaveLobby(lobby.id, currentUser.id);
+      hasJoinedRef.current = false;
+      currentLobbyIdRef.current = null;
+    }
+    onLeave?.();
+  };
+
   // Trouver les infos d'une cellule
   const getCellInfo = (cellIndex) => {
     const cell = gameState.cells?.find(c => c.index === cellIndex);
@@ -356,7 +386,7 @@ const MysteryGameView = ({
         {/* Header */}
         <div className="p-4 flex justify-between items-center">
           <button
-            onClick={onLeave}
+            onClick={handleLeave}
             className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -462,7 +492,7 @@ const MysteryGameView = ({
       <div className="flex-shrink-0 px-4 py-2 flex justify-between items-center bg-black/30">
         <div className="flex items-center gap-3">
           <button
-            onClick={onLeave}
+            onClick={handleLeave}
             className="flex items-center gap-1 px-3 py-1.5 bg-white/10 text-white rounded-lg hover:bg-white/20 text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -620,7 +650,7 @@ const MysteryGameView = ({
               Toutes les cases ont été découvertes.
             </p>
             <button
-              onClick={onLeave}
+              onClick={handleLeave}
               className="px-6 py-3 bg-white text-green-700 rounded-xl font-bold hover:bg-green-100"
             >
               Retour au menu
