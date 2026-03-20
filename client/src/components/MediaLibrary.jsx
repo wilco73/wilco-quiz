@@ -3,25 +3,41 @@ import {
   Image, Video, Music, Search, Plus, Trash2, Tag, X, 
   ChevronLeft, ChevronRight, Upload, Edit2, Check, Filter
 } from 'lucide-react';
-import { useToast } from './ToastProvider';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+
+// Toast fallback si le contexte n'est pas disponible
+const useToastSafe = () => {
+  try {
+    const { useToast } = require('./ToastProvider');
+    return useToast();
+  } catch {
+    return {
+      success: (msg) => console.log('[Toast Success]', msg),
+      error: (msg) => console.error('[Toast Error]', msg),
+      warning: (msg) => console.warn('[Toast Warning]', msg),
+      info: (msg) => console.info('[Toast Info]', msg)
+    };
+  }
+};
 
 const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds = [], compact = false }) => {
   const [media, setMedia] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [pagination, setPagination] = useState({ page: 1, limit: 12, total: 0, totalPages: 0 });
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMedia, setEditingMedia] = useState(null);
-  const toast = useToast();
-  const toastRef = useRef(toast);
-  toastRef.current = toast;
+  
+  // Toast avec fallback
+  const toast = useToastSafe();
 
   // Charger les médias
   const loadMedia = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({
         page: pagination.page.toString(),
@@ -34,16 +50,18 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
       const data = await res.json();
       
       if (data.success) {
-        setMedia(data.media);
+        setMedia(data.media || []);
         setPagination(prev => ({
           ...prev,
-          total: data.pagination.total,
-          totalPages: data.pagination.totalPages
+          total: data.pagination?.total || 0,
+          totalPages: data.pagination?.totalPages || 0
         }));
+      } else {
+        setError(data.error || 'Erreur lors du chargement');
       }
-    } catch (error) {
-      console.error('Erreur chargement médias:', error);
-      toastRef.current?.error?.('Erreur lors du chargement des médias');
+    } catch (err) {
+      console.error('Erreur chargement médias:', err);
+      setError(err.message || 'Erreur réseau');
     }
     setLoading(false);
   }, [pagination.page, pagination.limit, searchTerm, typeFilter]);
@@ -74,7 +92,7 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
       } else {
         toast.error(data.message || 'Erreur');
       }
-    } catch (error) {
+    } catch (err) {
       toast.error('Erreur lors de la suppression');
     }
   };
@@ -230,7 +248,18 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
       </div>
       
       {/* Grille de médias */}
-      {loading ? (
+      {error ? (
+        <div className="text-center py-12 text-red-500">
+          <p className="font-medium">Erreur</p>
+          <p className="text-sm">{error}</p>
+          <button 
+            onClick={loadMedia}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
+          >
+            Réessayer
+          </button>
+        </div>
+      ) : loading ? (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
@@ -273,6 +302,7 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
       {/* Modal Ajout */}
       {showAddModal && (
         <AddMediaModal 
+          toast={toast}
           onClose={() => setShowAddModal(false)}
           onSave={() => { setShowAddModal(false); loadMedia(); }}
         />
@@ -281,6 +311,7 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
       {/* Modal Édition */}
       {editingMedia && (
         <EditMediaModal 
+          toast={toast}
           media={editingMedia}
           onClose={() => setEditingMedia(null)}
           onSave={() => { setEditingMedia(null); loadMedia(); }}
@@ -291,7 +322,7 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
 };
 
 // Modal d'ajout de média
-const AddMediaModal = ({ onClose, onSave }) => {
+const AddMediaModal = ({ onClose, onSave, toast }) => {
   const [formData, setFormData] = useState({
     name: '',
     type: 'image',
@@ -300,7 +331,6 @@ const AddMediaModal = ({ onClose, onSave }) => {
     tags: ''
   });
   const [saving, setSaving] = useState(false);
-  const toast = useToast();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -429,14 +459,13 @@ const AddMediaModal = ({ onClose, onSave }) => {
 };
 
 // Modal d'édition de média
-const EditMediaModal = ({ media, onClose, onSave }) => {
+const EditMediaModal = ({ media, onClose, onSave, toast }) => {
   const [formData, setFormData] = useState({
     name: media.name,
     tags: (media.tags || []).join(', '),
     thumbnailUrl: media.thumbnail_url || ''
   });
   const [saving, setSaving] = useState(false);
-  const toast = useToast();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
