@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Image, Video, Music, Search, Plus, Trash2, Tag, X, 
   ChevronLeft, ChevronRight, Upload, Edit2, Check, Filter
@@ -16,14 +16,16 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMedia, setEditingMedia] = useState(null);
   const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
 
   // Charger les médias
   const loadMedia = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        page: pagination.page,
-        limit: pagination.limit,
+        page: pagination.page.toString(),
+        limit: pagination.limit.toString(),
         ...(searchTerm && { search: searchTerm }),
         ...(typeFilter && { type: typeFilter })
       });
@@ -41,10 +43,10 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
       }
     } catch (error) {
       console.error('Erreur chargement médias:', error);
-      toast.error('Erreur lors du chargement des médias');
+      toastRef.current?.error?.('Erreur lors du chargement des médias');
     }
     setLoading(false);
-  }, [pagination.page, pagination.limit, searchTerm, typeFilter, toast]);
+  }, [pagination.page, pagination.limit, searchTerm, typeFilter]);
 
   useEffect(() => {
     loadMedia();

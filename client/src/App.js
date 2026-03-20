@@ -667,6 +667,7 @@ const App = () => {
       case 'admin-drawing':
       case 'admin-lobbies':
       case 'admin-mystery':
+      case 'admin-media':
       case 'admin-monitoring':
       case 'admin-validation':
       case 'admin-users':
