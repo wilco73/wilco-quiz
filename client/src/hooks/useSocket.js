@@ -222,6 +222,11 @@ export function useSocket() {
       setGlobalState(prev => ({ ...prev, questions: data.questions }));
     });
     
+    socket.on('global:mysteryLobbiesUpdate', (data) => {
+      console.log('[SOCKET] global:mysteryLobbiesUpdate reçu -', data.mysteryLobbies?.length, 'lobbies');
+      setGlobalState(prev => ({ ...prev, mysteryLobbies: data.mysteryLobbies }));
+    });
+    
     socket.on('lobby:state', (data) => {
       console.log('[SOCKET] lobby:state reçu');
       setCurrentLobbyState(data);

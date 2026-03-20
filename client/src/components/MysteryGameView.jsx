@@ -53,6 +53,9 @@ const MysteryGameView = ({
     return false;
   }, [currentUser?.isSuperAdmin, currentUser?.id, lobby?.createdBy]);
 
+  // Déterminer si l'utilisateur est le créateur de ce lobby
+  const isCreator = currentUser?.id === lobby?.createdBy;
+
   // Rejoindre le lobby au montage et charger les données FRAÎCHES
   useEffect(() => {
     if (!socket || !lobby?.id || !currentUser) return;
@@ -60,8 +63,29 @@ const MysteryGameView = ({
     const loadLobbyData = async () => {
       setLoading(true);
       
-      // Les joueurs rejoignent le lobby, les admins utilisent le monitoring
-      if (isAdmin) {
+      // Le créateur et les users rejoignent comme participants
+      // Les admins non-créateurs utilisent le monitoring
+      const shouldJoinAsParticipant = isCreator || !isAdmin;
+      
+      if (shouldJoinAsParticipant) {
+        // Rejoindre en tant que participant (créateur ou user)
+        const response = await socket.mysteryJoinLobby(
+          lobby.id, 
+          currentUser.id,
+          currentUser.pseudo,
+          currentUser.teamName
+        );
+        if (response.success && response.lobby) {
+          setGameState(response.lobby.gameState || {});
+          setParticipants(response.lobby.participants || []);
+          setStatus(response.lobby.status || 'waiting');
+          setGrid(response.lobby.grid);
+          setCurrentReveal(response.lobby.currentReveal);
+        } else {
+          toast.error(response.message || 'Erreur connexion');
+        }
+      } else {
+        // Admin non-créateur - rejoindre en monitoring seulement
         const response = await socket.mysteryJoinMonitoring(lobby.id);
         console.log('[MYSTERY] Admin joined monitoring, response:', response);
         if (response.success && response.lobby) {
@@ -78,23 +102,6 @@ const MysteryGameView = ({
           setStatus(lobby.status || 'waiting');
           setGrid(lobby.grid);
         }
-      } else {
-        // Joueur - rejoindre en tant que participant
-        const response = await socket.mysteryJoinLobby(
-          lobby.id, 
-          currentUser.id,
-          currentUser.pseudo,
-          currentUser.teamName
-        );
-        if (response.success && response.lobby) {
-          setGameState(response.lobby.gameState || {});
-          setParticipants(response.lobby.participants || []);
-          setStatus(response.lobby.status || 'waiting');
-          setGrid(response.lobby.grid);
-          setCurrentReveal(response.lobby.currentReveal);
-        } else {
-          toast.error(response.message || 'Erreur connexion');
-        }
       }
       
       setLoading(false);
@@ -104,11 +111,12 @@ const MysteryGameView = ({
     
     // Cleanup - quitter le lobby
     return () => {
-      if (!isAdmin && currentUser) {
+      const shouldLeaveAsParticipant = isCreator || !isAdmin;
+      if (shouldLeaveAsParticipant && currentUser) {
         socket.mysteryLeaveLobby(lobby.id, currentUser.id);
       }
     };
-  }, [socket, lobby?.id, currentUser?.id, isAdmin]);
+  }, [socket, lobby?.id, currentUser?.id, isAdmin, isCreator]);
 
   // Écouter les événements socket
   useEffect(() => {
@@ -369,12 +377,24 @@ const MysteryGameView = ({
             <ArrowLeft className="w-5 h-5" />
             Quitter
           </button>
-          <button
-            onClick={handleToggleMute}
-            className="p-2 bg-white/10 text-white rounded-lg hover:bg-white/20"
-          >
-            {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-          </button>
+          <div className="flex items-center gap-2">
+            {canControl && (
+              <button
+                onClick={() => setShowBroadcastPanel(true)}
+                className="flex items-center gap-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+                title="Envoyer un message"
+              >
+                <Send className="w-4 h-4" />
+                Message
+              </button>
+            )}
+            <button
+              onClick={handleToggleMute}
+              className="p-2 bg-white/10 text-white rounded-lg hover:bg-white/20"
+            >
+              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
 
         {/* Contenu */}
@@ -416,6 +436,34 @@ const MysteryGameView = ({
             )}
           </div>
         </div>
+        
+        {/* Panel de broadcast (admin/créateur) - aussi en mode waiting */}
+        {canControl && (
+          <BroadcastPanel
+            isOpen={showBroadcastPanel}
+            onClose={() => setShowBroadcastPanel(false)}
+            currentLobbyId={lobby?.id}
+            currentLobbyType="mystery"
+            gridId={lobby?.gridId}
+            senderId={currentUser?.id}
+            senderPseudo={currentUser?.pseudo}
+          />
+        )}
+
+        {/* Modal de broadcast reçu */}
+        {currentBroadcast && (
+          <BroadcastModal
+            broadcast={currentBroadcast}
+            onClose={closeBroadcast}
+          />
+        )}
+
+        {/* Bouton pour revoir le dernier message */}
+        <BroadcastReviewButton
+          lastBroadcast={lastBroadcast}
+          hasUnread={hasUnread}
+          onClick={reviewLastBroadcast}
+        />
         
         <audio ref={audioRef} />
       </div>

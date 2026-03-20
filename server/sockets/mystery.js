@@ -3,6 +3,8 @@
  * Gestion en temps réel des parties de Case Mystère
  */
 
+const { broadcastMysteryLobbiesUpdate } = require('../utils/broadcast');
+
 module.exports = function(io, socket, db) {
   
   /**
@@ -31,6 +33,7 @@ module.exports = function(io, socket, db) {
       
       // Notifier tout le monde
       io.emit('mystery:lobbyCreated', lobby);
+      await broadcastMysteryLobbiesUpdate(io);
       
       if (callback) callback({ success: true, lobby });
     } catch (error) {
@@ -53,8 +56,10 @@ module.exports = function(io, socket, db) {
       socket.mysteryLobbyId = lobbyId;
       socket.mysteryOdId = odId; // Utiliser un nom différent pour éviter conflit
       
-      // Notifier les participants
+      // Notifier les participants du lobby
       io.to(`mystery:${lobbyId}`).emit('mystery:lobbyUpdated', lobby);
+      // Notifier tous les admins qui regardent la liste
+      await broadcastMysteryLobbiesUpdate(io);
       
       if (callback) callback({ success: true, lobby });
     } catch (error) {
@@ -77,6 +82,8 @@ module.exports = function(io, socket, db) {
       if (lobby) {
         io.to(`mystery:${lobbyId}`).emit('mystery:lobbyUpdated', lobby);
       }
+      // Notifier tous les admins
+      await broadcastMysteryLobbiesUpdate(io);
       
       if (callback) callback({ success: true });
     } catch (error) {
@@ -104,9 +111,10 @@ module.exports = function(io, socket, db) {
       
       const updatedLobby = await db.startMysteryLobby(lobbyId);
       
-      // Notifier tout le monde
+      // Notifier les joueurs du lobby
       io.to(`mystery:${lobbyId}`).emit('mystery:gameStarted', updatedLobby);
-      io.emit('mystery:lobbyUpdated', updatedLobby);
+      // Notifier tous les admins
+      await broadcastMysteryLobbiesUpdate(io);
       
       if (callback) callback({ success: true, lobby: updatedLobby });
     } catch (error) {
@@ -218,7 +226,7 @@ module.exports = function(io, socket, db) {
       const finishedLobby = await db.finishMysteryLobby(lobbyId);
       
       io.to(`mystery:${lobbyId}`).emit('mystery:gameFinished', finishedLobby);
-      io.emit('mystery:lobbyUpdated', finishedLobby);
+      await broadcastMysteryLobbiesUpdate(io);
       
       if (callback) callback({ success: true, lobby: finishedLobby });
     } catch (error) {
@@ -247,7 +255,7 @@ module.exports = function(io, socket, db) {
       await db.deleteMysteryLobby(lobbyId);
       
       io.to(`mystery:${lobbyId}`).emit('mystery:lobbyDeleted', { lobbyId });
-      io.emit('mystery:lobbyDeleted', { lobbyId });
+      await broadcastMysteryLobbiesUpdate(io);
       
       if (callback) callback({ success: true });
     } catch (error) {

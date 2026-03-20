@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Grid, Plus, Edit, Trash2, Play, X, Save, Upload, Music, Image as ImageIcon,
-  AlertTriangle, Check, ChevronDown, ChevronUp, Eye, Users
+  AlertTriangle, Check, ChevronDown, ChevronUp, Eye, Users, MessageSquare
 } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import BroadcastPanel from './BroadcastPanel';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -17,6 +18,7 @@ const MysteryGridManager = ({ socket, currentUser, onJoinLobby }) => {
   const [editingGrid, setEditingGrid] = useState(null);
   const [expandedGridId, setExpandedGridId] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [selectedLobbyForBroadcast, setSelectedLobbyForBroadcast] = useState(null);
   
   // Formulaire nouvelle grille
   const [newGrid, setNewGrid] = useState({
@@ -399,6 +401,13 @@ const MysteryGridManager = ({ socket, currentUser, onJoinLobby }) => {
                   </span>
                 </div>
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedLobbyForBroadcast(lobby)}
+                    className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 flex items-center gap-1"
+                    title="Envoyer un message"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => onJoinLobby?.(lobby)}
                     className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
@@ -802,6 +811,20 @@ const MysteryGridManager = ({ socket, currentUser, onJoinLobby }) => {
           ))
         )}
       </div>
+      
+      {/* Panel de broadcast pour envoyer aux lobbies depuis l'admin */}
+      {selectedLobbyForBroadcast && (
+        <BroadcastPanel
+          isOpen={!!selectedLobbyForBroadcast}
+          onClose={() => setSelectedLobbyForBroadcast(null)}
+          currentLobbyId={selectedLobbyForBroadcast.id}
+          currentLobbyType="mystery"
+          gridId={selectedLobbyForBroadcast.gridId}
+          senderId={currentUser?.id}
+          senderPseudo={currentUser?.pseudo}
+          availableLobbies={lobbies.filter(l => l.status !== 'finished')}
+        />
+      )}
     </div>
   );
 };

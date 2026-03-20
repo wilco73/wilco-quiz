@@ -157,6 +157,17 @@ async function smartBroadcast(io, types) {
   }
 }
 
+/**
+ * Émet la liste des mystery lobbies mise à jour
+ * Utilisé quand un lobby mystery change (création, join, leave, status)
+ */
+async function broadcastMysteryLobbiesUpdate(io) {
+  const mysteryLobbies = await db.getAllMysteryLobbies();
+  
+  console.log(`[BROADCAST] mysteryLobbiesUpdate - ${mysteryLobbies.length} lobbies`);
+  io.emit('global:mysteryLobbiesUpdate', { mysteryLobbies });
+}
+
 module.exports = {
   broadcastLobbyState,
   broadcastLobbiesUpdate,
@@ -165,6 +176,7 @@ module.exports = {
   broadcastQuizzesUpdate,
   broadcastQuestionsUpdate,
   broadcastGlobalState,
+  broadcastMysteryLobbiesUpdate,
   emitInitialState,
   smartBroadcast,
   BroadcastType

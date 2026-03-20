@@ -110,7 +110,7 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
     return (
       <div 
         className={`
-          relative bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden
+          group relative bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden
           border-2 transition-all cursor-pointer
           ${isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-transparent hover:border-gray-300'}
         `}
