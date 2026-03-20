@@ -254,7 +254,9 @@ module.exports = function(io, socket, db) {
       
       await db.deleteMysteryLobby(lobbyId);
       
+      // Notifier les participants du lobby ET tous les admins
       io.to(`mystery:${lobbyId}`).emit('mystery:lobbyDeleted', { lobbyId });
+      io.emit('mystery:lobbyDeleted', { lobbyId }); // Global pour les admins
       await broadcastMysteryLobbiesUpdate(io);
       
       if (callback) callback({ success: true });

@@ -69,15 +69,24 @@ const MysteryGridManager = ({ socket, currentUser, onJoinLobby }) => {
       setLobbies(prev => prev.filter(l => l.id !== lobbyId));
     };
     
+    // Mise à jour complète de la liste (depuis le broadcast global)
+    const handleLobbiesUpdate = ({ mysteryLobbies }) => {
+      if (mysteryLobbies) {
+        setLobbies(mysteryLobbies);
+      }
+    };
+    
     socket.on('mystery:lobbyCreated', handleLobbyCreated);
     socket.on('mystery:lobbyUpdated', handleLobbyUpdated);
     socket.on('mystery:lobbyDeleted', handleLobbyDeleted);
+    socket.on('global:mysteryLobbiesUpdate', handleLobbiesUpdate);
     
     return () => {
       if (socket?.off) {
         socket.off('mystery:lobbyCreated', handleLobbyCreated);
         socket.off('mystery:lobbyUpdated', handleLobbyUpdated);
         socket.off('mystery:lobbyDeleted', handleLobbyDeleted);
+        socket.off('global:mysteryLobbiesUpdate', handleLobbiesUpdate);
       }
     };
   }, [socket]);

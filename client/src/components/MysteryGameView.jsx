@@ -27,6 +27,7 @@ const MysteryGameView = ({
   const [revealAnimation, setRevealAnimation] = useState(null);
   const [grid, setGrid] = useState(null);
   const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
+  const [lobbyCreatedBy, setLobbyCreatedBy] = useState(lobby?.createdBy);
   
   const audioRef = useRef(null);
   const toast = useToast();
@@ -46,26 +47,27 @@ const MysteryGameView = ({
     // Superadmin peut tout contrôler
     if (currentUser?.isSuperAdmin) return true;
     
-    // Le créateur du lobby peut contrôler
-    if (lobby?.createdBy === currentUser?.id) return true;
+    // Le créateur du lobby peut contrôler (si on connaît le créateur)
+    if (lobbyCreatedBy && lobbyCreatedBy === currentUser?.id) return true;
     
     // Les autres (y compris admin non-créateur) ne peuvent pas
     return false;
-  }, [currentUser?.isSuperAdmin, currentUser?.id, lobby?.createdBy]);
-
-  // Déterminer si l'utilisateur est le créateur de ce lobby
-  const isCreator = currentUser?.id === lobby?.createdBy;
+  }, [currentUser?.isSuperAdmin, currentUser?.id, lobbyCreatedBy]);
 
   // Rejoindre le lobby au montage et charger les données FRAÎCHES
   useEffect(() => {
     if (!socket || !lobby?.id || !currentUser) return;
     
+    // Calculer une fois au montage si on doit rejoindre comme participant
+    // Créateur OU simple user = participant
+    // Admin non-créateur = monitoring seulement
+    const userIsCreator = currentUser.id === lobby.createdBy;
+    const shouldJoinAsParticipant = userIsCreator || !isAdmin;
+    
+    let hasJoined = false;
+    
     const loadLobbyData = async () => {
       setLoading(true);
-      
-      // Le créateur et les users rejoignent comme participants
-      // Les admins non-créateurs utilisent le monitoring
-      const shouldJoinAsParticipant = isCreator || !isAdmin;
       
       if (shouldJoinAsParticipant) {
         // Rejoindre en tant que participant (créateur ou user)
@@ -76,25 +78,29 @@ const MysteryGameView = ({
           currentUser.teamName
         );
         if (response.success && response.lobby) {
+          hasJoined = true;
           setGameState(response.lobby.gameState || {});
           setParticipants(response.lobby.participants || []);
           setStatus(response.lobby.status || 'waiting');
           setGrid(response.lobby.grid);
           setCurrentReveal(response.lobby.currentReveal);
+          if (response.lobby.createdBy) setLobbyCreatedBy(response.lobby.createdBy);
         } else {
-          toast.error(response.message || 'Erreur connexion');
+          toast?.error?.(response.message || 'Erreur connexion');
         }
       } else {
         // Admin non-créateur - rejoindre en monitoring seulement
         const response = await socket.mysteryJoinMonitoring(lobby.id);
         console.log('[MYSTERY] Admin joined monitoring, response:', response);
         if (response.success && response.lobby) {
+          hasJoined = true;
           console.log('[MYSTERY] Admin - participants reçus:', response.lobby.participants?.length);
           setGameState(response.lobby.gameState || {});
           setParticipants(response.lobby.participants || []);
           setStatus(response.lobby.status || 'waiting');
           setGrid(response.lobby.grid);
           setCurrentReveal(response.lobby.currentReveal);
+          if (response.lobby.createdBy) setLobbyCreatedBy(response.lobby.createdBy);
         } else {
           // Fallback sur les données du prop si erreur
           setGameState(lobby.gameState || {});
@@ -111,12 +117,12 @@ const MysteryGameView = ({
     
     // Cleanup - quitter le lobby
     return () => {
-      const shouldLeaveAsParticipant = isCreator || !isAdmin;
-      if (shouldLeaveAsParticipant && currentUser) {
+      if (shouldJoinAsParticipant && currentUser && hasJoined) {
         socket.mysteryLeaveLobby(lobby.id, currentUser.id);
       }
     };
-  }, [socket, lobby?.id, currentUser?.id, isAdmin, isCreator]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, lobby?.id, currentUser?.id]);
 
   // Écouter les événements socket
   useEffect(() => {
