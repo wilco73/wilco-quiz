@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   Grid, X, Users, Play, StopCircle, Volume2, VolumeX, 
-  ArrowLeft, Crown, Sparkles, Eye
+  ArrowLeft, Crown, Sparkles, Eye, Send
 } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import BroadcastPanel from './BroadcastPanel';
+import BroadcastModal, { BroadcastReviewButton, useBroadcastReceiver } from './BroadcastModal';
 
 /**
  * MysteryGameView - Vue de jeu pour les cases mystères
@@ -24,9 +26,19 @@ const MysteryGameView = ({
   const [isMuted, setIsMuted] = useState(false);
   const [revealAnimation, setRevealAnimation] = useState(null);
   const [grid, setGrid] = useState(null);
+  const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
   
   const audioRef = useRef(null);
   const toast = useToast();
+  
+  // Hook pour recevoir les broadcasts
+  const { 
+    currentBroadcast, 
+    lastBroadcast, 
+    hasUnread, 
+    closeBroadcast, 
+    reviewLastBroadcast 
+  } = useBroadcastReceiver(socket?.socket);
 
   // Déterminer si l'utilisateur peut contrôler ce lobby
   // Seuls le créateur du lobby OU un superadmin peuvent contrôler
@@ -438,6 +450,16 @@ const MysteryGameView = ({
               Maître
             </span>
           )}
+          {canControl && (
+            <button
+              onClick={() => setShowBroadcastPanel(true)}
+              className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+              title="Envoyer un message"
+            >
+              <Send className="w-4 h-4" />
+              <span className="hidden sm:inline">Message</span>
+            </button>
+          )}
           <button
             onClick={handleToggleMute}
             className={`p-1.5 rounded-lg ${isMuted ? 'bg-red-600' : 'bg-white/10'} text-white hover:bg-white/20`}
@@ -573,6 +595,34 @@ const MysteryGameView = ({
           </div>
         </div>
       )}
+
+      {/* Panel de broadcast (admin/créateur) */}
+      {canControl && (
+        <BroadcastPanel
+          isOpen={showBroadcastPanel}
+          onClose={() => setShowBroadcastPanel(false)}
+          currentLobbyId={lobby?.id}
+          currentLobbyType="mystery"
+          gridId={lobby?.gridId}
+          senderId={currentUser?.id}
+          senderPseudo={currentUser?.pseudo}
+        />
+      )}
+
+      {/* Modal de broadcast reçu */}
+      {currentBroadcast && (
+        <BroadcastModal
+          broadcast={currentBroadcast}
+          onClose={closeBroadcast}
+        />
+      )}
+
+      {/* Bouton pour revoir le dernier message */}
+      <BroadcastReviewButton
+        lastBroadcast={lastBroadcast}
+        hasUnread={hasUnread}
+        onClick={reviewLastBroadcast}
+      />
 
       <audio ref={audioRef} />
     </div>
