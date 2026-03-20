@@ -12,7 +12,7 @@ function register(socket, io) {
   // ==================== LOBBY MANAGEMENT ====================
   
   socket.on('lobby:create', async (data, callback) => {
-    const { quizId, shuffle } = data;
+    const { quizId, shuffle, trainingMode } = data;
     
     const quiz = await db.getQuizById(quizId);
     if (!quiz) {
@@ -20,8 +20,8 @@ function register(socket, io) {
       return;
     }
     
-    const lobby = await db.createLobby(quizId, shuffle);
-    console.log(`[LOBBY] Créé: ${lobby.id} pour quiz "${quiz.title}"`);
+    const lobby = await db.createLobby(quizId, shuffle, trainingMode);
+    console.log(`[LOBBY] Créé: ${lobby.id} pour quiz "${quiz.title}"${trainingMode ? ' (MODE ENTRAÎNEMENT)' : ''}`);
     
     await broadcastLobbiesUpdate(io);
     callback({ success: true, lobby });
@@ -311,8 +311,8 @@ function register(socket, io) {
       await db.validateAnswer(lobbyId, odId, questionId, isCorrect);
       autoValidated = true;
       
-      // Attribution automatique des points pour QCM
-      if (isCorrect) {
+      // Attribution automatique des points pour QCM (sauf mode entraînement)
+      if (isCorrect && !updatedLobby.trainingMode) {
         const updatedParticipant = updatedLobby.participants.find(p => p.participantId === odId);
         if (updatedParticipant && updatedParticipant.teamName) {
           const validation = await db.getParticipantValidation(lobbyId, odId, questionId);
@@ -355,8 +355,10 @@ function register(socket, io) {
     
     await db.validateAnswer(lobbyId, odId, questionId, isCorrect);
     
-    if (isCorrect) {
-      const lobby = await db.getLobbyById(lobbyId);
+    const lobby = await db.getLobbyById(lobbyId);
+    
+    // Ajouter les points seulement si correct ET pas en mode entraînement
+    if (isCorrect && !lobby?.trainingMode) {
       const participant = lobby?.participants.find(p => p.participantId === odId);
       
       if (participant && participant.teamName) {
@@ -368,7 +370,7 @@ function register(socket, io) {
       }
     }
     
-    console.log(`[VALIDATE] ${odId}: ${isCorrect ? 'CORRECT' : 'INCORRECT'}`);
+    console.log(`[VALIDATE] ${odId}: ${isCorrect ? 'CORRECT' : 'INCORRECT'}${lobby?.trainingMode ? ' (mode entraînement - pas de points)' : ''}`);
     
     io.to(`lobby:${lobbyId}`).emit('answer:validated', {
       odId,
@@ -378,8 +380,8 @@ function register(socket, io) {
     
     await broadcastLobbyState(io, lobbyId);
     await broadcastLobbiesUpdate(io);
-    // Broadcast équipes si le score a changé
-    if (isCorrect) {
+    // Broadcast équipes si le score a changé (pas en mode entraînement)
+    if (isCorrect && !lobby?.trainingMode) {
       await broadcastTeamsUpdate(io);
     }
     

@@ -98,13 +98,19 @@ const LobbyList = ({
                   className={`
                     bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all
                     ${isPlaying ? 'ring-2 ring-orange-400 dark:ring-orange-500' : ''}
+                    ${lobby.trainingMode ? 'border-2 border-orange-300 dark:border-orange-600' : ''}
                   `}
                 >
                   <div className="p-5">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                           {quiz?.title || 'Quiz'}
+                          {lobby.trainingMode && (
+                            <span className="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs rounded-full font-medium">
+                              Entraînement
+                            </span>
+                          )}
                         </h3>
                         {quiz?.description && (
                           <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">

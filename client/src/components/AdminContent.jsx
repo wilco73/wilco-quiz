@@ -38,6 +38,7 @@ const AdminContent = ({
   const [editingQuiz, setEditingQuiz] = useState(null);
   const [creatingQuiz, setCreatingQuiz] = useState(false);
   const [shuffleMode, setShuffleMode] = useState({});
+  const [trainingMode, setTrainingMode] = useState({});
   const [selectedLobby, setSelectedLobby] = useState(null);
   const [filterGroup, setFilterGroup] = useState('');
   const [expandedGroups, setExpandedGroups] = useState({});
@@ -59,10 +60,10 @@ const AdminContent = ({
 
   // === HANDLERS QUIZ ===
   
-  const handleCreateLobby = async (quizId, shuffle = false) => {
-    const result = await socket.createLobby(quizId, shuffle);
+  const handleCreateLobby = async (quizId, shuffle = false, training = false) => {
+    const result = await socket.createLobby(quizId, shuffle, training);
     if (result.success) {
-      toast.success('Lobby créé !');
+      toast.success(training ? 'Lobby créé (mode entraînement)' : 'Lobby créé !');
       onRefreshData?.();
     } else {
       toast.error(result.message || 'Erreur création lobby');
@@ -338,7 +339,7 @@ const AdminContent = ({
                                     >
                                       <Trash2 className="w-4 h-4" />
                                     </button>
-                                    <label className="flex items-center gap-1 px-1" title="Mélanger">
+                                    <label className="flex items-center gap-1 px-1" title="Mélanger les questions">
                                       <input
                                         type="checkbox"
                                         checked={shuffleMode[quiz.id] || false}
@@ -346,6 +347,15 @@ const AdminContent = ({
                                         className="rounded w-3 h-3"
                                       />
                                       <Shuffle className="w-3 h-3 text-gray-500" />
+                                    </label>
+                                    <label className="flex items-center gap-1 px-1" title="Mode entraînement (sans impact sur les scores)">
+                                      <input
+                                        type="checkbox"
+                                        checked={trainingMode[quiz.id] || false}
+                                        onChange={(e) => setTrainingMode({...trainingMode, [quiz.id]: e.target.checked})}
+                                        className="rounded w-3 h-3"
+                                      />
+                                      <BookOpen className="w-3 h-3 text-orange-500" />
                                     </label>
                                     {existingLobby ? (
                                       <button
@@ -357,10 +367,12 @@ const AdminContent = ({
                                       </button>
                                     ) : (
                                       <button
-                                        onClick={() => handleCreateLobby(quiz.id, shuffleMode[quiz.id])}
-                                        className="px-2 py-1 bg-purple-600 text-white rounded text-xs flex items-center gap-1"
+                                        onClick={() => handleCreateLobby(quiz.id, shuffleMode[quiz.id], trainingMode[quiz.id])}
+                                        className={`px-2 py-1 text-white rounded text-xs flex items-center gap-1 ${
+                                          trainingMode[quiz.id] ? 'bg-orange-500 hover:bg-orange-600' : 'bg-purple-600 hover:bg-purple-700'
+                                        }`}
                                       >
-                                        <Play className="w-3 h-3" /> Lancer
+                                        <Play className="w-3 h-3" /> {trainingMode[quiz.id] ? 'Entraînement' : 'Lancer'}
                                       </button>
                                     )}
                                   </div>

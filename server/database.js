@@ -877,6 +877,7 @@ async function getLobbyById(id) {
     currentQuestionIndex: lobby.current_question_index,
     shuffled: lobby.shuffled === 1,
     shuffledQuestions: lobby.shuffled_questions ? JSON.parse(lobby.shuffled_questions) : null,
+    trainingMode: lobby.training_mode === 1,
     startTime: lobby.start_time,
     archived: lobby.archived === 1,
     createdAt: lobby.created_at,
@@ -942,7 +943,7 @@ async function getLobbyParticipants(lobbyId) {
   return result;
 }
 
-async function createLobby(quizId, shuffle = false) {
+async function createLobby(quizId, shuffle = false, trainingMode = false) {
   const id = Date.now().toString();
   const quiz = await getQuizById(quizId);
   
@@ -956,7 +957,8 @@ async function createLobby(quizId, shuffle = false) {
     id,
     quiz_id: quizId,
     shuffled: shuffle ? 1 : 0,
-    shuffled_questions: shuffledQuestions
+    shuffled_questions: shuffledQuestions,
+    training_mode: trainingMode ? 1 : 0
   });
   
   return getLobbyById(id);

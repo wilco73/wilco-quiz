@@ -12,9 +12,15 @@ CREATE TABLE IF NOT EXISTS media_library (
   tags JSONB DEFAULT '[]'::jsonb,
   duration_seconds INTEGER, -- Pour vidéos/audios
   file_size INTEGER, -- En bytes
+  autoplay BOOLEAN DEFAULT TRUE, -- Lecture automatique
+  default_volume INTEGER DEFAULT 80 CHECK (default_volume >= 0 AND default_volume <= 100), -- Volume par défaut (0-100)
   created_by TEXT, -- ID du créateur
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Ajouter les colonnes si elles n'existent pas (migration)
+ALTER TABLE media_library ADD COLUMN IF NOT EXISTS autoplay BOOLEAN DEFAULT TRUE;
+ALTER TABLE media_library ADD COLUMN IF NOT EXISTS default_volume INTEGER DEFAULT 80;
 
 -- Index pour la recherche
 CREATE INDEX IF NOT EXISTS idx_media_library_name ON media_library USING gin(to_tsvector('french', name));

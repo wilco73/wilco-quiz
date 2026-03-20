@@ -307,10 +307,10 @@ export function useSocket() {
   }, []);
   
   // Lobby
-  const createLobby = useCallback((quizId, shuffle = false) => {
+  const createLobby = useCallback((quizId, shuffle = false, trainingMode = false) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
-      socketRef.current.emit('lobby:create', { quizId, shuffle }, resolve);
+      socketRef.current.emit('lobby:create', { quizId, shuffle, trainingMode }, resolve);
     });
   }, []);
   
