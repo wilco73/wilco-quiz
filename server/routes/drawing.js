@@ -10,8 +10,8 @@ const { pictionaryGames, pictionaryTimers } = require('../utils/state');
 let broadcastFunctions = null;
 let io = null;
 
-// Initialise avec la fonction de broadcast et Socket.IO
-function init(broadcastFn, socketIo) {
+// Initialise avec les fonctions de broadcast et Socket.IO
+function init(broadcasts, socketIo) {
   broadcastFunctions = broadcasts;
   io = socketIo;
 }
