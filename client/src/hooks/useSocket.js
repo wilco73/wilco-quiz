@@ -32,8 +32,11 @@ export function useSocket() {
     questions: []
   });
   
-  // Etat du lobby actuel
+  // Etat du lobby actuel (quiz)
   const [currentLobbyState, setCurrentLobbyState] = useState(null);
+  
+  // Etat du mystery lobby pour la reconnexion
+  const [currentMysteryLobbyState, setCurrentMysteryLobbyState] = useState(null);
   
   // Timer
   const [timerState, setTimerState] = useState({
@@ -80,7 +83,7 @@ export function useSocket() {
     const session = getLobbySession();
     if (!session) return;
 
-    console.log('[SOCKET] Tentative de reconnexion au lobby:', session.lobbyId);
+    console.log('[SOCKET] Tentative de reconnexion au lobby:', session.lobbyId, 'type:', session.lobbyType);
     setIsReconnecting(true);
 
     try {
@@ -92,12 +95,14 @@ export function useSocket() {
           pseudo: session.pseudo,
           teamName: session.teamName
         }, (response) => {
-          if (response.success) {
+          if (response.success && response.lobby) {
             console.log('[SOCKET] Reconnexion mystery réussie');
-            socket.join(`mystery:${session.lobbyId}`);
+            // Définir l'état pour que App.js puisse afficher MysteryGameView
+            setCurrentMysteryLobbyState(response.lobby);
           } else {
             console.log('[SOCKET] Reconnexion mystery échouée:', response.message);
             clearLobbySession();
+            setCurrentMysteryLobbyState(null);
           }
           setIsReconnecting(false);
         });
@@ -533,16 +538,26 @@ export function useSocket() {
   const mysteryJoinLobby = useCallback((lobbyId, odId, pseudo, teamName) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
-      socketRef.current.emit('mystery:joinLobby', { lobbyId, odId, pseudo, teamName }, resolve);
+      socketRef.current.emit('mystery:joinLobby', { lobbyId, odId, pseudo, teamName }, (response) => {
+        if (response.success) {
+          // Sauvegarder la session pour la reconnexion
+          saveLobbySession(lobbyId, odId, pseudo, teamName, 'mystery');
+        }
+        resolve(response);
+      });
     });
-  }, []);
+  }, [saveLobbySession]);
   
   const mysteryLeaveLobby = useCallback((lobbyId, odId) => {
     return new Promise((resolve) => {
       if (!socketRef.current?.connected) { resolve({ success: false }); return; }
-      socketRef.current.emit('mystery:leaveLobby', { lobbyId, odId }, resolve);
+      socketRef.current.emit('mystery:leaveLobby', { lobbyId, odId }, (response) => {
+        // Effacer la session
+        clearLobbySession();
+        resolve(response);
+      });
     });
-  }, []);
+  }, [clearLobbySession]);
   
   const mysteryJoinMonitoring = useCallback((lobbyId) => {
     return new Promise((resolve) => {
@@ -624,8 +639,11 @@ export function useSocket() {
     connectionError,
     globalState,
     currentLobbyState,
+    currentMysteryLobbyState,
     timerState,
     setCurrentLobbyState,
+    setCurrentMysteryLobbyState,
+    isReconnecting,
     // Auth
     login,
     getUser,
