@@ -29,3 +29,4 @@ yarn-error.log*
 server/db.json
 /client/src/resources/quiz
 /client/public/resources/quiz
+CLAUDE.md

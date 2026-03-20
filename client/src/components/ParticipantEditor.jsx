@@ -98,7 +98,7 @@ const ParticipantEditor = ({
       }
 
       // Mettre à jour le participant
-      const res = await fetch(`${API_URL}/participants/${participant.odId}`, {
+      const res = await fetch(`${API_URL}/participants/${participant.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
@@ -111,7 +111,7 @@ const ParticipantEditor = ({
 
       // Changer le mot de passe si fourni
       if (formData.newPassword) {
-        const pwRes = await fetch(`${API_URL}/participants/${participant.odId}/password`, {
+        const pwRes = await fetch(`${API_URL}/participants/${participant.id}/password`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ password: formData.newPassword })
@@ -265,7 +265,7 @@ const ParticipantEditor = ({
           <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-500">ID:</span>
-              <span className="text-gray-700 dark:text-gray-300 font-mono text-xs">{participant?.odId}</span>
+              <span className="text-gray-700 dark:text-gray-300 font-mono text-xs">{participant?.id}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Rôle:</span>
