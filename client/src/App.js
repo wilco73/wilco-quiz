@@ -95,8 +95,11 @@ const App = () => {
         setCurrentLobby(updatedLobby);
         if (updatedQuiz) setCurrentQuiz(updatedQuiz);
         
-        // Changement de question
-        if (newIndex > oldIndex && !isAdmin) {
+        // Vérifier si l'utilisateur est un participant du lobby
+        const isParticipant = updatedLobby.participants?.some(p => p.participantId === currentUser?.id);
+        
+        // Changement de question - pour les participants seulement
+        if (newIndex > oldIndex && isParticipant) {
           setMyAnswer('');
           setHasAnswered(false);
           // Reset les refs pour la nouvelle question
@@ -104,20 +107,20 @@ const App = () => {
           urgentSaveTriggeredRef.current = false;
         }
         
-        // Quiz demarre - passer en vue quiz
-        if (updatedLobby.status === 'playing' && view === 'lobby' && !isAdmin) {
+        // Quiz demarre - passer en vue quiz (pour les participants)
+        if (updatedLobby.status === 'playing' && view === 'lobby' && isParticipant) {
           console.log('[APP] Quiz demarre, passage en vue quiz');
           setView('quiz');
         }
         
         // Quiz termine - ne pas forcer si l'utilisateur est deja sur une autre vue
         // (lobby-list, history, profile, etc.)
-        if (updatedLobby.status === 'finished' && view === 'quiz' && !isAdmin) {
+        if (updatedLobby.status === 'finished' && view === 'quiz' && isParticipant) {
           setView('results');
         }
         
-        // Synchroniser hasAnswered
-        if (currentUser && !isAdmin) {
+        // Synchroniser hasAnswered - pour les participants
+        if (currentUser && isParticipant) {
           const myParticipant = updatedLobby.participants?.find(p => p.participantId === currentUser.id);
           if (myParticipant) {
             setHasAnswered(myParticipant.hasAnswered || false);
@@ -145,7 +148,13 @@ const App = () => {
       setCurrentQuiz(data.quiz);
       // Mettre a jour aussi currentLobbyState pour eviter l'ecrasement
       socket.setCurrentLobbyState({ lobby: data.lobby, quiz: data.quiz });
-      if (!isAdmin) {
+      
+      // Vérifier si l'utilisateur est un PARTICIPANT du lobby (pas juste en monitoring)
+      const isParticipant = data.lobby?.participants?.some(p => p.participantId === currentUser?.id);
+      
+      // Si c'est un participant (admin ou non), passer en vue quiz
+      // Les admins en monitoring restent sur leur vue actuelle
+      if (isParticipant && view === 'lobby') {
         setView('quiz');
         setMyAnswer('');
         setHasAnswered(false);
@@ -158,7 +167,10 @@ const App = () => {
       if (data.quiz) setCurrentQuiz(data.quiz);
       // Mettre a jour aussi currentLobbyState
       socket.setCurrentLobbyState({ lobby: data.lobby, quiz: data.quiz || currentQuiz });
-      if (!isAdmin) {
+      
+      // Vérifier si l'utilisateur est un participant
+      const isParticipant = data.lobby?.participants?.some(p => p.participantId === currentUser?.id);
+      if (isParticipant) {
         setMyAnswer('');
         setHasAnswered(false);
       }
@@ -177,14 +189,18 @@ const App = () => {
       if (data.quiz) {
         setCurrentQuiz(data.quiz);
       }
-      if (!isAdmin) {
+      // Vérifier si l'utilisateur est un participant
+      const isParticipant = data.lobby?.participants?.some(p => p.participantId === currentUser?.id);
+      if (isParticipant && view === 'quiz') {
         setView('results');
       }
     };
     
     const handleTimerExpired = (data) => {
       console.log('[EVENT] timer:expired recu');
-      if (!isAdmin && !hasAnswered && currentLobby && currentUser) {
+      // Vérifier si l'utilisateur est un participant
+      const isParticipant = currentLobby?.participants?.some(p => p.participantId === currentUser?.id);
+      if (isParticipant && !hasAnswered && currentLobby && currentUser) {
         // Envoyer immédiatement le dernier brouillon avant que le serveur ne finalise
         // Utiliser la ref pour avoir la valeur la plus récente
         const currentAnswer = myAnswerRef.current;
@@ -197,10 +213,12 @@ const App = () => {
     const handleLobbyDeleted = (data) => {
       console.log('[EVENT] lobby:deleted recu');
       if (currentLobby?.id === data.lobbyId) {
+        // Vérifier si l'utilisateur était un participant
+        const wasParticipant = currentLobby?.participants?.some(p => p.participantId === currentUser?.id);
         setCurrentLobby(null);
         setCurrentQuiz(null);
         socket.setCurrentLobbyState(null);
-        if (!isAdmin) {
+        if (wasParticipant) {
           setView('lobby-list');
           toast.info('La salle a ete supprimee');
         }
@@ -210,11 +228,13 @@ const App = () => {
     const handleLobbyStopped = (data) => {
       console.log('[EVENT] lobby:stopped recu');
       if (currentLobby?.id === data.lobbyId) {
+        // Vérifier si l'utilisateur est un participant
+        const isParticipant = data.lobby?.participants?.some(p => p.participantId === currentUser?.id);
         setCurrentLobby(data.lobby);
         socket.setCurrentLobbyState({ lobby: data.lobby, quiz: currentQuiz });
         setMyAnswer('');
         setHasAnswered(false);
-        if (!isAdmin) {
+        if (isParticipant) {
           setView('lobby');
           toast.info('Le quiz a ete arrete par l\'administrateur');
         }
