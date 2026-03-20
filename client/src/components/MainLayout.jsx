@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Menu, X, Home, Trophy, User, History, Settings, LogOut, 
   Users, Star, Crown, ChevronDown, ChevronRight,
-  FileQuestion, Palette, Trash, Monitor, Check, Eye, EyeOff, Grid
+  FileQuestion, Palette, Trash, Monitor, Check, Eye, EyeOff, Grid, Image
 } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 import Avatar from './Avatar';
@@ -59,6 +59,7 @@ const MainLayout = ({
     { id: 'admin-drawing', label: 'Jeux de Dessin', icon: Palette },
     { id: 'admin-lobbies', label: 'Gérer Lobbies', icon: Trash },
     { id: 'admin-mystery', label: 'Cases Mystères', icon: Grid },
+    { id: 'admin-media', label: 'Médiathèque', icon: Image },
     { id: 'admin-monitoring', label: 'Suivi Direct', icon: Monitor },
     { id: 'admin-validation', label: 'Validation', icon: Check },
   ];

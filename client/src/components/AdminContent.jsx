@@ -16,6 +16,7 @@ import DrawingReferenceBank from './DrawingReferenceBank';
 import DrawingLobbyManager from './DrawingLobbyManager';
 import UserManagement from './UserManagement';
 import MysteryGridManager from './MysteryGridManager';
+import MediaLibrary from './MediaLibrary';
 
 /**
  * AdminContent - Contenu de l'interface admin (sans le layout)
@@ -558,6 +559,11 @@ const AdminContent = ({
             window.dispatchEvent(new CustomEvent('mystery:joinLobby', { detail: lobby }));
           }}
         />
+      );
+
+    case 'admin-media':
+      return (
+        <MediaLibrary />
       );
 
     default:
