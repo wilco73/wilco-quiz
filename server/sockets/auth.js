@@ -5,7 +5,7 @@
 
 const db = require('../database');
 const { connectedParticipants, participantSockets } = require('../utils/state');
-const { broadcastGlobalState } = require('../utils/broadcast');
+const { broadcastParticipantsUpdate, broadcastTeamsUpdate } = require('../utils/broadcast');
 
 function register(socket, io) {
   
@@ -59,8 +59,8 @@ function register(socket, io) {
     
     console.log(`[AUTH] Nouveau participant: "${pseudo}" (rôle: user)`);
     
-    // Notifier tout le monde du nouveau participant
-    await broadcastGlobalState(io);
+    // Notifier uniquement la liste des participants
+    await broadcastParticipantsUpdate(io);
     
     const user = {
       ...newParticipant,
@@ -87,6 +87,8 @@ function register(socket, io) {
     let team = await db.getTeamByName(normalizedTeamName);
     if (!team) {
       team = await db.createTeam(normalizedTeamName);
+      // Nouvelle équipe créée, mettre à jour la liste
+      await broadcastTeamsUpdate(io);
     }
     
     await db.updateParticipantTeam(odId, team.id);
@@ -94,7 +96,8 @@ function register(socket, io) {
     
     console.log(`[AUTH] Changement d'équipe: "${participant.pseudo}" -> "${normalizedTeamName}"`);
     
-    await broadcastGlobalState(io);
+    // Mettre à jour participants (changement d'équipe)
+    await broadcastParticipantsUpdate(io);
     
     const user = {
       ...updatedParticipant,
@@ -134,7 +137,7 @@ function register(socket, io) {
       const updatedParticipant = await db.updateParticipantRole(targetId, newRole);
       console.log(`[AUTH] Rôle modifié: "${updatedParticipant.pseudo}" -> ${newRole} (par ${requester.pseudo})`);
       
-      await broadcastGlobalState(io);
+      await broadcastParticipantsUpdate(io);
       callback({ success: true, participant: updatedParticipant });
     } catch (error) {
       callback({ success: false, message: error.message });

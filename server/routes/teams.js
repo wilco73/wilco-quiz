@@ -6,11 +6,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database');
 
-let broadcastGlobalState = null;
+let broadcastFunctions = null;
 
-// Initialise avec la fonction de broadcast
-function init(broadcastFn) {
-  broadcastGlobalState = broadcastFn;
+// Initialise avec les fonctions de broadcast
+function init(broadcasts) {
+  broadcastFunctions = broadcasts;
 }
 
 // Liste des équipes
@@ -37,7 +37,7 @@ router.post('/create', async (req, res) => {
     await db.updateTeamScore(team.id, score);
   }
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.teams) await broadcastFunctions.teams();
   res.json({ success: true, team: await db.getTeamById(team.id) });
 });
 
@@ -55,7 +55,7 @@ router.put('/:id', async (req, res) => {
     await db.updateTeamScore(team.id, parseInt(score));
   }
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.teams) await broadcastFunctions.teams();
   res.json({ success: true, team: await db.getTeamById(team.id) });
 });
 
@@ -73,7 +73,9 @@ router.post('/delete', async (req, res) => {
   
   await db.deleteTeam(team.id);
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  // Équipe supprimée + participants potentiellement affectés
+  if (broadcastFunctions?.teams) await broadcastFunctions.teams();
+  if (affectedCount > 0 && broadcastFunctions?.participants) await broadcastFunctions.participants();
   res.json({ success: true, affectedCount });
 });
 
@@ -88,7 +90,7 @@ router.delete('/:id', async (req, res) => {
   
   await db.deleteTeam(team.id);
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.teams) await broadcastFunctions.teams();
   res.json({ success: true });
 });
 

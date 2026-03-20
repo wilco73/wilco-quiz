@@ -26,7 +26,14 @@ const fs = require('fs');
 const db = require('./database');
 const socketHandler = require('./sockets');
 const routes = require('./routes');
-const { broadcastGlobalState } = require('./utils/broadcast');
+const { 
+  broadcastGlobalState, 
+  broadcastLobbiesUpdate,
+  broadcastTeamsUpdate,
+  broadcastParticipantsUpdate,
+  broadcastQuizzesUpdate,
+  broadcastQuestionsUpdate
+} = require('./utils/broadcast');
 const timers = require('./utils/timers');
 
 // ==================== CONFIGURATION ====================
@@ -62,14 +69,20 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // ==================== INITIALISATION ====================
 
-// Fonction de broadcast avec io inclus
-async function broadcastGlobalStateWithIo() {
-  return broadcastGlobalState(io);
-}
+// Fonctions de broadcast avec io inclus
+const broadcastFunctions = {
+  global: () => broadcastGlobalState(io),
+  lobbies: () => broadcastLobbiesUpdate(io),
+  teams: () => broadcastTeamsUpdate(io),
+  participants: () => broadcastParticipantsUpdate(io),
+  quizzes: () => broadcastQuizzesUpdate(io),
+  questions: () => broadcastQuestionsUpdate(io)
+};
 
 // Configurer les routes
 routes.setup(app, { 
-  broadcastGlobalState: broadcastGlobalStateWithIo,
+  broadcastGlobalState: broadcastFunctions.global,
+  broadcasts: broadcastFunctions,
   io 
 });
 

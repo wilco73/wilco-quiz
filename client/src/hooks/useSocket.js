@@ -1,6 +1,7 @@
 /**
  * Hook useSocket - Gestion de la connexion Socket.IO
  * Fournit une connexion temps reel avec le serveur
+ * Avec reconnexion automatique et restauration d'état
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -8,11 +9,19 @@ import { io } from 'socket.io-client';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001';
 
+// Clés localStorage pour la persistance
+const STORAGE_KEYS = {
+  LOBBY_SESSION: 'wilcoquiz_lobby_session',
+  USER_SESSION: 'wilcoquiz_user_session'
+};
+
 export function useSocket() {
   const socketRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
   const [socketReady, setSocketReady] = useState(false);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   
   // Etat global synchronise
   const [globalState, setGlobalState] = useState({
@@ -33,6 +42,92 @@ export function useSocket() {
     questionId: null
   });
 
+  // Sauvegarder la session du lobby dans localStorage
+  const saveLobbySession = useCallback((lobbyId, odId, pseudo, teamName, lobbyType = 'quiz') => {
+    if (lobbyId && odId) {
+      const session = { lobbyId, odId, pseudo, teamName, lobbyType, timestamp: Date.now() };
+      localStorage.setItem(STORAGE_KEYS.LOBBY_SESSION, JSON.stringify(session));
+      console.log('[SOCKET] Session lobby sauvegardée:', session);
+    }
+  }, []);
+
+  // Récupérer la session du lobby
+  const getLobbySession = useCallback(() => {
+    try {
+      const session = localStorage.getItem(STORAGE_KEYS.LOBBY_SESSION);
+      if (session) {
+        const parsed = JSON.parse(session);
+        // Session valide pendant 4 heures
+        if (Date.now() - parsed.timestamp < 4 * 60 * 60 * 1000) {
+          return parsed;
+        }
+        localStorage.removeItem(STORAGE_KEYS.LOBBY_SESSION);
+      }
+    } catch (e) {
+      console.error('[SOCKET] Erreur lecture session:', e);
+    }
+    return null;
+  }, []);
+
+  // Effacer la session du lobby
+  const clearLobbySession = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEYS.LOBBY_SESSION);
+    console.log('[SOCKET] Session lobby effacée');
+  }, []);
+
+  // Tentative de reconnexion au lobby
+  const attemptLobbyReconnect = useCallback(async (socket) => {
+    const session = getLobbySession();
+    if (!session) return;
+
+    console.log('[SOCKET] Tentative de reconnexion au lobby:', session.lobbyId);
+    setIsReconnecting(true);
+
+    try {
+      if (session.lobbyType === 'mystery') {
+        // Reconnexion lobby mystery
+        socket.emit('mystery:joinLobby', {
+          lobbyId: session.lobbyId,
+          odId: session.odId,
+          pseudo: session.pseudo,
+          teamName: session.teamName
+        }, (response) => {
+          if (response.success) {
+            console.log('[SOCKET] Reconnexion mystery réussie');
+            socket.join(`mystery:${session.lobbyId}`);
+          } else {
+            console.log('[SOCKET] Reconnexion mystery échouée:', response.message);
+            clearLobbySession();
+          }
+          setIsReconnecting(false);
+        });
+      } else {
+        // Reconnexion lobby quiz classique
+        socket.emit('lobby:join', {
+          lobbyId: session.lobbyId,
+          odId: session.odId,
+          pseudo: session.pseudo,
+          teamName: session.teamName
+        }, (response) => {
+          if (response.success) {
+            console.log('[SOCKET] Reconnexion quiz réussie');
+            setCurrentLobbyState({ lobby: response.lobby, quiz: response.quiz });
+          } else {
+            console.log('[SOCKET] Reconnexion quiz échouée:', response.message);
+            // Si le lobby n'existe plus, effacer la session
+            if (response.message?.includes('introuvable') || response.message?.includes('terminé')) {
+              clearLobbySession();
+            }
+          }
+          setIsReconnecting(false);
+        });
+      }
+    } catch (error) {
+      console.error('[SOCKET] Erreur reconnexion:', error);
+      setIsReconnecting(false);
+    }
+  }, [getLobbySession, clearLobbySession]);
+
   // Initialiser la connexion
   useEffect(() => {
     console.log('[SOCKET] Initialisation...');
@@ -40,27 +135,56 @@ export function useSocket() {
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: Infinity, // Toujours essayer de se reconnecter
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelayMax: 10000,
+      randomizationFactor: 0.5,
       timeout: 20000
     });
     
     socketRef.current = socket;
     
     socket.on('connect', () => {
-      console.log('[SOCKET] Connecte:', socket.id);
+      console.log('[SOCKET] Connecté:', socket.id);
       setIsConnected(true);
       setConnectionError(null);
       setSocketReady(true);
+      setReconnectAttempt(0);
       
-      // Demander l'etat global a chaque connexion/reconnexion
+      // Demander l'état global
       socket.emit('global:requestState');
+      
+      // Tenter de rejoindre le lobby précédent si reconnexion
+      attemptLobbyReconnect(socket);
     });
     
     socket.on('disconnect', (reason) => {
-      console.log('[SOCKET] Deconnecte:', reason);
+      console.log('[SOCKET] Déconnecté:', reason);
       setIsConnected(false);
+      
+      // Si déconnexion côté serveur, on garde la session pour reconnexion
+      if (reason === 'io server disconnect') {
+        console.log('[SOCKET] Déconnexion serveur - reconnexion manuelle nécessaire');
+        socket.connect();
+      }
+    });
+    
+    socket.on('reconnect_attempt', (attemptNumber) => {
+      console.log(`[SOCKET] Tentative de reconnexion #${attemptNumber}`);
+      setReconnectAttempt(attemptNumber);
+      setIsReconnecting(true);
+    });
+    
+    socket.on('reconnect', (attemptNumber) => {
+      console.log(`[SOCKET] Reconnecté après ${attemptNumber} tentative(s)`);
+      setReconnectAttempt(0);
+      setIsReconnecting(false);
+    });
+    
+    socket.on('reconnect_failed', () => {
+      console.error('[SOCKET] Échec de reconnexion après plusieurs tentatives');
+      setConnectionError('Impossible de se reconnecter au serveur');
+      setIsReconnecting(false);
     });
     
     socket.on('connect_error', (error) => {
@@ -69,13 +193,35 @@ export function useSocket() {
       setIsConnected(false);
     });
     
+    // État global complet (initialisation)
     socket.on('global:state', (data) => {
-      console.log('[SOCKET] global:state recu');
+      console.log('[SOCKET] global:state reçu');
       setGlobalState(prev => ({ ...prev, ...data }));
     });
     
+    // Mises à jour ciblées (optimisation bande passante)
+    socket.on('global:lobbiesUpdate', (data) => {
+      setGlobalState(prev => ({ ...prev, lobbies: data.lobbies }));
+    });
+    
+    socket.on('global:teamsUpdate', (data) => {
+      setGlobalState(prev => ({ ...prev, teams: data.teams }));
+    });
+    
+    socket.on('global:participantsUpdate', (data) => {
+      setGlobalState(prev => ({ ...prev, participants: data.participants }));
+    });
+    
+    socket.on('global:quizzesUpdate', (data) => {
+      setGlobalState(prev => ({ ...prev, quizzes: data.quizzes }));
+    });
+    
+    socket.on('global:questionsUpdate', (data) => {
+      setGlobalState(prev => ({ ...prev, questions: data.questions }));
+    });
+    
     socket.on('lobby:state', (data) => {
-      console.log('[SOCKET] lobby:state recu');
+      console.log('[SOCKET] lobby:state reçu');
       setCurrentLobbyState(data);
     });
     
@@ -95,7 +241,7 @@ export function useSocket() {
       console.log('[SOCKET] Cleanup');
       socket.disconnect();
     };
-  }, []);
+  }, [attemptLobbyReconnect]);
   
   // Auth - Login unifié (le serveur détermine le rôle)
   const login = useCallback((pseudo, password) => {
@@ -168,11 +314,13 @@ export function useSocket() {
         console.log('[SOCKET] joinLobby response:', response.success);
         if (response.success) {
           setCurrentLobbyState({ lobby: response.lobby, quiz: response.quiz });
+          // Sauvegarder la session pour reconnexion automatique
+          saveLobbySession(lobbyId, odId, pseudo, teamName, 'quiz');
         }
         resolve(response);
       });
     });
-  }, []);
+  }, [saveLobbySession]);
   
   const leaveLobby = useCallback((lobbyId, odId) => {
     return new Promise((resolve) => {
@@ -180,10 +328,12 @@ export function useSocket() {
       socketRef.current.emit('lobby:leave', { lobbyId, odId }, () => {
         setCurrentLobbyState(null);
         setTimerState({ remaining: 0, total: 0, questionId: null });
+        // Effacer la session
+        clearLobbySession();
         resolve({ success: true });
       });
     });
-  }, []);
+  }, [clearLobbySession]);
   
   const deleteLobby = useCallback((lobbyId) => {
     return new Promise((resolve) => {

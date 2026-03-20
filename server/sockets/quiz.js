@@ -4,7 +4,7 @@
 
 const db = require('../database');
 const { getQuizQuestions, getLobbyWithTimer } = require('../utils/helpers');
-const { broadcastLobbyState, broadcastGlobalState } = require('../utils/broadcast');
+const { broadcastLobbyState, broadcastLobbiesUpdate, broadcastTeamsUpdate } = require('../utils/broadcast');
 const timers = require('../utils/timers');
 
 function register(socket, io) {
@@ -23,7 +23,7 @@ function register(socket, io) {
     const lobby = await db.createLobby(quizId, shuffle);
     console.log(`[LOBBY] Créé: ${lobby.id} pour quiz "${quiz.title}"`);
     
-    await broadcastGlobalState(io);
+    await broadcastLobbiesUpdate(io);
     callback({ success: true, lobby });
   });
   
@@ -87,7 +87,7 @@ function register(socket, io) {
     }
     
     await broadcastLobbyState(io, lobbyId);
-    await broadcastGlobalState(io);
+    await broadcastLobbiesUpdate(io);
     callback({ success: true, lobby: getLobbyWithTimer(updatedLobby), quiz });
   });
   
@@ -104,7 +104,7 @@ function register(socket, io) {
     io.to(`lobby:${lobbyId}`).emit('lobby:participantLeft', { odId });
     
     await broadcastLobbyState(io, lobbyId);
-    await broadcastGlobalState(io);
+    await broadcastLobbiesUpdate(io);
     
     if (callback) callback({ success: true });
   });
@@ -120,7 +120,7 @@ function register(socket, io) {
     
     console.log(`[LOBBY] Supprimé: ${lobbyId}`);
     
-    await broadcastGlobalState(io);
+    await broadcastLobbiesUpdate(io);
     if (callback) callback({ success: true });
   });
   
@@ -152,7 +152,7 @@ function register(socket, io) {
     console.log(`[LOBBY] Quiz arrêté: ${lobbyId}`);
     
     await broadcastLobbyState(io, lobbyId);
-    await broadcastGlobalState(io);
+    await broadcastLobbiesUpdate(io);
     
     callback({ success: true });
   });
@@ -188,7 +188,7 @@ function register(socket, io) {
       questionIndex: 0
     });
     
-    await broadcastGlobalState(io);
+    await broadcastLobbiesUpdate(io);
     callback({ success: true });
   });
   
@@ -218,7 +218,7 @@ function register(socket, io) {
         quiz
       });
       await broadcastLobbyState(io, lobbyId);
-      await broadcastGlobalState(io);
+      await broadcastLobbiesUpdate(io);
       
       callback({ success: true, finished: true });
       return;
@@ -248,7 +248,7 @@ function register(socket, io) {
       totalQuestions: questions.length
     });
     
-    await broadcastGlobalState(io);
+    // Pas besoin de broadcast global ici, l'état du lobby est envoyé directement
     callback({ success: true, questionIndex: nextIndex });
   });
   
@@ -340,8 +340,11 @@ function register(socket, io) {
       autoValidated
     });
     
+    // Broadcast ciblé : seulement le lobby + équipes si score a changé
     await broadcastLobbyState(io, lobbyId);
-    await broadcastGlobalState(io);
+    if (autoValidated) {
+      await broadcastTeamsUpdate(io);
+    }
     callback({ success: true, autoValidated });
   });
   
@@ -372,7 +375,10 @@ function register(socket, io) {
     });
     
     await broadcastLobbyState(io, lobbyId);
-    await broadcastGlobalState(io);
+    // Broadcast équipes si le score a changé
+    if (isCorrect) {
+      await broadcastTeamsUpdate(io);
+    }
     
     callback({ success: true });
   });
@@ -394,7 +400,7 @@ function register(socket, io) {
   socket.on('admin:resetScores', async (data, callback) => {
     await db.resetAllTeamScores();
     console.log(`[ADMIN] Reset des scores de toutes les équipes`);
-    await broadcastGlobalState(io);
+    await broadcastTeamsUpdate(io);
     if (callback) callback({ success: true });
   });
 }

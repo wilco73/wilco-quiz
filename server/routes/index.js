@@ -16,13 +16,14 @@ const mysteryRoutes = require('./mystery');
  * Configure toutes les routes avec les dépendances nécessaires
  */
 function setup(app, dependencies) {
-  const { broadcastGlobalState, io } = dependencies;
+  const { broadcastGlobalState, broadcasts, io } = dependencies;
   
   // Initialiser les routes qui ont besoin du broadcast
-  teamsRoutes.init(broadcastGlobalState);
-  participantsRoutes.init(broadcastGlobalState);
-  quizzesRoutes.init(broadcastGlobalState);
-  drawingRoutes.init(broadcastGlobalState, io);
+  // Utiliser les broadcasts ciblés si disponibles, sinon fallback sur broadcastGlobalState
+  teamsRoutes.init(broadcasts || { teams: broadcastGlobalState, participants: broadcastGlobalState });
+  participantsRoutes.init(broadcasts || { participants: broadcastGlobalState, teams: broadcastGlobalState });
+  quizzesRoutes.init(broadcasts || { quizzes: broadcastGlobalState, questions: broadcastGlobalState, lobbies: broadcastGlobalState });
+  drawingRoutes.init(broadcasts || { global: broadcastGlobalState }, io);
   
   // Monter les routes
   app.use('/api', authRoutes);

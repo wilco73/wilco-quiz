@@ -91,10 +91,9 @@ async function handleTimerExpired(lobbyId, questionId) {
       }
     }
     
-    // Broadcast l'état mis à jour
-    const { broadcastLobbyState, broadcastGlobalState } = require('./broadcast');
+    // Broadcast l'état mis à jour - seulement le lobby, pas tout l'état global
+    const { broadcastLobbyState } = require('./broadcast');
     await broadcastLobbyState(io, lobbyId);
-    await broadcastGlobalState(io);
   }, 500);
 }
 

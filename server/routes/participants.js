@@ -6,11 +6,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database');
 
-let broadcastGlobalState = null;
+let broadcastFunctions = null;
 
 // Initialise avec la fonction de broadcast
-function init(broadcastFn) {
-  broadcastGlobalState = broadcastFn;
+function init(broadcasts) {
+  broadcastFunctions = broadcasts;
 }
 
 // Liste des participants
@@ -52,7 +52,7 @@ router.post('/create', async (req, res) => {
   const odId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const participant = await db.createParticipant(odId, pseudo.trim(), password, teamId);
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.participants) await broadcastFunctions.participants();
   res.json({ success: true, participant });
 });
 
@@ -83,7 +83,7 @@ router.put('/:id', async (req, res) => {
     await db.updateParticipantPassword(id, password);
   }
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.participants) await broadcastFunctions.participants();
   res.json({ success: true, participant: await db.getParticipantById(id) });
 });
 
@@ -98,7 +98,7 @@ router.delete('/:id', async (req, res) => {
   
   await db.deleteParticipant(id);
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.participants) await broadcastFunctions.participants();
   res.json({ success: true });
 });
 
@@ -123,7 +123,7 @@ router.put('/:id/team', async (req, res) => {
     await db.updateParticipantTeam(id, team.id);
   }
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.participants) await broadcastFunctions.participants();
   res.json({ success: true, participant: await db.getParticipantById(id) });
 });
 
@@ -194,7 +194,7 @@ router.put('/:id/pseudo', async (req, res) => {
   
   await db.updateParticipantPseudo(id, pseudo.trim());
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.participants) await broadcastFunctions.participants();
   res.json({ success: true, participant: await db.getParticipantById(id) });
 });
 
@@ -220,7 +220,7 @@ router.put('/:id/avatar', async (req, res) => {
   }
   
   const updatedParticipant = await db.updateParticipantAvatar(id, avatar);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.participants) await broadcastFunctions.participants();
   
   res.json({ 
     success: true, 
@@ -251,7 +251,7 @@ router.post('/update', async (req, res) => {
     }
   }
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.participants) await broadcastFunctions.participants();
   res.json({ success: true, participant: await db.getParticipantById(participantId) });
 });
 

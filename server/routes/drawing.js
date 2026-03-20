@@ -7,12 +7,12 @@ const router = express.Router();
 const db = require('../database');
 const { pictionaryGames, pictionaryTimers } = require('../utils/state');
 
-let broadcastGlobalState = null;
+let broadcastFunctions = null;
 let io = null;
 
 // Initialise avec la fonction de broadcast et Socket.IO
 function init(broadcastFn, socketIo) {
-  broadcastGlobalState = broadcastFn;
+  broadcastFunctions = broadcasts;
   io = socketIo;
 }
 
@@ -24,19 +24,19 @@ router.get('/words', async (req, res) => {
 
 router.post('/words', async (req, res) => {
   const word = await db.createDrawingWord(req.body);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ success: true, word });
 });
 
 router.put('/words/:id', async (req, res) => {
   const word = await db.updateDrawingWord(req.params.id, req.body);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ success: true, word });
 });
 
 router.delete('/words/:id', async (req, res) => {
   await db.deleteDrawingWord(req.params.id);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ success: true });
 });
 
@@ -51,7 +51,7 @@ router.post('/words/import', async (req, res) => {
   const results = await db.mergeDrawingWords(words, mode);
   const allWords = await db.getAllDrawingWords();
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ 
     success: true, 
     added: results.added, 
@@ -70,19 +70,19 @@ router.get('/references', async (req, res) => {
 
 router.post('/references', async (req, res) => {
   const ref = await db.createDrawingReference(req.body);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ success: true, reference: ref });
 });
 
 router.put('/references/:id', async (req, res) => {
   const ref = await db.updateDrawingReference(req.params.id, req.body);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ success: true, reference: ref });
 });
 
 router.delete('/references/:id', async (req, res) => {
   await db.deleteDrawingReference(req.params.id);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ success: true });
 });
 
@@ -97,7 +97,7 @@ router.post('/references/import', async (req, res) => {
   const results = await db.mergeDrawingReferences(references, mode);
   const allRefs = await db.getAllDrawingReferences();
   
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ 
     success: true, 
     added: results.added, 
@@ -116,19 +116,19 @@ router.get('/games', async (req, res) => {
 
 router.post('/games', async (req, res) => {
   const game = await db.createDrawingGame(req.body);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ success: true, game });
 });
 
 router.put('/games/:id', async (req, res) => {
   const game = await db.updateDrawingGame(req.params.id, req.body);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ success: true, game });
 });
 
 router.delete('/games/:id', async (req, res) => {
   await db.deleteDrawingGame(req.params.id);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ success: true });
 });
 
@@ -149,7 +149,7 @@ router.get('/lobbies/:id', async (req, res) => {
 
 router.post('/lobbies', async (req, res) => {
   const lobby = await db.createDrawingLobby(req.body);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   res.json({ success: true, lobby });
 });
 
@@ -164,7 +164,7 @@ router.delete('/lobbies/:id', async (req, res) => {
   pictionaryGames.delete(lobbyId);
   
   await db.deleteDrawingLobby(lobbyId);
-  if (broadcastGlobalState) await broadcastGlobalState();
+  if (broadcastFunctions?.global) await broadcastFunctions.global();
   
   // Notifier tous les participants
   if (io) {
@@ -178,7 +178,7 @@ router.delete('/lobbies/:id', async (req, res) => {
 router.post('/lobbies/:id/archive', async (req, res) => {
   const lobby = await db.archiveDrawingLobby(req.params.id);
   if (lobby) {
-    if (broadcastGlobalState) await broadcastGlobalState();
+    if (broadcastFunctions?.global) await broadcastFunctions.global();
     res.json({ success: true, lobby });
   } else {
     res.status(404).json({ success: false, message: 'Lobby non trouvé' });
