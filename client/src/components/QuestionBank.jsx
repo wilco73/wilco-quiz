@@ -385,12 +385,20 @@ const QuestionBank = ({ questions, onSave }) => {
         }
       }
 
-      // Fermer la modale et rafraîchir
+      // Fermer la modale et rafraîchir les données localement
       setImportModal({ isOpen: false, questions: [], isImporting: false, progress: 0 });
       
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Récupérer les questions mises à jour depuis le serveur
+      try {
+        const response = await fetch(`${API_URL}/questions`);
+        if (response.ok) {
+          const updatedQuestions = await response.json();
+          setLocalQuestions(updatedQuestions);
+          console.log(`[IMPORT] Questions rafraîchies: ${updatedQuestions.length}`);
+        }
+      } catch (err) {
+        console.error('Erreur rafraîchissement questions:', err);
+      }
 
     } catch (error) {
       console.error('Erreur import CSV:', error);
