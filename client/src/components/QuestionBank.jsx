@@ -325,12 +325,19 @@ const QuestionBank = ({ questions, onSave }) => {
             progress: Math.round((i / batches.length) * 100) 
           }));
 
+          // Pour le mode 'replace', seul le premier batch efface tout
+          // Pour les modes 'update' et 'add', tous les batches utilisent le même mode
+          let batchMode = mode;
+          if (mode === 'replace' && !isFirstBatch) {
+            batchMode = 'add'; // Après le premier batch qui a tout effacé, on ajoute
+          }
+
           const response = await fetch(`${API_URL}/questions/merge`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               questions: batch,
-              mode: isFirstBatch ? mode : 'add'
+              mode: batchMode
             })
           });
 
