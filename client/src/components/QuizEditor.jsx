@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Save, X, Plus, Trash2, ChevronDown, ChevronUp, Shuffle, Filter, Eye, EyeOff } from 'lucide-react';
+import { Save, X, Plus, Trash2, ChevronDown, ChevronUp, Shuffle, Filter, Eye, EyeOff, Tag } from 'lucide-react';
 import { useToast } from './ToastProvider';
 
 const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
@@ -10,12 +10,14 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
   const [showQuestionPicker, setShowQuestionPicker] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [selectedTags, setSelectedTags] = useState([]); // Nouveau: filtre par tags
   const toast = useToast();
 
   // États pour sélection aléatoire
   const [showRandomPicker, setShowRandomPicker] = useState(false);
   const [randomCount, setRandomCount] = useState(5);
   const [randomCategory, setRandomCategory] = useState('');
+  const [randomTags, setRandomTags] = useState([]); // Nouveau: tags pour aléatoire
   
   // ✅ NOUVEAU: Affichage des réponses
   const [showAnswers, setShowAnswers] = useState(true);
@@ -24,14 +26,31 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
     !selectedQuestions.find(sq => sq.id === q.id)
   );
 
+  // Extraire tous les tags uniques
+  const allTags = [...new Set(
+    questions.flatMap(q => q.tags || []).filter(Boolean)
+  )].sort();
+
   const filteredQuestions = availableQuestions.filter(q => {
     const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          q.category?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !categoryFilter || q.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    // Nouveau: filtre par tags (la question doit avoir TOUS les tags sélectionnés)
+    const matchesTags = selectedTags.length === 0 || 
+                        selectedTags.every(tag => (q.tags || []).includes(tag));
+    return matchesSearch && matchesCategory && matchesTags;
   });
 
   const allCategories = [...new Set(questions.map(q => q.category).filter(Boolean))].sort();
+
+  // Toggle un tag dans la sélection
+  const toggleTag = (tag, tagList, setTagList) => {
+    if (tagList.includes(tag)) {
+      setTagList(tagList.filter(t => t !== tag));
+    } else {
+      setTagList([...tagList, tag]);
+    }
+  };
 
   const addQuestion = (question) => {
     setSelectedQuestions([...selectedQuestions, question]);
@@ -56,6 +75,11 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
     
     if (randomCategory) {
       pool = pool.filter(q => q.category === randomCategory);
+    }
+    
+    // Nouveau: filtre par tags pour aléatoire
+    if (randomTags.length > 0) {
+      pool = pool.filter(q => randomTags.every(tag => (q.tags || []).includes(tag)));
     }
     
     if (pool.length === 0) {
@@ -282,6 +306,39 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
               </select>
             </div>
             
+            {/* Filtre par tags pour aléatoire */}
+            {allTags.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Tag className="w-4 h-4 text-gray-500" />
+                  <label className="text-sm font-semibold dark:text-gray-300">Tags (optionnel)</label>
+                  {randomTags.length > 0 && (
+                    <button
+                      onClick={() => setRandomTags([])}
+                      className="text-xs text-red-500 hover:text-red-700"
+                    >
+                      Effacer
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
+                  {allTags.map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => toggleTag(tag, randomTags, setRandomTags)}
+                      className={`px-2 py-1 text-xs rounded-full transition-colors ${
+                        randomTags.includes(tag)
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-blue-200 dark:hover:bg-blue-800'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <button
               onClick={addRandomQuestions}
               className="w-full py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 flex items-center justify-center gap-2"
@@ -314,6 +371,45 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
+          </div>
+          
+          {/* Filtre par tags */}
+          {allTags.length > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Tag className="w-4 h-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filtrer par tags :</span>
+                {selectedTags.length > 0 && (
+                  <button
+                    onClick={() => setSelectedTags([])}
+                    className="text-xs text-red-500 hover:text-red-700"
+                  >
+                    Effacer
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {allTags.map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => toggleTag(tag, selectedTags, setSelectedTags)}
+                    className={`px-2 py-1 text-xs rounded-full transition-colors ${
+                      selectedTags.includes(tag)
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-purple-200 dark:hover:bg-purple-800'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            {filteredQuestions.length} question(s) disponible(s)
+            {selectedTags.length > 0 && ` avec ${selectedTags.length} tag(s) sélectionné(s)`}
+          </p>
           </div>
           
           <div className="max-h-96 overflow-y-auto space-y-2">
