@@ -410,7 +410,6 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
             {filteredQuestions.length} question(s) disponible(s)
             {selectedTags.length > 0 && ` avec ${selectedTags.length} tag(s) sélectionné(s)`}
           </p>
-          </div>
           
           <div className="max-h-96 overflow-y-auto space-y-2">
             {filteredQuestions.length === 0 ? (
