@@ -153,6 +153,47 @@ const QuestionBank = ({ questions, onSave }) => {
 
         console.log(`Délimiteur détecté: "${detectedDelimiter}"`);
 
+        // Parser les headers pour déterminer l'ordre des colonnes
+        const headers = parseCSVLine(firstLine, detectedDelimiter).map(h => h.toLowerCase().trim());
+        console.log('Headers détectés:', headers);
+
+        // Mapper les colonnes par nom (insensible à la casse)
+        const getColumnIndex = (possibleNames) => {
+          for (const name of possibleNames) {
+            const idx = headers.findIndex(h => h.includes(name.toLowerCase()));
+            if (idx !== -1) return idx;
+          }
+          return -1;
+        };
+
+        const colMap = {
+          id: getColumnIndex(['id']),
+          type: getColumnIndex(['type']),
+          category: getColumnIndex(['catégorie', 'categorie', 'category']),
+          tags: getColumnIndex(['tags', 'tag']),
+          text: getColumnIndex(['question', 'text', 'texte']),
+          answer: getColumnIndex(['réponse', 'reponse', 'answer']),
+          media: getColumnIndex(['média', 'media', 'url']),
+          mediaType: getColumnIndex(['type média', 'type media', 'mediatype']),
+          points: getColumnIndex(['points', 'point']),
+          timer: getColumnIndex(['timer', 'temps', 'secondes']),
+          choice1: getColumnIndex(['choix 1', 'choice 1', 'choix1']),
+          choice2: getColumnIndex(['choix 2', 'choice 2', 'choix2']),
+          choice3: getColumnIndex(['choix 3', 'choice 3', 'choix3']),
+          choice4: getColumnIndex(['choix 4', 'choice 4', 'choix4']),
+          choice5: getColumnIndex(['choix 5', 'choice 5', 'choix5']),
+          choice6: getColumnIndex(['choix 6', 'choice 6', 'choix6']),
+          correctChoice: getColumnIndex(['index réponse', 'index reponse', 'correct', 'correctchoice'])
+        };
+
+        console.log('Mapping colonnes:', colMap);
+
+        // Vérifier que les colonnes essentielles sont présentes
+        if (colMap.text === -1) {
+          toast.error('Colonne "Question" introuvable dans le fichier');
+          return;
+        }
+
         const dataLines = lines.slice(1);
         const importedQuestions = [];
         let errors = [];
@@ -162,42 +203,43 @@ const QuestionBank = ({ questions, onSave }) => {
           try {
             const values = parseCSVLine(line, detectedDelimiter);
 
-            if (values.length < 7) {
-              errors.push(`Ligne ${index + 2}: Nombre de colonnes insuffisant`);
-              return;
-            }
+            // Extraire les valeurs selon le mapping
+            const getValue = (key) => {
+              const idx = colMap[key];
+              return idx !== -1 && values[idx] ? values[idx].trim() : '';
+            };
 
-            const [
-              id, type, category, tagsStr, text, answer, media, mediaType,
-              points, timer,
-              choice1, choice2, choice3, choice4, choice5, choice6,
-              correctChoiceIndex
-            ] = values;
-
-            if (!text || !text.trim()) {
+            const text = getValue('text');
+            if (!text) {
               errors.push(`Ligne ${index + 2}: Question vide`);
               return;
             }
 
+            const tagsStr = getValue('tags');
             const tags = tagsStr ? tagsStr.split('|').map(t => t.trim()).filter(Boolean) : [];
 
             const question = {
-              id: id && id.trim() ? id.trim() : `import-${Date.now()}-${index}`,
-              type: type || 'text',
-              category: category || '',
+              id: getValue('id') || `import-${Date.now()}-${index}`,
+              type: getValue('type') || 'text',
+              category: getValue('category') || '',
               tags: tags,
-              text: text.trim(),
-              answer: answer?.trim() || '',
-              media: media || '',
-              mediaType: mediaType || '',
-              points: parseInt(points) || 1,
-              timer: parseInt(timer) || 0
+              text: text,
+              answer: getValue('answer') || '',
+              media: getValue('media') || '',
+              mediaType: getValue('mediaType') || '',
+              points: parseInt(getValue('points')) || 1,
+              timer: parseInt(getValue('timer')) || 0
             };
 
             if (question.type === 'qcm') {
-              const choices = [choice1, choice2, choice3, choice4, choice5, choice6]
-                .filter(c => c && c.trim())
-                .map(c => c.trim());
+              const choices = [
+                getValue('choice1'),
+                getValue('choice2'),
+                getValue('choice3'),
+                getValue('choice4'),
+                getValue('choice5'),
+                getValue('choice6')
+              ].filter(c => c && c.trim()).map(c => c.trim());
 
               if (choices.length < 2) {
                 errors.push(`Ligne ${index + 2}: QCM doit avoir au moins 2 choix`);
@@ -205,7 +247,7 @@ const QuestionBank = ({ questions, onSave }) => {
               }
 
               question.choices = choices;
-              question.correctChoice = parseInt(correctChoiceIndex) || 0;
+              question.correctChoice = parseInt(getValue('correctChoice')) || 0;
 
               if (question.correctChoice >= choices.length) {
                 question.correctChoice = 0;
@@ -547,7 +589,7 @@ const QuestionBank = ({ questions, onSave }) => {
         const updatedQuestion = { ...formData, id: editingQuestion.id };
 
         const response = await fetch(
-          `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/${editingQuestion.id}`,
+          `${API_URL}/questions/${editingQuestion.id}`,
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -574,7 +616,7 @@ const QuestionBank = ({ questions, onSave }) => {
         };
 
         const response = await fetch(
-          `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/add`,
+          `${API_URL}/questions/add`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -629,7 +671,7 @@ const QuestionBank = ({ questions, onSave }) => {
 
     try {
       const response = await fetch(
-        `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/questions/${id}`,
+        `${API_URL}/questions/${id}`,
         { method: 'DELETE' }
       );
 
