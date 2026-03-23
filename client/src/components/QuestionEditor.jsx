@@ -49,7 +49,7 @@ const QuestionEditor = ({
         tags: question.tags || [],
         tagsInput: '',
         choices: question.choices || ['', '', '', ''],
-        correctChoice: question.correctChoice || 0
+        correctChoice: parseInt(question.correctChoice, 10) || 0
       });
     } else {
       resetForm();

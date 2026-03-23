@@ -1333,28 +1333,31 @@ const QuestionBank = ({ questions, onSave }) => {
                   <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                     <p className="font-semibold mb-1">Choix :</p>
                     <ul className="ml-4 space-y-1">
-                      {question.choices?.map((choice, idx) => (
-                        <li 
-                          key={idx} 
-                          className={`flex items-center gap-2 ${
-                            idx === question.correctChoice 
-                              ? 'text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded -ml-2' 
-                              : ''
-                          }`}
-                        >
-                          {idx === question.correctChoice ? (
-                            <span className="text-green-500">✓</span>
-                          ) : (
-                            <span className="text-gray-400">○</span>
-                          )}
-                          {choice}
-                          {idx === question.correctChoice && (
-                            <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded ml-2">
-                              Bonne réponse
-                            </span>
-                          )}
-                        </li>
-                      ))}
+                      {question.choices?.map((choice, idx) => {
+                        const isCorrect = idx === parseInt(question.correctChoice, 10);
+                        return (
+                          <li 
+                            key={idx} 
+                            className={`flex items-center gap-2 ${
+                              isCorrect 
+                                ? 'text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded -ml-2' 
+                                : ''
+                            }`}
+                          >
+                            {isCorrect ? (
+                              <span className="text-green-500">✓</span>
+                            ) : (
+                              <span className="text-gray-400">○</span>
+                            )}
+                            {choice}
+                            {isCorrect && (
+                              <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded ml-2">
+                                Bonne réponse
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 ) : (
