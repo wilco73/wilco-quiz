@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download, ZoomIn } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import QuestionEditor from './QuestionEditor';
 import ImportModal from './ImportModal';
@@ -19,6 +19,7 @@ const QuestionBank = ({ questions, onSave }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [questionsPerPage, setQuestionsPerPage] = useState(25);
   const [csvDelimiter, setCsvDelimiter] = useState(',');
+  const [zoomedImage, setZoomedImage] = useState(null); // Zoom image
   const fileInputRef = useRef(null);
   const toast = useToast();
   
@@ -776,12 +777,16 @@ const QuestionBank = ({ questions, onSave }) => {
               <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-2">
                 <Eye className="w-4 h-4" />
                 Aperçu de l'image
+                <span className="text-purple-500 ml-auto flex items-center gap-1">
+                  <ZoomIn className="w-3 h-3" /> Cliquer pour agrandir
+                </span>
               </p>
               <img
                 key={mediaKey}
                 src={url}
                 alt="Preview"
-                className="max-w-full max-h-64 rounded border border-gray-300 dark:border-gray-600"
+                className="max-w-full max-h-64 rounded border border-gray-300 dark:border-gray-600 cursor-pointer hover:opacity-80 transition"
+                onClick={() => setZoomedImage(url)}
                 onError={(e) => {
                   e.target.style.display = 'none';
 
@@ -1326,11 +1331,28 @@ const QuestionBank = ({ questions, onSave }) => {
 
                 {question.type === 'qcm' ? (
                   <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                    <p className="font-semibold">Choix :</p>
-                    <ul className="ml-4">
-                      {question.choices ?.map((choice, idx) => (
-                        <li key={idx} className={idx === question.correctChoice ? 'text-green-600 dark:text-green-400 font-bold' : ''}>
-                          {idx === question.correctChoice ? '✓ ' : '• '}{choice}
+                    <p className="font-semibold mb-1">Choix :</p>
+                    <ul className="ml-4 space-y-1">
+                      {question.choices?.map((choice, idx) => (
+                        <li 
+                          key={idx} 
+                          className={`flex items-center gap-2 ${
+                            idx === question.correctChoice 
+                              ? 'text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded -ml-2' 
+                              : ''
+                          }`}
+                        >
+                          {idx === question.correctChoice ? (
+                            <span className="text-green-500">✓</span>
+                          ) : (
+                            <span className="text-gray-400">○</span>
+                          )}
+                          {choice}
+                          {idx === question.correctChoice && (
+                            <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded ml-2">
+                              Bonne réponse
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -1372,6 +1394,29 @@ const QuestionBank = ({ questions, onSave }) => {
         )}
       </div>
       </div>
+      
+      {/* Modale de zoom image */}
+      {zoomedImage && (
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setZoomedImage(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]">
+            <button
+              onClick={() => setZoomedImage(null)}
+              className="absolute -top-10 right-0 text-white hover:text-gray-300 transition"
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <img
+              src={zoomedImage}
+              alt="Zoom"
+              className="max-w-full max-h-[85vh] object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
