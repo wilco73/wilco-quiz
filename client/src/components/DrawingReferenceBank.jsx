@@ -4,6 +4,7 @@ import {
   X, Check, CheckSquare, Square, Image
 } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import Pagination from './Pagination';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -13,6 +14,10 @@ const DrawingReferenceBank = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [csvDelimiter, setCsvDelimiter] = useState(';');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
   
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selectMode, setSelectMode] = useState(false);
@@ -51,6 +56,17 @@ const DrawingReferenceBank = () => {
       return matchesSearch && matchesCategory;
     });
   }, [references, searchTerm, filterCategory]);
+
+  // Reset page quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterCategory]);
+
+  // Pagination des références filtrées
+  const paginatedReferences = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredReferences.slice(start, start + itemsPerPage);
+  }, [filteredReferences, currentPage, itemsPerPage]);
   
   const categories = useMemo(() => {
     return [...new Set(references.map(r => r.category).filter(Boolean))].sort();
@@ -494,6 +510,18 @@ const DrawingReferenceBank = () => {
       
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
         <h3 className="text-lg font-bold dark:text-white mb-4">Images ({filteredReferences.length})</h3>
+        
+        {/* Pagination en haut */}
+        {filteredReferences.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredReferences.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+          />
+        )}
+        
         {filteredReferences.length === 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
             <Image className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -501,7 +529,7 @@ const DrawingReferenceBank = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredReferences.map(ref => (
+            {paginatedReferences.map(ref => (
               <div key={ref.id} className={`border rounded-lg overflow-hidden transition ${
                 selectMode && selectedIds.has(ref.id) ? 'border-purple-500 ring-2 ring-purple-300' : 'border-gray-200 dark:border-gray-700'}`}>
                 <div className="aspect-square bg-gray-100 dark:bg-gray-700 relative cursor-pointer"
@@ -536,6 +564,17 @@ const DrawingReferenceBank = () => {
               </div>
             ))}
           </div>
+        )}
+        
+        {/* Pagination en bas */}
+        {filteredReferences.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredReferences.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+          />
         )}
       </div>
     </div>

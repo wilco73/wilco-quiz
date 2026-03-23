@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import ImportModal from './ImportModal';
+import Pagination from './Pagination';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -17,6 +18,10 @@ const DrawingWordBank = () => {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState('');
   const [csvDelimiter, setCsvDelimiter] = useState(';');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
   
   // Sélection multiple
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -72,6 +77,17 @@ const DrawingWordBank = () => {
       return matchesSearch && matchesCategory && matchesDifficulty;
     });
   }, [words, searchTerm, filterCategory, filterDifficulty]);
+
+  // Reset page quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterCategory, filterDifficulty]);
+
+  // Pagination des mots filtrés
+  const paginatedWords = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredWords.slice(start, start + itemsPerPage);
+  }, [filteredWords, currentPage, itemsPerPage]);
   
   // Catégories uniques
   const categories = useMemo(() => {
@@ -635,6 +651,17 @@ const DrawingWordBank = () => {
         </select>
       </div>
       
+      {/* Pagination en haut */}
+      {filteredWords.length > 0 && (
+        <Pagination
+          currentPage={currentPage}
+          totalItems={filteredWords.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={setItemsPerPage}
+        />
+      )}
+      
       {/* Liste des mots */}
       {filteredWords.length === 0 ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
@@ -643,7 +670,7 @@ const DrawingWordBank = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredWords.map(word => (
+          {paginatedWords.map(word => (
             <div
               key={word.id}
               onClick={() => selectMode && toggleSelectWord(word.id)}
@@ -707,6 +734,17 @@ const DrawingWordBank = () => {
             </div>
           ))}
         </div>
+      )}
+      
+      {/* Pagination en bas */}
+      {filteredWords.length > 0 && (
+        <Pagination
+          currentPage={currentPage}
+          totalItems={filteredWords.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={setItemsPerPage}
+        />
       )}
       
       {/* Modal formulaire */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Users, Crown, Shield, User, Search, ChevronDown, Check, X, RefreshCw } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import Pagination from './Pagination';
 
 const ROLES = {
   user: { label: 'Utilisateur', icon: User, color: 'gray' },
@@ -15,6 +16,11 @@ const UserManagement = ({ socket, currentUser }) => {
   const [filterRole, setFilterRole] = useState('');
   const [filterTeam, setFilterTeam] = useState('');
   const [editingUserId, setEditingUserId] = useState(null);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  
   const toast = useToast();
 
   // Charger les utilisateurs
@@ -60,6 +66,17 @@ const UserManagement = ({ socket, currentUser }) => {
       return matchesSearch && matchesRole && matchesTeam;
     });
   }, [users, searchTerm, filterRole, filterTeam]);
+
+  // Reset page quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterRole, filterTeam]);
+
+  // Pagination des utilisateurs filtrés
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredUsers.slice(start, start + itemsPerPage);
+  }, [filteredUsers, currentPage, itemsPerPage]);
 
   // Liste des équipes uniques
   const teams = useMemo(() => {
@@ -192,6 +209,19 @@ const UserManagement = ({ socket, currentUser }) => {
 
       {/* Liste des utilisateurs */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+        {/* Pagination en haut */}
+        {filteredUsers.length > 0 && (
+          <div className="px-6 border-b border-gray-200 dark:border-gray-700">
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredUsers.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={setItemsPerPage}
+            />
+          </div>
+        )}
+        
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-700">
@@ -211,7 +241,7 @@ const UserManagement = ({ socket, currentUser }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredUsers.map(user => (
+              {paginatedUsers.map(user => (
                 <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-3">
@@ -298,9 +328,18 @@ const UserManagement = ({ socket, currentUser }) => {
           </div>
         )}
         
-        <div className="px-6 py-3 bg-gray-50 dark:bg-gray-700 text-sm text-gray-600 dark:text-gray-400">
-          {filteredUsers.length} utilisateur{filteredUsers.length > 1 ? 's' : ''} affiché{filteredUsers.length > 1 ? 's' : ''}
-        </div>
+        {/* Pagination en bas */}
+        {filteredUsers.length > 0 && (
+          <div className="px-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredUsers.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={setItemsPerPage}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

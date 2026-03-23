@@ -4,6 +4,7 @@ import {
   ChevronLeft, ChevronRight, Upload, Edit2, Check, Filter
 } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import Pagination from './Pagination';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -233,6 +234,18 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
         </select>
       </div>
       
+      {/* Pagination en haut */}
+      {pagination.total > 0 && (
+        <Pagination
+          currentPage={pagination.page}
+          totalItems={pagination.total}
+          itemsPerPage={pagination.limit}
+          onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+          onItemsPerPageChange={(limit) => setPagination(prev => ({ ...prev, limit, page: 1 }))}
+          itemsPerPageOptions={[12, 24, 48, 96]}
+        />
+      )}
+      
       {/* Grille de médias */}
       {error ? (
         <div className="text-center py-12 text-red-500">
@@ -262,27 +275,16 @@ const MediaLibrary = ({ onSelectMedia, selectionMode = false, selectedMediaIds =
         </div>
       )}
       
-      {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className="flex justify-center items-center gap-4 mt-6">
-          <button
-            onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-            disabled={pagination.page === 1}
-            className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 disabled:opacity-50"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <span className="text-gray-600 dark:text-gray-400">
-            Page {pagination.page} / {pagination.totalPages}
-          </span>
-          <button
-            onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-            disabled={pagination.page === pagination.totalPages}
-            className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 disabled:opacity-50"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
+      {/* Pagination en bas */}
+      {pagination.total > 0 && (
+        <Pagination
+          currentPage={pagination.page}
+          totalItems={pagination.total}
+          itemsPerPage={pagination.limit}
+          onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+          onItemsPerPageChange={(limit) => setPagination(prev => ({ ...prev, limit, page: 1 }))}
+          itemsPerPageOptions={[12, 24, 48, 96]}
+        />
       )}
       
       {/* Modal Ajout */}
