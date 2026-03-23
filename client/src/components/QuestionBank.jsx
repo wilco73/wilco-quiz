@@ -95,6 +95,14 @@ const QuestionBank = ({ questions, onSave }) => {
     const rows = localQuestions.map(q => {
       const choices = q.type === 'qcm' ? (q.choices || []) : [];
       const tagsStr = (q.tags || []).join('|');
+      
+      // Pour les QCM, calculer l'index de la bonne réponse à partir de answer et choices
+      let correctChoiceIndex = '';
+      if (q.type === 'qcm' && choices.length > 0 && q.answer) {
+        const idx = choices.findIndex(c => c === q.answer);
+        correctChoiceIndex = idx >= 0 ? idx : 0;
+      }
+      
       return [
         q.id || '',
         q.type || 'text',
@@ -112,7 +120,7 @@ const QuestionBank = ({ questions, onSave }) => {
         choices[3] ? `"${choices[3].replace(/"/g, '""')}"` : '',
         choices[4] ? `"${choices[4].replace(/"/g, '""')}"` : '',
         choices[5] ? `"${choices[5].replace(/"/g, '""')}"` : '',
-        q.type === 'qcm' ? (q.correctChoice || 0) : ''
+        correctChoiceIndex
       ].join(delimiter);
     });
 
@@ -1334,7 +1342,8 @@ const QuestionBank = ({ questions, onSave }) => {
                     <p className="font-semibold mb-1">Choix :</p>
                     <ul className="ml-4 space-y-1">
                       {question.choices?.map((choice, idx) => {
-                        const isCorrect = idx === parseInt(question.correctChoice, 10);
+                        // La bonne réponse est celle qui correspond au champ answer
+                        const isCorrect = choice === question.answer;
                         return (
                           <li 
                             key={idx} 

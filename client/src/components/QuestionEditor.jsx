@@ -37,6 +37,14 @@ const QuestionEditor = ({
   // Initialiser le formulaire quand une question est passée
   useEffect(() => {
     if (question) {
+      const choices = question.choices || ['', '', '', ''];
+      // Calculer correctChoice à partir de answer et choices
+      let correctChoice = 0;
+      if (question.type === 'qcm' && question.answer && choices.length > 0) {
+        const idx = choices.findIndex(c => c === question.answer);
+        correctChoice = idx >= 0 ? idx : 0;
+      }
+      
       setFormData({
         text: question.text || '',
         answer: question.answer || '',
@@ -48,8 +56,8 @@ const QuestionEditor = ({
         category: question.category || '',
         tags: question.tags || [],
         tagsInput: '',
-        choices: question.choices || ['', '', '', ''],
-        correctChoice: parseInt(question.correctChoice, 10) || 0
+        choices: choices,
+        correctChoice: correctChoice
       });
     } else {
       resetForm();
