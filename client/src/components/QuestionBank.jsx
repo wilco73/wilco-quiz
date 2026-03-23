@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import QuestionEditor from './QuestionEditor';
 import ImportModal from './ImportModal';
+import Pagination from './Pagination';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -16,9 +17,9 @@ const QuestionBank = ({ questions, onSave }) => {
   const [filterTag, setFilterTag] = useState('');
   const [showPreview, setShowPreview] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [questionsPerPage, setQuestionsPerPage] = useState(25);
   const [csvDelimiter, setCsvDelimiter] = useState(',');
   const fileInputRef = useRef(null);
-  const questionsPerPage = 10;
   const toast = useToast();
   
   // État pour la modale d'import CSV
@@ -747,99 +748,9 @@ const QuestionBank = ({ questions, onSave }) => {
   const paginatedQuestions = filteredQuestions.slice(startIndex, startIndex + questionsPerPage);
 
   // Réinitialiser à la page 1 si on filtre
-  useMemo(() => {
+  useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterCategory, filterType, filterTag]);
-
-  // ✅ Pagination avec ellipsis
-  const renderPagination = () => {
-    if (totalPages <= 1) return null;
-
-    const pages = [];
-
-    // Toujours afficher la première page
-    pages.push(
-      <button
-        key={1}
-        onClick={() => setCurrentPage(1)}
-        className={`px-3 py-1 rounded ${
-          currentPage === 1
-            ? 'bg-purple-600 text-white'
-            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-          }`}
-      >
-        1
-      </button>
-    );
-
-    // Ellipsis après la première page si nécessaire
-    if (currentPage > 3 && totalPages > 5) {
-      pages.push(<span key="ellipsis1" className="px-2 text-gray-500">...</span>);
-    }
-
-    // Pages autour de la page actuelle
-    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
-      if (i > 1 && i < totalPages) {
-        pages.push(
-          <button
-            key={i}
-            onClick={() => setCurrentPage(i)}
-            className={`px-3 py-1 rounded ${
-              currentPage === i
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-              }`}
-          >
-            {i}
-          </button>
-        );
-      }
-    }
-
-    // Ellipsis avant la dernière page si nécessaire
-    if (currentPage < totalPages - 2 && totalPages > 5) {
-      pages.push(<span key="ellipsis2" className="px-2 text-gray-500">...</span>);
-    }
-
-    // Toujours afficher la dernière page
-    if (totalPages > 1) {
-      pages.push(
-        <button
-          key={totalPages}
-          onClick={() => setCurrentPage(totalPages)}
-          className={`px-3 py-1 rounded ${
-            currentPage === totalPages
-              ? 'bg-purple-600 text-white'
-              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-            }`}
-        >
-          {totalPages}
-        </button>
-      );
-    }
-
-    return (
-      <div className="flex items-center justify-center gap-2 mt-4">
-        <button
-          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-          disabled={currentPage === 1}
-          className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-
-        {pages}
-
-        <button
-          onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-          disabled={currentPage === totalPages}
-          className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-    );
-  };
 
   const getTypeIcon = (type) => {
     switch (type) {
@@ -1366,9 +1277,16 @@ const QuestionBank = ({ questions, onSave }) => {
 
       {/* Liste des questions avec pagination */}
       <div className="space-y-3">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          {filteredQuestions.length} question(s) trouvée(s) - Page {currentPage}/{totalPages}
-        </p>
+        {/* Pagination en haut */}
+        {filteredQuestions.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredQuestions.length}
+            itemsPerPage={questionsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setQuestionsPerPage}
+          />
+        )}
 
         {paginatedQuestions.map(question => (
           <div key={question.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md transition bg-white dark:bg-gray-700">
@@ -1441,10 +1359,18 @@ const QuestionBank = ({ questions, onSave }) => {
             </div>
           </div>
         ))}
+        
+        {/* Pagination en bas */}
+        {filteredQuestions.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredQuestions.length}
+            itemsPerPage={questionsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setQuestionsPerPage}
+          />
+        )}
       </div>
-
-      {/* Pagination */}
-      {renderPagination()}
       </div>
     </div>
   );
