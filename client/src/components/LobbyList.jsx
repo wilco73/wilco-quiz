@@ -56,35 +56,35 @@ const LobbyList = ({
   }, []);
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto px-2 sm:px-0">
       {/* Message si pas d'équipe */}
       {!currentUser?.teamName && (
-        <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 mb-6 border-2 border-orange-200 dark:border-orange-700">
-          <p className="text-orange-800 dark:text-orange-300">
+        <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 border-2 border-orange-200 dark:border-orange-700">
+          <p className="text-orange-800 dark:text-orange-300 text-sm sm:text-base">
             ⚠️ Vous n'êtes pas encore dans une équipe. Allez dans <strong>Profil</strong> pour rejoindre ou créer une équipe.
           </p>
         </div>
       )}
 
       {/* Section Quiz */}
-      <section className="mb-8">
-        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-          <Play className="w-5 h-5 text-purple-600" />
+      <section className="mb-6 sm:mb-8">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
+          <Play className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
           Quiz disponibles
         </h2>
         
         {availableLobbies.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center shadow-sm">
-            <Clock className="w-12 h-12 mx-auto text-gray-400 mb-3" />
-            <p className="text-gray-500 dark:text-gray-400">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 sm:p-8 text-center shadow-sm">
+            <Clock className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-gray-400 mb-3" />
+            <p className="text-gray-500 dark:text-gray-400 text-sm sm:text-base">
               Aucun quiz disponible pour le moment
             </p>
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+            <p className="text-xs sm:text-sm text-gray-400 dark:text-gray-500 mt-1">
               Un administrateur doit créer une salle
             </p>
           </div>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-3 sm:gap-4">
             {availableLobbies.map(lobby => {
               const quiz = quizzes.find(q => q.id === lobby.quizId);
               const isPlaying = lobby.status === 'playing';
@@ -101,39 +101,41 @@ const LobbyList = ({
                     ${lobby.trainingMode ? 'border-2 border-orange-300 dark:border-orange-600' : ''}
                   `}
                 >
-                  <div className="p-5">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                          {quiz?.title || 'Quiz'}
+                  <div className="p-3 sm:p-5">
+                    {/* Header du lobby */}
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex flex-wrap items-center gap-2">
+                          <span className="truncate">{quiz?.title || 'Quiz'}</span>
                           {lobby.trainingMode && (
-                            <span className="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs rounded-full font-medium">
+                            <span className="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs rounded-full font-medium whitespace-nowrap">
                               Entraînement
                             </span>
                           )}
                         </h3>
                         {quiz?.description && (
-                          <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
+                          <p className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm mt-1 line-clamp-2">
                             {quiz.description}
                           </p>
                         )}
                       </div>
                       
                       {isPlaying && (
-                        <span className="px-3 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-sm rounded-full font-semibold animate-pulse">
+                        <span className="self-start px-2 sm:px-3 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-xs sm:text-sm rounded-full font-semibold animate-pulse whitespace-nowrap">
                           🔴 En cours
                         </span>
                       )}
                     </div>
                     
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                    {/* Footer avec infos et bouton */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                         <span className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
+                          <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           {lobby.participants?.length || 0} participant{(lobby.participants?.length || 0) > 1 ? 's' : ''}
                         </span>
                         <span className="flex items-center gap-1">
-                          {lobby.shuffled ? <Shuffle className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
+                          {lobby.shuffled ? <Shuffle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                           {totalQ} questions
                         </span>
                         {isPlaying && (
@@ -147,7 +149,7 @@ const LobbyList = ({
                         onClick={() => onJoinLobby(lobby.id)}
                         disabled={isPlaying && !isInLobby}
                         className={`
-                          px-4 py-2 rounded-lg font-semibold transition-colors
+                          w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-lg font-semibold transition-colors text-sm sm:text-base active:scale-[0.98]
                           ${isInLobby 
                             ? 'bg-green-600 hover:bg-green-700 text-white'
                             : isPlaying
@@ -168,36 +170,36 @@ const LobbyList = ({
       </section>
 
       {/* Section Jeux de dessin */}
-      <section>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-          <Palette className="w-5 h-5 text-pink-600" />
+      <section className="mb-6 sm:mb-8">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
+          <Palette className="w-4 h-4 sm:w-5 sm:h-5 text-pink-600" />
           Jeux de dessin
         </h2>
         
         {/* Boutons de création - visibles si l'utilisateur a une équipe */}
         {currentUser?.teamName && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
             <button
               onClick={() => onJoinDrawingLobby({ action: 'create', gameType: 'pictionary' })}
-              className="bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl shadow-sm hover:shadow-md p-4 transition-all text-left"
+              className="bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl shadow-sm hover:shadow-md p-3 sm:p-4 transition-all text-left active:scale-[0.98]"
             >
-              <div className="flex items-center gap-3 text-white">
-                <div className="text-3xl">🎨</div>
+              <div className="flex items-center gap-2 sm:gap-3 text-white">
+                <div className="text-2xl sm:text-3xl">🎨</div>
                 <div>
-                  <h4 className="text-lg font-bold">Pictionary</h4>
-                  <p className="text-white/80 text-sm">Dessinez pour faire deviner</p>
+                  <h4 className="text-base sm:text-lg font-bold">Pictionary</h4>
+                  <p className="text-white/80 text-xs sm:text-sm">Dessinez pour faire deviner</p>
                 </div>
               </div>
             </button>
             <button
               onClick={() => onJoinDrawingLobby({ action: 'create', gameType: 'relay' })}
-              className="bg-gradient-to-r from-green-500 to-teal-500 rounded-xl shadow-sm hover:shadow-md p-4 transition-all text-left"
+              className="bg-gradient-to-r from-green-500 to-teal-500 rounded-xl shadow-sm hover:shadow-md p-3 sm:p-4 transition-all text-left active:scale-[0.98]"
             >
-              <div className="flex items-center gap-3 text-white">
-                <div className="text-3xl">🔄</div>
+              <div className="flex items-center gap-2 sm:gap-3 text-white">
+                <div className="text-2xl sm:text-3xl">🔄</div>
                 <div>
-                  <h4 className="text-lg font-bold">Passe-moi le Relais</h4>
-                  <p className="text-white/80 text-sm">Reproduisez de mémoire</p>
+                  <h4 className="text-base sm:text-lg font-bold">Passe-moi le Relais</h4>
+                  <p className="text-white/80 text-xs sm:text-sm">Reproduisez de mémoire</p>
                 </div>
               </div>
             </button>
@@ -206,9 +208,9 @@ const LobbyList = ({
 
         {/* Message si pas d'équipe et pas de lobbies */}
         {!currentUser?.teamName && drawingLobbies.length === 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center shadow-sm">
-            <Palette className="w-12 h-12 mx-auto text-gray-400 mb-3" />
-            <p className="text-gray-500 dark:text-gray-400">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 sm:p-8 text-center shadow-sm">
+            <Palette className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-gray-400 mb-3" />
+            <p className="text-gray-500 dark:text-gray-400 text-sm sm:text-base">
               Rejoignez une équipe pour créer ou rejoindre un jeu de dessin
             </p>
           </div>
@@ -216,14 +218,14 @@ const LobbyList = ({
         
         {/* Liste des lobbies existants */}
         {drawingLobbies.length === 0 && currentUser?.teamName ? (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center shadow-sm">
-            <Palette className="w-12 h-12 mx-auto text-gray-400 mb-3" />
-            <p className="text-gray-500 dark:text-gray-400">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 sm:p-8 text-center shadow-sm">
+            <Palette className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-gray-400 mb-3" />
+            <p className="text-gray-500 dark:text-gray-400 text-sm sm:text-base">
               Aucune partie en cours — créez-en une !
             </p>
           </div>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-3 sm:gap-4">
             {drawingLobbies.map(lobby => {
               const isPlaying = lobby.status === 'playing';
               const gameType = lobby.config?.gameType;
@@ -245,9 +247,9 @@ const LobbyList = ({
                     }
                   `}
                 >
-                  <div className="p-5">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
+                  <div className="p-3 sm:p-5">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
                             isRelay 
@@ -267,7 +269,7 @@ const LobbyList = ({
                             </span>
                           )}
                         </div>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-1">
+                        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mt-1 truncate">
                           {lobby.title || `Partie ${gameLabel}`}
                         </h3>
                       </div>
@@ -275,14 +277,14 @@ const LobbyList = ({
                     
                     {/* Mots custom */}
                     {lobby.custom_words?.length > 0 && (
-                      <p className="text-sm text-purple-600 dark:text-purple-400 mb-2">
+                      <p className="text-xs sm:text-sm text-purple-600 dark:text-purple-400 mb-2">
                         📝 {lobby.custom_words.length} mot(s) personnalisé(s)
                       </p>
                     )}
                     
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                        <Users className="w-4 h-4" />
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <span className="flex items-center gap-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                        <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         {lobby.participants?.length || 0} joueur{(lobby.participants?.length || 0) > 1 ? 's' : ''}
                       </span>
                       
@@ -291,7 +293,7 @@ const LobbyList = ({
                           onClick={() => onJoinDrawingLobby(lobby)}
                           disabled={isPlaying && !isInLobby}
                           className={`
-                            px-4 py-2 rounded-lg font-semibold transition-colors
+                            w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-lg font-semibold transition-colors text-sm sm:text-base active:scale-[0.98]
                             ${isInLobby 
                               ? 'bg-green-600 hover:bg-green-700 text-white'
                               : isPlaying
@@ -305,7 +307,7 @@ const LobbyList = ({
                           {isInLobby ? 'Rejoindre' : isPlaying ? 'En cours...' : 'Jouer'}
                         </button>
                       ) : (
-                        <p className="text-orange-600 dark:text-orange-400 text-sm">
+                        <p className="text-orange-600 dark:text-orange-400 text-xs sm:text-sm">
                           Rejoignez une équipe d'abord
                         </p>
                       )}
@@ -320,13 +322,13 @@ const LobbyList = ({
 
       {/* Section Cases Mystères */}
       {mysteryLobbies.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-            <Grid className="w-5 h-5 text-indigo-600" />
+        <section className="mb-6 sm:mb-8">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
+            <Grid className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
             Cases Mystères
           </h2>
           
-          <div className="grid gap-4">
+          <div className="grid gap-3 sm:gap-4">
             {mysteryLobbies.map(lobby => {
               const isPlaying = lobby.status === 'playing';
               const isInLobby = lobby.participants?.some(p => p.odId === currentUser?.id);
@@ -346,29 +348,29 @@ const LobbyList = ({
                     ${isPlaying ? 'ring-2 ring-indigo-400 dark:ring-indigo-500' : ''}
                   `}
                 >
-                  <div className="p-5">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                          <Grid className="w-5 h-5 text-indigo-600" />
-                          {lobby.gridTitle || 'Cases Mystères'}
+                  <div className="p-3 sm:p-5">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          <Grid className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
+                          <span className="truncate">{lobby.gridTitle || 'Cases Mystères'}</span>
                         </h3>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
+                        <p className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm mt-1">
                           {totalCells} cases à découvrir
                         </p>
                       </div>
                       
                       {isPlaying && (
-                        <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-sm rounded-full font-semibold animate-pulse">
+                        <span className="self-start px-2 sm:px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-xs sm:text-sm rounded-full font-semibold animate-pulse whitespace-nowrap">
                           🔮 En cours
                         </span>
                       )}
                     </div>
                     
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                         <span className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
+                          <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           {lobby.participants?.length || 0} joueur{(lobby.participants?.length || 0) > 1 ? 's' : ''}
                         </span>
                         {isPlaying && totalCells > 0 && (
@@ -381,7 +383,7 @@ const LobbyList = ({
                       <button
                         onClick={() => onJoinMysteryLobby?.(lobby)}
                         className={`
-                          px-4 py-2 rounded-lg font-semibold transition-colors
+                          w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-lg font-semibold transition-colors text-sm sm:text-base active:scale-[0.98]
                           ${isInLobby 
                             ? 'bg-green-600 hover:bg-green-700 text-white'
                             : 'bg-indigo-600 hover:bg-indigo-700 text-white'
