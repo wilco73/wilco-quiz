@@ -9,18 +9,16 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
   const [localTimeRemaining, setLocalTimeRemaining] = useState(null);
   const [showAnswers, setShowAnswers] = useState(false);
   const joinedLobbyRef = useRef(null);
-  const [pastedParticipants, setPastedParticipants] = useState({}); // { odId: { questionId: true } }
-  const [zoomedImage, setZoomedImage] = useState(null); // URL de l'image zoomée
+  const [pastedParticipants, setPastedParticipants] = useState({});
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   // Rejoindre la room du lobby actif pour recevoir les events timer
   useEffect(() => {
     if (activeLobby && socket) {
       if (joinedLobbyRef.current !== activeLobby.id) {
-        // Quitter l'ancienne room si necessaire
         if (joinedLobbyRef.current) {
           socket.leaveMonitoring(joinedLobbyRef.current);
         }
-        // Rejoindre la nouvelle room
         socket.joinMonitoring(activeLobby.id);
         joinedLobbyRef.current = activeLobby.id;
         console.log('[MONITORING] Rejoint room:', activeLobby.id);
@@ -115,7 +113,6 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
       return;
     }
 
-    // Utiliser timeRemaining du lobby comme valeur initiale
     if (localTimeRemaining === null && activeLobby.timeRemaining !== undefined) {
       setLocalTimeRemaining(activeLobby.timeRemaining);
     }
@@ -123,14 +120,14 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
 
   if (!activeLobby) {
     return (
-      <div className="space-y-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-          <h3 className="text-2xl font-bold dark:text-white">Suivi en direct</h3>
+      <div className="space-y-4 sm:space-y-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+          <h3 className="text-xl sm:text-2xl font-bold dark:text-white">Suivi en direct</h3>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-12 text-center">
-          <Eye className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-          <p className="text-xl text-gray-600 dark:text-gray-400">Aucun quiz en cours</p>
-          <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Démarrez un quiz depuis le tableau de bord</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 sm:p-12 text-center">
+          <Eye className="w-12 h-12 sm:w-16 sm:h-16 mx-auto text-gray-400 mb-4" />
+          <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400">Aucun quiz en cours</p>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-500 mt-2">Démarrez un quiz depuis le tableau de bord</p>
         </div>
       </div>
     );
@@ -138,7 +135,6 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
 
   const quiz = quizzes.find(q => q.id === activeLobby.quizId);
   
-  // ✅ Support du mélange aléatoire
   const questions = activeLobby.shuffled && activeLobby.shuffledQuestions 
     ? activeLobby.shuffledQuestions 
     : quiz?.questions || [];
@@ -152,27 +148,28 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
   const hasTimer = currentQuestion?.timer > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <audio ref={audioRef} src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZRA0PVq3n77BdGAg+ltrzxnMpBSl+zPLaizsIGGS57OihUBELTKXh8bllHAU2jdXzzn0vBSJ1xe/glEILEly26+ujVRUJQZzd8sFuJAUuhM/z1YU2Bhxqvu7mnEgODVKq5O+2Yh0FO5LY88p1KwUme8rx3I4+CRZiturqpVITC0mi4PK8aB8FM4nU8tGAMQYfb8Tv45ZFDBFYr+fxsV8aBTqU2vPJdC0FKoHO8t2NOwgZabvt56FQEQtMpeLysGQcBTeQ1/POgTEGI3bG8OCWQQoSXbPq7KpYFAlBoN3zv2wiBTOJz/PWhTYGHWy+7+OaSQ4PVqzm8K9gHAU7kdj0yHUsBSh+zPDckD4IGmq97uit0xQLTqXk87BqIAU1kNf0zX4tBSN0yO/hlUMLElyw6+ypVhQJQZzd88FtIgU0iM/z1YU2BRxsu+7imUkNCVOq5O+wXx4FO5HX9MlzKgUqgcvz3I4+CRlpu+7knFIRC06k4fO0aB4FM4nU89GAMQYgccTv45VFCxJctuvqpVIVCUGc3vO+biMFMojO89aGNQYfbsLu4ppICglSrOPvr18dBTuR2fPJcSsFLIHL8t2OOgcZa7zq46hSEQxNpuLxt2smBTWP1vPQgCwGI3TH7+CVRQoSX7Xp66lUFglBoN3yvmwhBTOJzfPWhTUHHm3A7uKZSAgPU6vj769hHAU6j9jzx3QtBSiByvHejz0HGWm86+WhUhALTKPi8bZnIAU0jdXy0H4qBSF0xPDekkMJEl2y6uqnUxUJQJzd8sFsIQYzhc3z1YU1Bh1sw+7jm0kNDVKr5O+vYRwFOY/Y88lzKwcogMvx3I4+CRhr" />
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <div className="flex justify-between items-start mb-4">
-          <div className="flex-1">
-            <h3 className="text-2xl font-bold mb-2 dark:text-white">{quiz?.title}</h3>
-            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+      {/* Header avec titre et boutons */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-xl sm:text-2xl font-bold mb-2 dark:text-white truncate">{quiz?.title}</h3>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
               <div className="flex items-center gap-1">
                 <Trophy className="w-4 h-4" />
-                <span>Question {currentQuestionIndex + 1} / {questions.length}</span>
+                <span>Q{currentQuestionIndex + 1}/{questions.length}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Users className="w-4 h-4" />
-                <span>{answeredCount} / {totalParticipants} réponses</span>
+                <span>{answeredCount}/{totalParticipants} réponses</span>
               </div>
               {hasTimer && localTimeRemaining !== null && (
                 <div className="flex items-center gap-1">
                   <Clock className={`w-4 h-4 ${localTimeRemaining <= 5 ? 'text-red-600 dark:text-red-400 animate-pulse' : 'text-blue-600 dark:text-blue-400'}`} />
                   <span className={`font-bold ${localTimeRemaining <= 5 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>
-                    {localTimeRemaining}s restantes
+                    {localTimeRemaining}s
                   </span>
                 </div>
               )}
@@ -185,31 +182,32 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
                   onStopQuiz(activeLobby.id);
                 }
               }}
-              className="px-4 py-3 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 flex items-center gap-2 font-semibold transition-all hover:scale-105"
-              title="Arreter le quiz et revenir en salle d'attente"
+              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 sm:py-3 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 flex items-center justify-center gap-1 sm:gap-2 font-semibold transition-all active:scale-[0.98] text-sm sm:text-base"
+              title="Arreter le quiz"
             >
-              <StopCircle className="w-5 h-5" />
-              Arreter
+              <StopCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden xs:inline">Arreter</span>
             </button>
             <button
               onClick={() => onNextQuestion(activeLobby.id)}
-              className="px-6 py-3 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600 flex items-center gap-2 font-semibold transition-all hover:scale-105"
+              className="flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600 flex items-center justify-center gap-1 sm:gap-2 font-semibold transition-all active:scale-[0.98] text-sm sm:text-base"
             >
-              <SkipForward className="w-5 h-5" />
-              Question suivante
+              <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden xs:inline">Question</span> suivante
             </button>
           </div>
         </div>
 
+        {/* Barre de progression timer */}
         {hasTimer && localTimeRemaining !== null && (
           <div className="mt-4">
             <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
               <span>Temps restant</span>
               <span>{localTimeRemaining}s / {currentQuestion.timer}s</span>
             </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 sm:h-3 overflow-hidden">
               <div
-                className={`h-3 rounded-full transition-all duration-1000 ${
+                className={`h-2 sm:h-3 rounded-full transition-all duration-1000 ${
                   localTimeRemaining <= 5 ? 'bg-red-600' : 'bg-blue-600 dark:bg-blue-500'
                 }`}
                 style={{ width: `${(localTimeRemaining / currentQuestion.timer) * 100}%` }}
@@ -218,14 +216,15 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
           </div>
         )}
 
+        {/* Barre de progression réponses */}
         <div className="mt-4">
           <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
             <span>Progression des réponses</span>
             <span>{Math.round(progressPercent)}%</span>
           </div>
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 sm:h-3 overflow-hidden">
             <div
-              className={`h-3 rounded-full transition-all duration-500 ${
+              className={`h-2 sm:h-3 rounded-full transition-all duration-500 ${
                 allAnswered ? 'bg-green-500' : 'bg-purple-600 dark:bg-purple-500'
               }`}
               style={{ width: `${progressPercent}%` }}
@@ -242,7 +241,7 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
             {currentQuestion.type === 'video' && <VideoIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
             {currentQuestion.type === 'audio' && <Music className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
             {currentQuestion.type === 'qcm' && <ImageIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
-            <h4 className="font-semibold text-sm text-purple-900 dark:text-purple-300">
+            <h4 className="font-semibold text-xs sm:text-sm text-purple-900 dark:text-purple-300">
               Media de la question
             </h4>
           </div>
@@ -253,7 +252,7 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
                 <img 
                   src={currentQuestion.media} 
                   alt="Question" 
-                  className="max-h-32 w-auto rounded mx-auto border border-gray-300 dark:border-gray-600 cursor-pointer hover:opacity-80 transition-opacity"
+                  className="max-h-24 sm:max-h-32 w-auto rounded mx-auto border border-gray-300 dark:border-gray-600 cursor-pointer hover:opacity-80 transition-opacity"
                   onClick={() => setZoomedImage(currentQuestion.media)}
                   title="Cliquer pour agrandir"
                 />
@@ -265,8 +264,9 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
               <video 
                 ref={adminVideoRef}
                 key={`admin-video-${currentQuestionIndex}-${currentQuestion.id}`}
-                controls 
-                className="w-full max-h-40 mx-auto rounded"
+                controls
+                playsInline
+                className="w-full max-h-32 sm:max-h-40 mx-auto rounded"
               >
                 <source src={currentQuestion.media} />
               </video>
@@ -286,33 +286,34 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
         </div>
       )}
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <div className="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 dark:border-purple-600 p-4 mb-6 rounded">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <h4 className="font-bold text-lg mb-2 dark:text-white">📝 Question actuelle</h4>
-              <p className="text-gray-700 dark:text-gray-300">{currentQuestion?.text}</p>
-              <div className="flex gap-4 mt-3 text-sm">
-                <span className="px-3 py-1 bg-purple-200 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300 rounded-full">
-                  {currentQuestion?.points || 1} points
+      {/* Question actuelle */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+        <div className="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 dark:border-purple-600 p-3 sm:p-4 mb-4 sm:mb-6 rounded">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+            <div className="flex-1 min-w-0">
+              <h4 className="font-bold text-base sm:text-lg mb-2 dark:text-white">📝 Question actuelle</h4>
+              <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300">{currentQuestion?.text}</p>
+              <div className="flex flex-wrap gap-2 mt-3 text-xs sm:text-sm">
+                <span className="px-2 sm:px-3 py-1 bg-purple-200 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300 rounded-full">
+                  {currentQuestion?.points || 1} pts
                 </span>
                 {currentQuestion?.timer > 0 && (
-                  <span className="px-3 py-1 bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 rounded-full">
+                  <span className="px-2 sm:px-3 py-1 bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 rounded-full">
                     ⏱️ {currentQuestion.timer}s
                   </span>
                 )}
                 {currentQuestion?.category && (
-                  <span className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full">
+                  <span className="px-2 sm:px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full truncate max-w-[120px]">
                     {currentQuestion.category}
                   </span>
                 )}
               </div>
             </div>
             
-            {/* ✅ Mode Anti-Triche: Bouton pour afficher/masquer les réponses */}
+            {/* Bouton afficher/masquer réponses */}
             <button
               onClick={() => setShowAnswers(!showAnswers)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition ${
+              className={`self-start flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-semibold transition text-xs sm:text-sm ${
                 showAnswers 
                   ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-2 border-green-500 dark:border-green-600' 
                   : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-2 border-orange-500 dark:border-orange-600'
@@ -321,13 +322,13 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
             >
               {showAnswers ? (
                 <>
-                  <Eye className="w-5 h-5" />
-                  Masquer réponses
+                  <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className="hidden sm:inline">Masquer</span>
                 </>
               ) : (
                 <>
-                  <EyeOff className="w-5 h-5" />
-                  Afficher réponses
+                  <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className="hidden sm:inline">Afficher</span>
                 </>
               )}
             </button>
@@ -337,53 +338,51 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
           {showAnswers ? (
             <div className="mt-3 pt-3 border-t border-purple-200 dark:border-purple-700">
               <p className="text-xs text-gray-600 dark:text-gray-400">Réponse attendue :</p>
-              <p className="font-bold text-green-700 dark:text-green-400">{currentQuestion?.answer}</p>
+              <p className="font-bold text-green-700 dark:text-green-400 text-sm sm:text-base">{currentQuestion?.answer}</p>
             </div>
           ) : (
             <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 rounded p-2">
               <p className="text-xs text-orange-700 dark:text-orange-300 flex items-center gap-2">
-                <EyeOff className="w-4 h-4" />
-                <span className="font-semibold">Mode Anti-Triche :</span> Réponse masquée pour éviter que les participants voient votre écran
+                <EyeOff className="w-4 h-4 flex-shrink-0" />
+                <span><span className="font-semibold">Mode Anti-Triche :</span> Réponse masquée</span>
               </p>
             </div>
           )}
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Grille des participants */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {activeLobby.participants?.map((p) => (
             <div 
               key={p.participantId} 
-              className={`border-2 rounded-lg p-4 transition-all duration-300 ${
+              className={`border-2 rounded-lg p-3 sm:p-4 transition-all duration-300 ${
                 p.hasAnswered 
                   ? 'border-green-500 dark:border-green-600 bg-green-50 dark:bg-green-900/20 scale-100' 
-                  : 'border-orange-300 dark:border-orange-600 bg-orange-50 dark:bg-orange-900/20 scale-95 animate-pulse'
+                  : 'border-orange-300 dark:border-orange-600 bg-orange-50 dark:bg-orange-900/20 scale-[0.98] animate-pulse'
               }`}
             >
               <div className="flex justify-between items-center mb-2">
-                <div>
-                  <p className="font-bold dark:text-white">{p.pseudo}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{p.teamName}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold dark:text-white text-sm sm:text-base truncate">{p.pseudo}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate">{p.teamName}</p>
                 </div>
                 {p.hasAnswered ? (
-                  <div className="flex items-center gap-1">
-                    <Check className="w-6 h-6 text-green-600 dark:text-green-400" />
-                    <span className="text-xs text-green-600 dark:text-green-400 font-semibold">✓</span>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Check className="w-5 h-5 sm:w-6 sm:h-6 text-green-600 dark:text-green-400" />
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-6 h-6 text-orange-600 dark:text-orange-400 animate-spin" />
-                    <span className="text-xs text-orange-600 dark:text-orange-400 font-semibold">...</span>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 dark:text-orange-400 animate-spin" />
                   </div>
                 )}
               </div>
 
               {p.hasAnswered && (
-                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-gray-200 dark:border-gray-600">
                   {showAnswers ? (
                     <div className="bg-white dark:bg-gray-700 rounded p-2 border border-green-300 dark:border-green-600">
                       <div className="flex items-center justify-between mb-1">
                         <p className="text-xs text-gray-600 dark:text-gray-400">Réponse :</p>
-                        {/* Indicateur de copier-coller */}
                         {pastedParticipants[p.participantId]?.[currentQuestion?.id] && (
                           <span 
                             className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400" 
@@ -393,7 +392,7 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
                           </span>
                         )}
                       </div>
-                      <p className="font-bold text-green-700 dark:text-green-400 break-words text-sm">
+                      <p className="font-bold text-green-700 dark:text-green-400 break-words text-xs sm:text-sm">
                         {p.currentAnswer || '(vide)'}
                       </p>
                     </div>
@@ -401,10 +400,9 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
                     <div className="bg-orange-50 dark:bg-orange-900/20 rounded p-2 border border-orange-300 dark:border-orange-600">
                       <p className="text-xs text-orange-700 dark:text-orange-400 flex items-center gap-1">
                         <EyeOff className="w-3 h-3" />
-                        Réponse masquée
-                        {/* Indicateur de copier-coller même quand masqué */}
+                        Masquée
                         {pastedParticipants[p.participantId]?.[currentQuestion?.id] && (
-                          <Clipboard className="w-3 h-3 ml-2" title="Copier-coller détecté" />
+                          <Clipboard className="w-3 h-3 ml-1" title="Copier-coller détecté" />
                         )}
                       </p>
                     </div>
@@ -416,35 +414,37 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
         </div>
       </div>
 
+      {/* Message tous ont répondu */}
       {allAnswered && totalParticipants > 0 && (
-        <div className="bg-gradient-to-r from-green-400 to-green-600 dark:from-green-600 dark:to-green-800 rounded-lg p-6 text-center animate-bounce shadow-xl">
-          <div className="flex items-center justify-center gap-3 text-white">
-            <Check className="w-8 h-8" />
-            <p className="font-bold text-xl">
-              Tous les participants ont répondu !
+        <div className="bg-gradient-to-r from-green-400 to-green-600 dark:from-green-600 dark:to-green-800 rounded-lg p-4 sm:p-6 text-center animate-bounce shadow-xl">
+          <div className="flex items-center justify-center gap-2 sm:gap-3 text-white">
+            <Check className="w-6 h-6 sm:w-8 sm:h-8" />
+            <p className="font-bold text-base sm:text-xl">
+              Tous ont répondu !
             </p>
-            <Check className="w-8 h-8" />
+            <Check className="w-6 h-6 sm:w-8 sm:h-8" />
           </div>
-          <p className="text-white text-sm mt-2 opacity-90">
+          <p className="text-white text-xs sm:text-sm mt-2 opacity-90">
             Cliquez sur "Question suivante" pour continuer
           </p>
         </div>
       )}
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <h4 className="font-bold text-lg mb-4 dark:text-white">📊 Statistiques en direct</h4>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 text-center border border-blue-200 dark:border-blue-700">
-            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{totalParticipants}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Participants</p>
+      {/* Statistiques */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+        <h4 className="font-bold text-base sm:text-lg mb-3 sm:mb-4 dark:text-white">📊 Statistiques en direct</h4>
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 sm:p-4 text-center border border-blue-200 dark:border-blue-700">
+            <p className="text-xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400">{totalParticipants}</p>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">Participants</p>
           </div>
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center border border-green-200 dark:border-green-700">
-            <p className="text-3xl font-bold text-green-600 dark:text-green-400">{answeredCount}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Ont répondu</p>
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 sm:p-4 text-center border border-green-200 dark:border-green-700">
+            <p className="text-xl sm:text-3xl font-bold text-green-600 dark:text-green-400">{answeredCount}</p>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">Répondu</p>
           </div>
-          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4 text-center border border-orange-200 dark:border-orange-700">
-            <p className="text-3xl font-bold text-orange-600 dark:text-orange-400">{totalParticipants - answeredCount}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">En attente</p>
+          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 sm:p-4 text-center border border-orange-200 dark:border-orange-700">
+            <p className="text-xl sm:text-3xl font-bold text-orange-600 dark:text-orange-400">{totalParticipants - answeredCount}</p>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">En attente</p>
           </div>
         </div>
       </div>
@@ -452,24 +452,24 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
       {/* Modale de zoom d'image */}
       {zoomedImage && (
         <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 cursor-pointer"
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4 cursor-pointer"
           onClick={() => setZoomedImage(null)}
         >
-          <div className="relative max-w-[90vw] max-h-[90vh]">
+          <div className="relative max-w-[95vw] max-h-[90vh]">
             <img 
               src={zoomedImage} 
               alt="Image agrandie" 
-              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             />
             <button 
               onClick={() => setZoomedImage(null)}
-              className="absolute -top-3 -right-3 w-8 h-8 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 w-7 h-7 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm"
             >
               ✕
             </button>
-            <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-sm">
-              Cliquer à l'extérieur ou sur ✕ pour fermer
+            <p className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-xs sm:text-sm">
+              Cliquer pour fermer
             </p>
           </div>
         </div>
