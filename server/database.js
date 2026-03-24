@@ -321,13 +321,14 @@ async function getAllParticipants() {
 }
 
 async function getParticipantByPseudo(pseudo) {
+  // Recherche insensible à la casse avec ilike
   const { data } = await supabase
     .from('participants')
     .select(`
       id, pseudo, password_hash, team_id, avatar, role, created_at,
       teams (name)
     `)
-    .eq('pseudo', pseudo)
+    .ilike('pseudo', pseudo)
     .single();
   
   if (!data) return null;
@@ -404,10 +405,11 @@ async function updateParticipantAvatar(participantId, avatar) {
 }
 
 async function verifyParticipantPassword(pseudo, password) {
+  // Recherche insensible à la casse avec ilike
   const { data } = await supabase
     .from('participants')
     .select('password_hash')
-    .eq('pseudo', pseudo)
+    .ilike('pseudo', pseudo)
     .single();
   
   if (!data) {
