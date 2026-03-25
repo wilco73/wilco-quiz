@@ -693,16 +693,26 @@ const DrawingLobbyView = ({
               )}
             </div>
           )}
+          
+          {/* Info mots disponibles */}
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 sm:p-4 text-center text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+            <p>
+              📚 {drawingWords.length} mots en base de données + {customWords.length} mots personnalisés
+            </p>
+          </div>
         </div>
         
         {/* Modal de configuration */}
         {showConfigModal && (
-          <PictionaryConfig
-            onStart={handleStartPictionary}
-            onCancel={() => setShowConfigModal(false)}
-            wordCount={drawingWords.length + (lobby?.custom_words?.length || 0)}
-            teamCount={lobbyTeams.length}
-          />
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <PictionaryConfig
+              words={drawingWords}
+              teams={lobbyTeams}
+              customWordsCount={customWords.length}
+              onStart={handleStartPictionary}
+              onCancel={() => setShowConfigModal(false)}
+            />
+          </div>
         )}
       </div>
     );
