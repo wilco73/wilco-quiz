@@ -328,8 +328,10 @@ const MainLayout = ({
       
       {/* Contenu principal */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Header mobile */}
-        <header className="lg:hidden sticky top-0 z-30 bg-white dark:bg-gray-800 shadow-sm px-4 py-3 flex items-center justify-between flex-shrink-0">
+        {/* Header mobile - avec safe area pour iOS */}
+        <header className="lg:hidden sticky top-0 z-30 bg-white dark:bg-gray-800 shadow-sm px-4 py-3 flex items-center justify-between flex-shrink-0"
+          style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+        >
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"

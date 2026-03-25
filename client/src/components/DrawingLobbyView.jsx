@@ -818,8 +818,11 @@ const DrawingLobbyView = ({
       <div className="fixed inset-0 flex flex-col bg-gray-900 overflow-hidden">
         {renderPopups()}
         
-        {/* Header ultra-compact mobile paysage */}
-        <div className="flex-shrink-0 bg-gray-800 px-2 py-1 flex items-center justify-between">
+        {/* Header ultra-compact mobile paysage - avec safe area */}
+        <div 
+          className="flex-shrink-0 bg-gray-800 px-2 py-1 flex items-center justify-between"
+          style={{ paddingTop: 'max(0.25rem, env(safe-area-inset-top))', paddingLeft: 'max(0.5rem, env(safe-area-inset-left))', paddingRight: 'max(0.5rem, env(safe-area-inset-right))' }}
+        >
           {/* Timer */}
           <div className={`flex items-center gap-1 ${
             gameState.timeRemaining <= 10 ? 'text-red-500 animate-pulse' : 'text-blue-400'

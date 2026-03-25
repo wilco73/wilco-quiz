@@ -53,7 +53,6 @@ const MysteryGameView = ({
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
   
-  const audioRef = useRef(null);
   const toast = useToast();
   
   // Hook pour recevoir les broadcasts
@@ -426,8 +425,11 @@ const MysteryGameView = ({
   if (status === 'waiting') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex flex-col">
-        {/* Header */}
-        <div className="p-4 flex justify-between items-center">
+        {/* Header - avec safe area pour iOS */}
+        <div 
+          className="p-4 flex justify-between items-center"
+          style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
+        >
           <button
             onClick={handleLeave}
             className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20"
@@ -531,8 +533,11 @@ const MysteryGameView = ({
   // === ÉCRAN DE JEU ===
   return (
     <div className="h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex flex-col overflow-hidden">
-      {/* Header compact */}
-      <div className="flex-shrink-0 px-4 py-2 flex justify-between items-center bg-black/30">
+      {/* Header compact - avec safe area pour iOS */}
+      <div 
+        className="flex-shrink-0 px-4 py-2 flex justify-between items-center bg-black/30"
+        style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
+      >
         <div className="flex items-center gap-3">
           <button
             onClick={handleLeave}
