@@ -778,12 +778,12 @@ const DrawingLobbyView = ({
   // ========== RENDU MOBILE (JEU EN COURS) ==========
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col bg-gray-900 overflow-hidden">
+      <div className="fixed inset-0 flex flex-col bg-gray-900 overflow-hidden">
         {renderPopups()}
         
-        {/* Header compact mobile */}
-        <div className="flex-shrink-0 bg-gray-800 px-2 py-1.5 flex items-center justify-between">
-          {/* Gauche: Timer */}
+        {/* Header ultra-compact mobile */}
+        <div className="flex-shrink-0 bg-gray-800 px-2 py-1 flex items-center justify-between">
+          {/* Timer */}
           <div className={`flex items-center gap-1 ${
             gameState.timeRemaining <= 10 ? 'text-red-500 animate-pulse' : 'text-blue-400'
           }`}>
@@ -791,21 +791,12 @@ const DrawingLobbyView = ({
             <span className="text-lg font-bold">{gameState.timeRemaining || 0}s</span>
           </div>
           
-          {/* Centre: Tour/Info */}
-          <div className="text-center flex-1 px-2">
-            <p className="text-xs text-gray-400">Tour {(gameState.currentRound || 0) + 1}/{gameState.totalRounds || 0}</p>
-            <p className="text-xs truncate">
-              {isDrawingTeam ? (
-                <span className="text-green-400 font-medium">Vous dessinez !</span>
-              ) : (
-                <span className="text-gray-300">
-                  <span className="text-purple-400 font-medium">{gameState.drawingTeam}</span> dessine
-                </span>
-              )}
-            </p>
+          {/* Info tour */}
+          <div className="text-center">
+            <p className="text-xs text-gray-400">{(gameState.currentRound || 0) + 1}/{gameState.totalRounds || 0}</p>
           </div>
           
-          {/* Droite: Scores dropdown */}
+          {/* Scores dropdown */}
           <button 
             onClick={() => setShowMobileScores(!showMobileScores)}
             className="flex items-center gap-1 px-2 py-1 bg-gray-700 rounded text-xs"
@@ -818,7 +809,7 @@ const DrawingLobbyView = ({
         
         {/* Dropdown scores */}
         {showMobileScores && (
-          <div className="absolute top-12 right-2 z-40 bg-gray-800 rounded-lg shadow-xl p-3 min-w-[150px]">
+          <div className="absolute top-10 right-2 z-40 bg-gray-800 rounded-lg shadow-xl p-3 min-w-[150px]">
             <h4 className="text-xs font-bold text-gray-400 mb-2">Scores</h4>
             {Object.entries(gameState.scores || {})
               .sort(([,a], [,b]) => b - a)
@@ -831,144 +822,95 @@ const DrawingLobbyView = ({
                   <span className="font-bold">{score}</span>
                 </div>
               ))}
-            <div className="border-t border-gray-700 mt-2 pt-2">
-              <h4 className="text-xs font-bold text-gray-400 mb-1">Ont trouvé</h4>
-              {gameState.teamsFound?.length > 0 ? (
-                gameState.teamsFound.map((team, idx) => (
-                  <div key={team} className="text-xs text-green-400 flex items-center gap-1">
-                    {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '✓'} {team}
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-gray-500">Personne</p>
-              )}
-            </div>
           </div>
         )}
         
-        {/* Mot à faire deviner (si dessinateur) */}
+        {/* Bandeau mot (si dessinateur) - compact */}
         {isDrawingTeam && (
-          <div className="flex-shrink-0 bg-gradient-to-r from-purple-600 to-blue-600 px-3 py-2 text-center">
-            <p className="text-xs text-white/80">Mot à faire deviner :</p>
-            <p className="text-xl font-bold text-white">{gameState.currentWord || '???'}</p>
-            {hasRotation && !canActuallyDraw && (
-              <p className="text-xs text-white/80 mt-1">
-                👀 C'est au tour de <strong>{currentDrawer?.pseudo}</strong>
-              </p>
-            )}
+          <div className="flex-shrink-0 bg-gradient-to-r from-purple-600 to-blue-600 px-2 py-1.5 flex items-center justify-center gap-2">
+            <span className="text-white font-bold text-lg">{gameState.currentWord || '???'}</span>
           </div>
         )}
         
-        {/* Zone canvas - prend tout l'espace restant */}
-        <div className="flex-1 relative overflow-hidden flex items-center justify-center bg-gray-100 p-1">
-          <div className="w-full h-full max-w-full max-h-full" style={{ aspectRatio: `${CANVAS_WIDTH}/${CANVAS_HEIGHT}` }}>
-            <DrawingCanvas
-              width={CANVAS_WIDTH}
-              height={CANVAS_HEIGHT}
-              canDraw={canActuallyDraw}
-              showTools={canActuallyDraw && showMobileTools}
-              collaborative={true}
-              socket={socket}
-              lobbyId={lobby.id}
-              odId={currentUser?.id}
-              teamId={myTeam}
-              externalStrokes={externalStrokes}
-              clearSignal={clearSignal}
-              externalCanvasRef={canvasRef}
-            />
-          </div>
+        {/* Zone canvas - prend TOUT l'espace */}
+        <div className="flex-1 relative bg-white" onClick={() => setShowMobileScores(false)}>
+          <DrawingCanvas
+            width={CANVAS_WIDTH}
+            height={CANVAS_HEIGHT}
+            canDraw={canActuallyDraw}
+            showTools={canActuallyDraw && showMobileTools}
+            collaborative={true}
+            socket={socket}
+            lobbyId={lobby.id}
+            odId={currentUser?.id}
+            teamId={myTeam}
+            externalStrokes={externalStrokes}
+            clearSignal={clearSignal}
+            externalCanvasRef={canvasRef}
+          />
           
-          {/* Bouton toggle outils (si dessinateur) */}
+          {/* Boutons flottants */}
           {canActuallyDraw && (
             <button
               onClick={() => setShowMobileTools(!showMobileTools)}
               className={`absolute bottom-2 left-2 p-2.5 rounded-full shadow-lg z-30 ${
-                showMobileTools ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 border border-gray-300'
+                showMobileTools ? 'bg-purple-600 text-white' : 'bg-white/90 text-gray-700'
               }`}
             >
               <Palette className="w-5 h-5" />
             </button>
           )}
+          
+          {!isDrawingTeam && !hasFoundWord && (
+            <button
+              onClick={() => setShowMobileGuessModal(true)}
+              className="absolute bottom-2 right-2 w-12 h-12 bg-purple-600 text-white rounded-full shadow-xl flex items-center justify-center z-30"
+            >
+              <MessageCircle className="w-5 h-5" />
+            </button>
+          )}
+          
+          {!isDrawingTeam && hasFoundWord && (
+            <div className="absolute bottom-2 right-2 px-3 py-2 bg-green-500 text-white rounded-full shadow-lg text-sm font-bold flex items-center gap-1">
+              <Check className="w-4 h-4" /> Trouvé !
+            </div>
+          )}
         </div>
         
-        {/* Zone réponse mobile (si pas dessinateur) */}
-        {!isDrawingTeam && (
-          <>
-            {/* FAB pour ouvrir la modal de réponse */}
-            {!hasFoundWord && (
-              <button
-                onClick={() => setShowMobileGuessModal(true)}
-                className="fixed bottom-4 right-4 w-14 h-14 bg-purple-600 text-white rounded-full shadow-xl flex items-center justify-center z-40 active:scale-95"
-              >
-                <MessageCircle className="w-6 h-6" />
+        {/* Modal réponse */}
+        {showMobileGuessModal && (
+          <div className="fixed inset-0 bg-black/80 z-50 flex flex-col">
+            <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-gray-900">
+              <h3 className="text-white font-bold">Proposer une réponse</h3>
+              <button onClick={() => setShowMobileGuessModal(false)} className="p-2 text-gray-400">
+                <X className="w-5 h-5" />
               </button>
-            )}
-            
-            {/* Indicateur trouvé */}
-            {hasFoundWord && (
-              <div className="flex-shrink-0 bg-green-500 px-4 py-3 text-center">
-                <p className="text-white font-bold flex items-center justify-center gap-2">
-                  <Check className="w-5 h-5" />
-                  🎉 Bravo ! Vous avez trouvé !
-                </p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {myGuesses.length > 0 ? myGuesses.slice().reverse().map((g, i) => (
+                <div key={i} className={`px-3 py-2 rounded-lg text-sm ${g.correct ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+                  {g.correct ? '✓' : '✗'} {g.text}
+                </div>
+              )) : <p className="text-gray-500 text-center py-8">Aucune proposition</p>}
+            </div>
+            <div className="flex-shrink-0 p-4 bg-gray-900 border-t border-gray-800">
+              <div className="flex gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={guess}
+                  onChange={(e) => setGuess(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSubmitGuess()}
+                  placeholder="Votre réponse..."
+                  className="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
+                  autoFocus
+                />
+                <button onClick={handleSubmitGuess} disabled={!guess.trim()} className="px-4 py-3 bg-purple-600 text-white rounded-lg disabled:opacity-50">
+                  <Send className="w-5 h-5" />
+                </button>
               </div>
-            )}
-            
-            {/* Modal de réponse */}
-            {showMobileGuessModal && (
-              <div className="fixed inset-0 bg-black/80 z-50 flex flex-col">
-                <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-gray-900">
-                  <h3 className="text-white font-bold">Proposer une réponse</h3>
-                  <button onClick={() => setShowMobileGuessModal(false)} className="p-2 text-gray-400">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                
-                {/* Historique des propositions */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                  {myGuesses.length > 0 ? (
-                    myGuesses.slice().reverse().map((g, i) => (
-                      <div 
-                        key={i}
-                        className={`px-3 py-2 rounded-lg text-sm ${
-                          g.correct 
-                            ? 'bg-green-900/50 text-green-400 border border-green-600'
-                            : 'bg-red-900/50 text-red-400 border border-red-600'
-                        }`}
-                      >
-                        {g.correct ? '✓' : '✗'} {g.text}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-gray-500 text-center py-8">Aucune proposition pour l'instant</p>
-                  )}
-                </div>
-                
-                {/* Input de réponse */}
-                <div className="flex-shrink-0 p-4 bg-gray-900 border-t border-gray-800">
-                  <div className="flex gap-2">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={guess}
-                      onChange={(e) => setGuess(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSubmitGuess()}
-                      placeholder="Votre réponse..."
-                      className="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none"
-                      autoFocus
-                    />
-                    <button
-                      onClick={handleSubmitGuess}
-                      disabled={!guess.trim()}
-                      className="px-4 py-3 bg-purple-600 text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
-                    >
-                      <Send className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
+            </div>
+          </div>
         )}
       </div>
     );
@@ -976,59 +918,29 @@ const DrawingLobbyView = ({
 
   // ========== RENDU DESKTOP (JEU EN COURS) ==========
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+    <div className="h-screen bg-gray-100 dark:bg-gray-900 p-2 flex flex-col overflow-hidden">
       {renderPopups()}
       
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 mb-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-xl font-bold dark:text-white">
-                🎨 Pictionary - Tour {(gameState.currentRound || 0) + 1}/{gameState.totalRounds || 0}
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {isDrawingTeam ? (
-                  <span className="text-green-600 dark:text-green-400 font-medium">Votre équipe dessine !</span>
-                ) : (
-                  <span>L'équipe <strong className="text-purple-600 dark:text-purple-400">{gameState.drawingTeam}</strong> dessine</span>
-                )}
-              </p>
-            </div>
-            
-            {/* Timer */}
-            <div className="text-right">
-              <div className={`flex items-center gap-2 ${
-                gameState.timeRemaining <= 10 ? 'text-red-500 animate-pulse' : 'text-blue-600 dark:text-blue-400'
-              }`}>
-                <Clock className="w-6 h-6" />
-                <span className="text-3xl font-bold">{gameState.timeRemaining || 0}s</span>
-              </div>
-              <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
-                <div 
-                  className={`h-2 rounded-full transition-all ${
-                    gameState.timeRemaining <= 10 ? 'bg-red-500' : 'bg-blue-500'
-                  }`}
-                  style={{ width: `${((gameState.timeRemaining || 0) / (gameState.config?.timePerRound || 180)) * 100}%` }}
-                />
-              </div>
-            </div>
-          </div>
-          
-          {/* Scores rapides */}
-          <div className="flex gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 overflow-x-auto">
+      {/* Header compact */}
+      <div className="flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg shadow px-4 py-2 mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-bold dark:text-white">
+            🎨 Tour {(gameState.currentRound || 0) + 1}/{gameState.totalRounds || 0}
+          </h2>
+          {/* Scores inline */}
+          <div className="flex gap-2">
             {Object.entries(gameState.scores || {})
               .sort(([,a], [,b]) => b - a)
               .map(([team, score], idx) => (
                 <div 
                   key={team}
-                  className={`flex items-center gap-2 px-3 py-1 rounded-full whitespace-nowrap ${
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-sm ${
                     team === myTeam 
                       ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' 
                       : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                   }`}
                 >
-                  {idx === 0 && <Crown className="w-4 h-4 text-yellow-500" />}
+                  {idx === 0 && <Crown className="w-3 h-3 text-yellow-500" />}
                   <span className="font-medium">{team}</span>
                   <span className="font-bold">{score}</span>
                 </div>
@@ -1036,46 +948,41 @@ const DrawingLobbyView = ({
           </div>
         </div>
         
-        {/* Zone principale */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          {/* Canvas */}
-          <div className="lg:col-span-3">
-            {isDrawingTeam ? (
-              // Vue dessinateur
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
-                {/* Mot à faire deviner */}
-                <div className="bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg p-4 mb-4 text-center">
-                  <p className="text-sm text-white/80">Mot à faire deviner :</p>
-                  <p className="text-3xl font-bold text-white">{gameState.currentWord || '???'}</p>
+        {/* Timer */}
+        <div className={`flex items-center gap-2 ${
+          gameState.timeRemaining <= 10 ? 'text-red-500 animate-pulse' : 'text-blue-600 dark:text-blue-400'
+        }`}>
+          <Clock className="w-5 h-5" />
+          <span className="text-2xl font-bold">{gameState.timeRemaining || 0}s</span>
+        </div>
+      </div>
+      
+      {/* Zone principale - prend tout l'espace */}
+      <div className="flex-1 flex gap-2 min-h-0">
+        {/* Canvas + outils */}
+        <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow p-3 flex flex-col min-h-0">
+          {isDrawingTeam ? (
+            <>
+              {/* Bandeau mot à deviner */}
+              <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg px-4 py-2 mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-white/80 text-sm">Mot :</span>
+                  <span className="text-xl font-bold text-white">{gameState.currentWord || '???'}</span>
                 </div>
-                
-                {/* Info rotation dessinateur */}
-                {hasRotation && (
-                  <div className={`mb-4 p-3 rounded-lg text-center ${
-                    canActuallyDraw 
-                      ? 'bg-green-100 dark:bg-green-900/30 border border-green-400'
-                      : 'bg-orange-100 dark:bg-orange-900/30 border border-orange-400'
-                  }`}>
-                    {canActuallyDraw ? (
-                      <p className="text-green-700 dark:text-green-300 font-bold">✏️ C'est votre tour de dessiner !</p>
-                    ) : (
-                      <p className="text-orange-700 dark:text-orange-300">
-                        👀 C'est au tour de <strong>{currentDrawer?.pseudo || '...'}</strong> de dessiner
-                        {gameState.drawerRotationTime > 0 && <span className="ml-2">({gameState.drawerRotationTime}s)</span>}
-                      </p>
-                    )}
-                  </div>
+                {hasRotation ? (
+                  <span className={`text-sm ${canActuallyDraw ? 'text-green-300' : 'text-orange-300'}`}>
+                    {canActuallyDraw ? '✏️ Votre tour' : `👀 ${currentDrawer?.pseudo}`}
+                  </span>
+                ) : (
+                  <span className="text-sm text-blue-200">🎨 Équipe dessine ensemble</span>
                 )}
-                
-                {!hasRotation && (
-                  <div className="mb-4 p-3 rounded-lg text-center bg-blue-100 dark:bg-blue-900/30 border border-blue-400">
-                    <p className="text-blue-700 dark:text-blue-300">🎨 Toute l'équipe peut dessiner en même temps !</p>
-                  </div>
-                )}
-                
+              </div>
+              
+              {/* Canvas */}
+              <div className="flex-1 min-h-0">
                 <DrawingCanvas
-                  width={700}
-                  height={450}
+                  width={CANVAS_WIDTH}
+                  height={CANVAS_HEIGHT}
                   canDraw={canActuallyDraw}
                   showTools={canActuallyDraw}
                   collaborative={true}
@@ -1088,109 +995,102 @@ const DrawingLobbyView = ({
                   externalCanvasRef={canvasRef}
                 />
               </div>
-            ) : (
-              // Vue devineur
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
+            </>
+          ) : (
+            <>
+              {/* Canvas */}
+              <div className="flex-1 min-h-0">
                 <DrawingCanvas
-                  width={700}
-                  height={450}
+                  width={CANVAS_WIDTH}
+                  height={CANVAS_HEIGHT}
                   canDraw={false}
                   showTools={false}
                   externalStrokes={externalStrokes}
                   clearSignal={clearSignal}
                 />
-                
-                {/* Zone de réponse */}
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                  {hasFoundWord ? (
-                    <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-500 rounded-lg p-4 text-center">
-                      <Check className="w-10 h-10 mx-auto text-green-600 dark:text-green-400 mb-2" />
-                      <p className="text-green-700 dark:text-green-300 font-bold text-lg">🎉 Bravo ! Vous avez trouvé !</p>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        value={guess}
-                        onChange={(e) => setGuess(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSubmitGuess()}
-                        placeholder="Tapez votre réponse..."
-                        className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-lg focus:border-purple-500 focus:outline-none"
-                        autoFocus
-                      />
-                      <button
-                        onClick={handleSubmitGuess}
-                        disabled={!guess.trim()}
-                        className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-semibold"
-                      >
-                        <Send className="w-5 h-5" />
-                        Proposer
-                      </button>
-                    </div>
-                  )}
-                </div>
               </div>
+              
+              {/* Zone de réponse */}
+              <div className="flex-shrink-0 mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                {hasFoundWord ? (
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-500 rounded-lg p-3 text-center flex items-center justify-center gap-2">
+                    <Check className="w-5 h-5 text-green-600" />
+                    <span className="text-green-700 dark:text-green-300 font-bold">🎉 Bravo ! Vous avez trouvé !</span>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={guess}
+                      onChange={(e) => setGuess(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSubmitGuess()}
+                      placeholder="Tapez votre réponse..."
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-purple-500 focus:outline-none"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleSubmitGuess}
+                      disabled={!guess.trim()}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 font-semibold"
+                    >
+                      <Send className="w-4 h-4" />
+                      Proposer
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        
+        {/* Sidebar droite */}
+        <div className="w-48 flex-shrink-0 flex flex-col gap-2">
+          {/* Équipes qui ont trouvé */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3">
+            <h3 className="font-bold dark:text-white text-sm mb-2 flex items-center gap-1">
+              <Trophy className="w-4 h-4 text-yellow-500" />
+              Ont trouvé
+            </h3>
+            {gameState.teamsFound?.length > 0 ? (
+              <div className="space-y-1">
+                {gameState.teamsFound.map((team, idx) => (
+                  <div key={team} className="flex items-center gap-1 text-sm p-1 bg-green-50 dark:bg-green-900/20 rounded">
+                    <span>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '✓'}</span>
+                    <span className={`font-medium ${team === myTeam ? 'text-purple-600' : 'text-green-700 dark:text-green-300'}`}>{team}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-xs">Personne encore...</p>
             )}
           </div>
           
-          {/* Sidebar */}
-          <div className="space-y-4">
-            {/* Équipes qui ont trouvé */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
-              <h3 className="font-bold dark:text-white mb-3 flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-yellow-500" />
-                Ont trouvé
-              </h3>
-              {gameState.teamsFound?.length > 0 ? (
-                <div className="space-y-2">
-                  {gameState.teamsFound.map((team, idx) => (
-                    <div key={team} className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                      <span className="text-lg">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '✓'}</span>
-                      <span className={`font-medium ${team === myTeam ? 'text-purple-600 dark:text-purple-400' : 'text-green-700 dark:text-green-300'}`}>
-                        {team}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 dark:text-gray-400 text-sm">Personne n'a encore trouvé...</p>
-              )}
+          {/* Mes propositions (si devineur) */}
+          {!isDrawingTeam && myGuesses.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 flex-1 min-h-0 overflow-hidden">
+              <h3 className="font-bold dark:text-white text-sm mb-2">Vos propositions</h3>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {myGuesses.slice().reverse().map((g, i) => (
+                  <div key={i} className={`text-xs px-2 py-1 rounded ${g.correct ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {g.correct ? '✓' : '✗'} {g.text}
+                  </div>
+                ))}
+              </div>
             </div>
-            
-            {/* Mes propositions */}
-            {!isDrawingTeam && myGuesses.length > 0 && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
-                <h3 className="font-bold dark:text-white mb-3">Vos propositions</h3>
-                <div className="space-y-1 max-h-40 overflow-y-auto">
-                  {myGuesses.slice().reverse().map((g, i) => (
-                    <div 
-                      key={i}
-                      className={`text-sm px-2 py-1 rounded ${
-                        g.correct 
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                          : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                      }`}
-                    >
-                      {g.correct ? '✓' : '✗'} {g.text}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Rappel pour l'équipe qui dessine */}
-            {isDrawingTeam && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
-                <h3 className="font-bold dark:text-white mb-3">💡 Rappel</h3>
-                <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                  <li>• Pas de lettres ni de chiffres</li>
-                  <li>• Pas de mots dans le dessin</li>
-                  <li>• Faites deviner avec des images !</li>
-                </ul>
-              </div>
-            )}
-          </div>
+          )}
+          
+          {/* Rappel (si dessinateur) */}
+          {isDrawingTeam && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3">
+              <h3 className="font-bold dark:text-white text-sm mb-2">💡 Rappel</h3>
+              <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
+                <li>• Pas de lettres/chiffres</li>
+                <li>• Pas de mots</li>
+                <li>• Dessinez !</li>
+              </ul>
+            </div>
+          )}
         </div>
       </div>
     </div>
