@@ -384,18 +384,11 @@ const DrawingLobbyView = ({
     link.click();
   };
 
-  // ========== CALCUL DIMENSIONS CANVAS ==========
-  const getCanvasDimensions = () => {
-    if (isMobile) {
-      // Sur mobile, canvas prend toute la largeur avec ratio 4:3
-      const width = Math.min(window.innerWidth - 16, 500);
-      const height = Math.round(width * 0.75);
-      return { width, height };
-    }
-    return { width: 700, height: 450 };
-  };
-  
-  const canvasDims = getCanvasDimensions();
+  // ========== DIMENSIONS CANVAS FIXES ==========
+  // Toujours utiliser les mêmes dimensions internes pour que les coordonnées soient cohérentes
+  // Le scaling CSS s'occupe de l'affichage responsive
+  const CANVAS_WIDTH = 700;
+  const CANVAS_HEIGHT = 450;
 
   // ==================== RENDUS ====================
   
@@ -867,27 +860,29 @@ const DrawingLobbyView = ({
         )}
         
         {/* Zone canvas - prend tout l'espace restant */}
-        <div className="flex-1 relative overflow-hidden bg-white">
-          <DrawingCanvas
-            width={canvasDims.width}
-            height={canvasDims.height}
-            canDraw={canActuallyDraw}
-            showTools={canActuallyDraw && showMobileTools}
-            collaborative={true}
-            socket={socket}
-            lobbyId={lobby.id}
-            odId={currentUser?.id}
-            teamId={myTeam}
-            externalStrokes={externalStrokes}
-            clearSignal={clearSignal}
-            externalCanvasRef={canvasRef}
-          />
+        <div className="flex-1 relative overflow-hidden flex items-center justify-center bg-gray-100 p-1">
+          <div className="w-full h-full max-w-full max-h-full" style={{ aspectRatio: `${CANVAS_WIDTH}/${CANVAS_HEIGHT}` }}>
+            <DrawingCanvas
+              width={CANVAS_WIDTH}
+              height={CANVAS_HEIGHT}
+              canDraw={canActuallyDraw}
+              showTools={canActuallyDraw && showMobileTools}
+              collaborative={true}
+              socket={socket}
+              lobbyId={lobby.id}
+              odId={currentUser?.id}
+              teamId={myTeam}
+              externalStrokes={externalStrokes}
+              clearSignal={clearSignal}
+              externalCanvasRef={canvasRef}
+            />
+          </div>
           
           {/* Bouton toggle outils (si dessinateur) */}
           {canActuallyDraw && (
             <button
               onClick={() => setShowMobileTools(!showMobileTools)}
-              className={`absolute bottom-3 left-3 p-3 rounded-full shadow-lg z-30 ${
+              className={`absolute bottom-2 left-2 p-2.5 rounded-full shadow-lg z-30 ${
                 showMobileTools ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 border border-gray-300'
               }`}
             >

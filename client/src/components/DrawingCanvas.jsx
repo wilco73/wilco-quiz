@@ -1004,7 +1004,8 @@ const DrawingCanvas = ({
             : 'border-gray-300 dark:border-gray-600'
         }`}
         style={{ 
-          width: '100%', 
+          width: '100%',
+          height: '100%',
           maxWidth: width,
           aspectRatio: `${width}/${height}`
         }}
@@ -1018,7 +1019,7 @@ const DrawingCanvas = ({
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={finishDrawing}
-          className="w-full h-full touch-none"
+          className="absolute inset-0 w-full h-full touch-none"
           style={{ 
             cursor: canDraw 
               ? (tool === 'eraser' ? 'cell' : tool === 'fill' ? 'crosshair' : 'crosshair') 
