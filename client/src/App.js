@@ -17,6 +17,7 @@ import DrawingLobbyView from './components/DrawingLobbyView';
 import RelayLobbyView from './components/RelayLobbyView';
 import MonitoringWidget from './components/MonitoringWidget';
 import MysteryGameView from './components/MysteryGameView';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 import { useToast } from './components/ToastProvider';
 import './App.css';
 
@@ -872,6 +873,9 @@ const App = () => {
           }}
         />
       )}
+      
+      {/* Prompt installation PWA */}
+      <PWAInstallPrompt />
     </div>
   );
 };
