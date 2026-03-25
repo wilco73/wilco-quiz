@@ -29,6 +29,30 @@ const MysteryGameView = ({
   const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
   const [lobbyCreatedBy, setLobbyCreatedBy] = useState(lobby?.createdBy);
   
+  // États responsive
+  const [screenSize, setScreenSize] = useState('desktop'); // 'mobile', 'tablet', 'desktop'
+  
+  const audioRef = useRef(null);
+  const toast = useToast();
+  
+  // Détecter la taille d'écran
+  useEffect(() => {
+    const checkScreenSize = () => {
+      const width = window.innerWidth;
+      if (width < 640) {
+        setScreenSize('mobile');
+      } else if (width < 1024) {
+        setScreenSize('tablet');
+      } else {
+        setScreenSize('desktop');
+      }
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+  
   const audioRef = useRef(null);
   const toast = useToast();
   
@@ -309,13 +333,32 @@ const MysteryGameView = ({
     const isAnimating = revealAnimation?.index === index;
     const isFlipping = isAnimating && revealAnimation.phase === 'flip';
     
+    // Taille du numéro selon le nombre de cases et la taille d'écran
+    const totalCells = gameState.totalCells || grid?.gridSize || 12;
+    const getNumberSize = () => {
+      if (screenSize === 'mobile') {
+        if (totalCells > 30) return 'text-lg';
+        if (totalCells > 16) return 'text-xl';
+        return 'text-2xl';
+      }
+      if (screenSize === 'tablet') {
+        if (totalCells > 30) return 'text-2xl';
+        if (totalCells > 16) return 'text-3xl';
+        return 'text-4xl';
+      }
+      // Desktop
+      if (totalCells > 30) return 'text-3xl';
+      if (totalCells > 16) return 'text-5xl';
+      return 'text-6xl';
+    };
+    
     return (
       <button
         key={index}
         onClick={() => handleRevealCell(index)}
         disabled={!canControl || status !== 'playing' || isRevealed}
         className={`
-          w-full h-full rounded-xl border-3 transition-all duration-300 relative overflow-hidden shadow-lg
+          w-full h-full rounded-lg sm:rounded-xl transition-all duration-300 relative overflow-hidden shadow-md sm:shadow-lg
           ${isRevealed 
             ? 'bg-gradient-to-br from-purple-200 to-indigo-200 dark:from-purple-800/50 dark:to-indigo-800/50 border-purple-400 dark:border-purple-500' 
             : canControl && status === 'playing'
@@ -327,31 +370,31 @@ const MysteryGameView = ({
         style={{
           transform: isFlipping ? 'rotateY(90deg)' : 'rotateY(0deg)',
           transition: 'transform 0.3s ease-in-out',
-          borderWidth: '3px'
+          borderWidth: screenSize === 'mobile' ? '2px' : '3px'
         }}
       >
         {isRevealed ? (
           // Case révélée - afficher thumbnail/image
-          <div className="w-full h-full flex items-center justify-center p-2">
+          <div className="w-full h-full flex items-center justify-center p-0.5 sm:p-1 md:p-2">
             {(cellInfo?.type?.thumbnailUrl || cellInfo?.type?.imageUrl) ? (
               <img 
                 src={cellInfo.type.thumbnailUrl || cellInfo.type.imageUrl}
                 alt={cellInfo.type?.name}
-                className="w-full h-full object-cover rounded-lg"
+                className="w-full h-full object-cover rounded-md sm:rounded-lg"
               />
             ) : (
               <div className="text-center flex flex-col items-center justify-center">
-                <Sparkles className="w-8 h-8 md:w-12 md:h-12 text-purple-500 mb-1" />
-                <span className="text-sm md:text-base font-bold text-purple-700 dark:text-purple-300 line-clamp-2 px-1">
+                <Sparkles className="w-4 h-4 sm:w-6 sm:h-6 md:w-10 md:h-10 text-purple-500" />
+                <span className="text-xs sm:text-sm md:text-base font-bold text-purple-700 dark:text-purple-300 line-clamp-2 px-0.5">
                   {cellInfo?.type?.name}
                 </span>
               </div>
             )}
           </div>
         ) : (
-          // Case non révélée - afficher numéro bien visible
+          // Case non révélée - afficher numéro adapté à la taille
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/10 to-transparent">
-            <span className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+            <span className={`${getNumberSize()} font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]`}>
               {index + 1}
             </span>
           </div>
@@ -360,7 +403,7 @@ const MysteryGameView = ({
         {/* Overlay hover pour contrôleur (créateur ou superadmin) */}
         {canControl && status === 'playing' && !isRevealed && (
           <div className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
-            <Eye className="w-10 h-10 md:w-14 md:h-14 text-white drop-shadow-lg" />
+            <Eye className="w-6 h-6 sm:w-8 sm:h-8 md:w-12 md:h-12 text-white drop-shadow-lg" />
           </div>
         )}
       </button>
@@ -542,7 +585,7 @@ const MysteryGameView = ({
       </div>
 
       {/* Grille plein écran */}
-      <div className="flex-1 p-2 sm:p-4 overflow-hidden">
+      <div className="flex-1 p-1 sm:p-2 md:p-4 overflow-hidden">
         <style>{`
           @keyframes flip {
             0% { transform: rotateY(0deg); }
@@ -554,9 +597,9 @@ const MysteryGameView = ({
           }
         `}</style>
         <div 
-          className="h-full w-full grid gap-1 sm:gap-2 md:gap-3 auto-rows-fr"
+          className="h-full w-full grid gap-1 sm:gap-1.5 md:gap-2 auto-rows-fr"
           style={{
-            gridTemplateColumns: `repeat(${cols.mobile}, 1fr)`,
+            gridTemplateColumns: `repeat(${cols[screenSize]}, 1fr)`,
           }}
         >
           {Array.from({ length: gameState.totalCells || grid?.gridSize || 0 }, (_, i) => renderCell(i))}
@@ -580,11 +623,11 @@ const MysteryGameView = ({
       {/* Modale de révélation */}
       {currentReveal && (
         <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4"
           onClick={canControl ? handleCloseReveal : undefined}
         >
           <div 
-            className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl p-6 md:p-8 max-w-lg w-full text-center animate-bounce-in shadow-2xl"
+            className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-lg w-full text-center animate-bounce-in shadow-2xl max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <style>{`
@@ -599,40 +642,40 @@ const MysteryGameView = ({
             `}</style>
             
             {/* Numéro de la case */}
-            <div className="inline-block px-4 py-1 bg-white/20 rounded-full text-white text-sm mb-4">
+            <div className="inline-block px-3 py-0.5 sm:px-4 sm:py-1 bg-white/20 rounded-full text-white text-xs sm:text-sm mb-3 sm:mb-4">
               Case #{currentReveal.index + 1}
             </div>
             
             {/* Image */}
             {currentReveal.imageUrl && (
-              <div className="mb-4 rounded-xl overflow-hidden bg-white/10 p-2">
+              <div className="mb-3 sm:mb-4 rounded-lg sm:rounded-xl overflow-hidden bg-white/10 p-1 sm:p-2">
                 <img 
                   src={currentReveal.imageUrl}
                   alt={currentReveal.name}
-                  className="w-full max-h-64 object-contain rounded-lg"
+                  className="w-full max-h-40 sm:max-h-56 md:max-h-64 object-contain rounded-lg"
                 />
               </div>
             )}
             
             {/* Nom */}
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4 flex items-center justify-center gap-3">
-              <Sparkles className="w-8 h-8 text-yellow-400" />
-              {currentReveal.name}
-              <Sparkles className="w-8 h-8 text-yellow-400" />
+            <h2 className="text-xl sm:text-2xl md:text-4xl font-bold text-white mb-3 sm:mb-4 flex items-center justify-center gap-2 sm:gap-3">
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-yellow-400" />
+              <span className="flex-1">{currentReveal.name}</span>
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-yellow-400" />
             </h2>
             
             {/* Bouton fermer (créateur ou superadmin) */}
             {canControl && (
               <button
                 onClick={handleCloseReveal}
-                className="mt-4 px-6 py-3 bg-white text-purple-700 rounded-xl font-bold hover:bg-purple-100 transition-colors"
+                className="mt-2 sm:mt-4 px-4 sm:px-6 py-2 sm:py-3 bg-white text-purple-700 rounded-lg sm:rounded-xl font-bold hover:bg-purple-100 transition-colors text-sm sm:text-base"
               >
                 Continuer
               </button>
             )}
             
             {!canControl && (
-              <p className="text-purple-200 text-sm mt-4">
+              <p className="text-purple-200 text-xs sm:text-sm mt-2 sm:mt-4">
                 En attente de l'admin...
               </p>
             )}
@@ -642,16 +685,16 @@ const MysteryGameView = ({
 
       {/* Écran de fin */}
       {status === 'finished' && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gradient-to-br from-green-600 to-emerald-700 rounded-2xl p-8 max-w-md w-full text-center">
-            <Sparkles className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
-            <h2 className="text-3xl font-bold text-white mb-4">Partie terminée !</h2>
-            <p className="text-green-200 mb-6">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-gradient-to-br from-green-600 to-emerald-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-md w-full text-center">
+            <Sparkles className="w-12 h-12 sm:w-16 sm:h-16 text-yellow-400 mx-auto mb-3 sm:mb-4" />
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3 sm:mb-4">Partie terminée !</h2>
+            <p className="text-green-200 mb-4 sm:mb-6 text-sm sm:text-base">
               Toutes les cases ont été découvertes.
             </p>
             <button
               onClick={handleLeave}
-              className="px-6 py-3 bg-white text-green-700 rounded-xl font-bold hover:bg-green-100"
+              className="px-4 sm:px-6 py-2 sm:py-3 bg-white text-green-700 rounded-lg sm:rounded-xl font-bold hover:bg-green-100 text-sm sm:text-base"
             >
               Retour au menu
             </button>
