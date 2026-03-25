@@ -53,8 +53,6 @@ const MysteryGameView = ({
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
   
-  const toast = useToast();
-  
   // Hook pour recevoir les broadcasts
   const { 
     currentBroadcast, 
