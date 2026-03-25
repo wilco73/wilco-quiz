@@ -694,10 +694,10 @@ const DrawingCanvas = ({
   };
 
   return (
-    <div className="drawing-canvas-container" onClick={closeAllPickers}>
+    <div className="drawing-canvas-container h-full w-full flex flex-col" onClick={closeAllPickers}>
       {/* Barre d'outils */}
       {showTools && (
-        <div className="flex flex-wrap items-center gap-2 mb-3 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="flex-shrink-0 flex flex-wrap items-center gap-2 mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg" onClick={(e) => e.stopPropagation()}>
           {/* Outils de base */}
           <div className="flex items-center gap-1 border-r border-gray-300 dark:border-gray-600 pr-2">
             <button
@@ -996,19 +996,13 @@ const DrawingCanvas = ({
         </div>
       )}
       
-      {/* Canvas */}
+      {/* Canvas - utilise tout l'espace disponible */}
       <div 
-        className={`relative border-2 rounded-lg overflow-hidden ${
+        className={`relative border-2 rounded-lg overflow-hidden flex-1 min-h-0 ${
           canDraw 
             ? 'border-purple-500 dark:border-purple-400' 
             : 'border-gray-300 dark:border-gray-600'
         }`}
-        style={{ 
-          width: '100%',
-          height: '100%',
-          maxWidth: width,
-          aspectRatio: `${width}/${height}`
-        }}
       >
         <canvas
           ref={canvasRef}

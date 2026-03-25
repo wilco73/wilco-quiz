@@ -3,7 +3,7 @@ import {
   Clock, Trophy, Send, Check, Users, Crown, LogOut,
   AlertCircle, Palette, ChevronLeft, ChevronRight, Download, Image,
   Plus, X, Play, Settings, ChevronUp, ChevronDown, MessageCircle,
-  Maximize2, Minimize2, Menu
+  Maximize2, Minimize2, Menu, RotateCcw, Smartphone
 } from 'lucide-react';
 import DrawingCanvas from './DrawingCanvas';
 import { PictionaryConfig } from './PictionaryGame';
@@ -33,19 +33,26 @@ const DrawingLobbyView = ({
   
   // ========== ÉTATS MOBILE ==========
   const [isMobile, setIsMobile] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
   const [showMobileTools, setShowMobileTools] = useState(false);
   const [showMobileGuessModal, setShowMobileGuessModal] = useState(false);
   const [showMobileScores, setShowMobileScores] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
-  // Détecter le mode mobile
+  // Détecter le mode mobile et l'orientation
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+      const mobile = window.innerWidth < 768 || ('ontouchstart' in window && window.innerWidth < 1024);
+      setIsMobile(mobile);
+      setIsPortrait(window.innerHeight > window.innerWidth);
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener('orientationchange', checkMobile);
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('orientationchange', checkMobile);
+    };
   }, []);
   
   // Propriétés du joueur
@@ -777,11 +784,41 @@ const DrawingLobbyView = ({
 
   // ========== RENDU MOBILE (JEU EN COURS) ==========
   if (isMobile) {
+    // Si en mode portrait, demander de tourner le téléphone
+    if (isPortrait) {
+      return (
+        <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex flex-col items-center justify-center p-6 text-center">
+          {renderPopups()}
+          <div className="animate-bounce mb-6">
+            <Smartphone className="w-16 h-16 text-purple-400 transform rotate-90" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">Tournez votre téléphone</h2>
+          <p className="text-gray-300 mb-6">
+            Pour une meilleure expérience de dessin, passez en mode paysage
+          </p>
+          <div className="flex items-center gap-2 text-purple-400">
+            <RotateCcw className="w-5 h-5 animate-spin" style={{ animationDuration: '3s' }} />
+            <span className="text-sm">Rotation automatique</span>
+          </div>
+          
+          {/* Info partie en cours */}
+          <div className="mt-8 p-4 bg-gray-800/50 rounded-lg">
+            <p className="text-sm text-gray-400">Partie en cours</p>
+            <p className="text-lg font-bold text-white">Tour {(gameState.currentRound || 0) + 1}/{gameState.totalRounds || 0}</p>
+            <p className={`text-sm ${gameState.timeRemaining <= 30 ? 'text-red-400' : 'text-blue-400'}`}>
+              ⏱️ {gameState.timeRemaining || 0}s restantes
+            </p>
+          </div>
+        </div>
+      );
+    }
+    
+    // Mode paysage - afficher le jeu
     return (
       <div className="fixed inset-0 flex flex-col bg-gray-900 overflow-hidden">
         {renderPopups()}
         
-        {/* Header ultra-compact mobile */}
+        {/* Header ultra-compact mobile paysage */}
         <div className="flex-shrink-0 bg-gray-800 px-2 py-1 flex items-center justify-between">
           {/* Timer */}
           <div className={`flex items-center gap-1 ${
@@ -791,9 +828,16 @@ const DrawingLobbyView = ({
             <span className="text-lg font-bold">{gameState.timeRemaining || 0}s</span>
           </div>
           
+          {/* Mot à deviner (si dessinateur) */}
+          {isDrawingTeam && (
+            <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-3 py-0.5 rounded-full">
+              <span className="text-white font-bold">{gameState.currentWord || '???'}</span>
+            </div>
+          )}
+          
           {/* Info tour */}
-          <div className="text-center">
-            <p className="text-xs text-gray-400">{(gameState.currentRound || 0) + 1}/{gameState.totalRounds || 0}</p>
+          <div className="text-center text-xs text-gray-400">
+            {(gameState.currentRound || 0) + 1}/{gameState.totalRounds || 0}
           </div>
           
           {/* Scores dropdown */}
@@ -822,13 +866,6 @@ const DrawingLobbyView = ({
                   <span className="font-bold">{score}</span>
                 </div>
               ))}
-          </div>
-        )}
-        
-        {/* Bandeau mot (si dessinateur) - compact */}
-        {isDrawingTeam && (
-          <div className="flex-shrink-0 bg-gradient-to-r from-purple-600 to-blue-600 px-2 py-1.5 flex items-center justify-center gap-2">
-            <span className="text-white font-bold text-lg">{gameState.currentWord || '???'}</span>
           </div>
         )}
         
