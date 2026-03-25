@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Clock } from 'lucide-react';
+import { Check, Clock, ZoomIn, X } from 'lucide-react';
 
 const QuizView = ({
   lobby,
@@ -16,6 +16,8 @@ const QuizView = ({
   const inputRef = useRef(null);
   const videoRef = useRef(null);
   const audioRef = useRef(null);
+  const [zoomedImage, setZoomedImage] = useState(null);
+  const [autoplayFailed, setAutoplayFailed] = useState(false);
 
   // Utiliser les props renommees avec protection null
   const currentLobby = lobby;
@@ -49,15 +51,63 @@ const QuizView = ({
     }
   };
 
-  // Volume à 30%
+  // Cleanup des médias quand on change de question ou quitte le composant
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.volume = 0.3;
+    return () => {
+      // Cleanup au démontage ou changement de question
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.src = '';
+        videoRef.current.load();
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current.load();
+      }
+    };
+  }, [questionIndex, lobby?.id]);
+
+  // Cleanup quand le lobby est terminé ou qu'on quitte
+  useEffect(() => {
+    if (isFinished || !currentLobby) {
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
     }
-    if (audioRef.current) {
-      audioRef.current.volume = 0.3;
-    }
-  }, [question?.id, questionIndex]);
+  }, [isFinished, currentLobby]);
+
+  // Gestion de l'autoplay avec fallback pour Safari
+  useEffect(() => {
+    setAutoplayFailed(false);
+    
+    const tryAutoplay = async (mediaRef) => {
+      if (!mediaRef.current) return;
+      
+      try {
+        mediaRef.current.volume = 0.3;
+        await mediaRef.current.play();
+      } catch (error) {
+        console.log('[AUTOPLAY BLOCKED]', error.message);
+        setAutoplayFailed(true);
+      }
+    };
+
+    // Petit délai pour laisser le DOM se mettre à jour
+    const timer = setTimeout(() => {
+      if (videoRef.current && question?.media && (question?.type === 'video' || (question?.type === 'qcm' && question?.mediaType === 'video'))) {
+        tryAutoplay(videoRef);
+      }
+      if (audioRef.current && question?.media && (question?.type === 'audio' || (question?.type === 'qcm' && question?.mediaType === 'audio'))) {
+        tryAutoplay(audioRef);
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [question?.id, questionIndex, question?.media, question?.type, question?.mediaType]);
 
   // Focus automatique sur l'input (seulement sur desktop)
   useEffect(() => {
@@ -66,6 +116,17 @@ const QuizView = ({
       inputRef.current.focus();
     }
   }, [questionIndex, hasAnswered, isFinished, question?.type]);
+
+  // Lancer manuellement le média (pour Safari)
+  const handleManualPlay = () => {
+    if (videoRef.current) {
+      videoRef.current.play().catch(console.error);
+    }
+    if (audioRef.current) {
+      audioRef.current.play().catch(console.error);
+    }
+    setAutoplayFailed(false);
+  };
 
   // Afficher un loader si pas encore de donnees
   if (!currentLobby || !quiz) {
@@ -115,6 +176,9 @@ const QuizView = ({
   }
 
   const isTimeExpired = timeRemaining === 0 && question?.timer > 0;
+  const hasImageMedia = question?.media && (question?.type === 'image' || (question?.type === 'qcm' && question?.mediaType === 'image'));
+  const hasVideoMedia = question?.media && (question?.type === 'video' || (question?.type === 'qcm' && question?.mediaType === 'video'));
+  const hasAudioMedia = question?.media && (question?.type === 'audio' || (question?.type === 'qcm' && question?.mediaType === 'audio'));
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-2 sm:p-4">
@@ -176,39 +240,73 @@ const QuizView = ({
           {/* Média (image, vidéo, audio) */}
           {question?.media && (
             <div className="mb-4 sm:mb-6">
-              {(question?.type === 'image' || (question?.type === 'qcm' && question?.mediaType === 'image')) && (
+              {/* Image avec zoom */}
+              {hasImageMedia && (
                 <div className="flex justify-center">
-                  <img 
-                    src={question.media} 
-                    alt="Question" 
-                    className="max-w-full w-auto max-h-48 sm:max-h-64 md:max-h-80 rounded-lg object-contain" 
-                  />
+                  <div 
+                    className="relative cursor-pointer group"
+                    onClick={() => setZoomedImage(question.media)}
+                  >
+                    <img 
+                      src={question.media} 
+                      alt="Question" 
+                      className="max-w-full w-auto max-h-[40vh] sm:max-h-[50vh] md:max-h-[60vh] rounded-lg object-contain" 
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-lg flex items-center justify-center">
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 text-white px-2 py-1 rounded text-xs sm:text-sm flex items-center gap-1">
+                        <ZoomIn className="w-3 h-3 sm:w-4 sm:h-4" />
+                        Agrandir
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
-                
-              {(question?.type === 'video' || (question?.type === 'qcm' && question?.mediaType === 'video')) && (
-                <video
-                  ref={videoRef}
-                  key={`video-${currentSession?.currentQuestionIndex}-${question.id}`}
-                  controls
-                  autoPlay
-                  playsInline
-                  className="w-full rounded-lg max-h-48 sm:max-h-64 md:max-h-80"
-                >
-                  <source src={question.media} />
-                </video>
+              
+              {/* Vidéo */}
+              {hasVideoMedia && (
+                <div className="relative">
+                  <video
+                    ref={videoRef}
+                    key={`video-${currentSession?.currentQuestionIndex}-${question.id}`}
+                    controls
+                    playsInline
+                    className="w-full rounded-lg max-h-[40vh] sm:max-h-[50vh] md:max-h-[60vh]"
+                  >
+                    <source src={question.media} />
+                  </video>
+                  {autoplayFailed && (
+                    <button
+                      onClick={handleManualPlay}
+                      className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-lg"
+                    >
+                      <div className="bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm sm:text-base font-semibold shadow-lg">
+                        ▶️ Lancer la vidéo
+                      </div>
+                    </button>
+                  )}
+                </div>
               )}
 
-              {(question?.type === 'audio' || (question?.type === 'qcm' && question?.mediaType === 'audio')) && (
-                <audio
-                  ref={audioRef}
-                  key={`audio-${currentSession?.currentQuestionIndex}-${question.id}`}
-                  controls
-                  autoPlay
-                  className="w-full"
-                >
-                  <source src={question.media} />
-                </audio>
+              {/* Audio */}
+              {hasAudioMedia && (
+                <div className="space-y-2">
+                  <audio
+                    ref={audioRef}
+                    key={`audio-${currentSession?.currentQuestionIndex}-${question.id}`}
+                    controls
+                    className="w-full"
+                  >
+                    <source src={question.media} />
+                  </audio>
+                  {autoplayFailed && (
+                    <button
+                      onClick={handleManualPlay}
+                      className="w-full py-2 bg-purple-600 text-white rounded-lg flex items-center justify-center gap-2 text-sm sm:text-base font-semibold"
+                    >
+                      🎵 Lancer la musique
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -344,6 +442,27 @@ const QuizView = ({
           )}
         </div>
       </div>
+
+      {/* Modale zoom image */}
+      {zoomedImage && (
+        <div 
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-2 sm:p-4"
+          onClick={() => setZoomedImage(null)}
+        >
+          <button
+            onClick={() => setZoomedImage(null)}
+            className="absolute top-2 right-2 sm:top-4 sm:right-4 p-2 bg-white/20 hover:bg-white/30 rounded-full text-white transition-colors"
+          >
+            <X className="w-6 h-6 sm:w-8 sm:h-8" />
+          </button>
+          <img
+            src={zoomedImage}
+            alt="Zoom"
+            className="max-w-full max-h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 };

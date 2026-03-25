@@ -531,6 +531,8 @@ const AdminContent = ({
               toast.error(result.message || 'Erreur');
             }
           }}
+          onStartQuiz={handleStartQuiz}
+          onStopQuiz={onStopQuiz}
         />
       );
 
