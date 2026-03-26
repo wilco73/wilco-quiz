@@ -211,7 +211,7 @@ router.put('/:id/avatar', async (req, res) => {
   // Liste des avatars autorisés
   const allowedAvatars = [
     'default', 'cat', 'dog', 'fox', 'owl', 'panda', 'rabbit', 'bear', 'koala', 'lion',
-    'tiger', 'wolf', 'penguin', 'monkey', 'elephant', 'giraffe', 'zebra', 'deer', 'squirrel', 'hedgehog',
+    'tiger', 'wolf', 'penguin', 'monkey', 'elephant', 'giraffe', 'zebra', 'deer', 'squirrel', 'hedgehog', 'flamant',
     'robot', 'alien', 'ghost', 'ninja', 'pirate', 'wizard', 'knight', 'astronaut', 'chef', 'detective'
   ];
   
