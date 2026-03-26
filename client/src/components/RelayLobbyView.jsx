@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Clock, Users, LogOut, Image, RefreshCw, Play
+  Clock, Users, LogOut, Image, RefreshCw, Play, RotateCcw, Smartphone
 } from 'lucide-react';
 import DrawingCanvas from './DrawingCanvas';
 import { RelayConfig, RelayResults } from './RelayGame';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+
+// Dimensions canvas fixes pour cohérence
+const CANVAS_WIDTH = 700;
+const CANVAS_HEIGHT = 450;
 
 const RelayLobbyView = ({
   lobby: initialLobby,
@@ -20,7 +24,11 @@ const RelayLobbyView = ({
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [references, setReferences] = useState([]);
   const canvasRef = useRef(null);
-  const gameStateRef = useRef(null); // Pour accéder au gameState dans les callbacks
+  const gameStateRef = useRef(null);
+  
+  // États responsive
+  const [isMobile, setIsMobile] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
   
   const myTeam = currentUser?.teamName;
   const isRoomMaster = lobby?.creator_id === currentUser?.id;
@@ -31,6 +39,22 @@ const RelayLobbyView = ({
     : [];
   
   const myAssignment = gameState?.assignments?.find(a => a.team === myTeam);
+  
+  // Détecter mobile et orientation
+  useEffect(() => {
+    const checkDevice = () => {
+      const mobile = window.innerWidth < 768 || ('ontouchstart' in window && window.innerWidth < 1024);
+      setIsMobile(mobile);
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
+    window.addEventListener('orientationchange', checkDevice);
+    return () => {
+      window.removeEventListener('resize', checkDevice);
+      window.removeEventListener('orientationchange', checkDevice);
+    };
+  }, []);
   
   // Garder gameStateRef synchronisé
   useEffect(() => {
@@ -370,40 +394,52 @@ const RelayLobbyView = ({
     const isOriginal = gameState.currentRound === 0;
     
     return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 mb-4">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-2 sm:p-4 flex flex-col"
+        style={{ paddingTop: isMobile ? 'max(0.5rem, env(safe-area-inset-top))' : undefined }}
+      >
+        <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col">
+          {/* Header */}
+          <div className="flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 sm:p-4 mb-2 sm:mb-4">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-bold dark:text-white">👀 Phase d'observation</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Passage {gameState.currentRound + 1} / {gameState.totalRounds}
+                <h2 className="text-lg sm:text-xl font-bold dark:text-white">👀 Mémorisez !</h2>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                  Passage {gameState.currentRound + 1}/{gameState.totalRounds}
                 </p>
               </div>
-              <div className={`text-3xl font-bold ${
+              <div className={`text-xl sm:text-3xl font-bold ${
                 gameState.phaseTimeRemaining <= 10 ? 'text-red-500 animate-pulse' : 'text-blue-600 dark:text-blue-400'
               }`}>
-                <Clock className="w-6 h-6 inline mr-2" />
+                <Clock className="w-4 h-4 sm:w-6 sm:h-6 inline mr-1" />
                 {formatTime(gameState.phaseTimeRemaining)}
               </div>
             </div>
           </div>
           
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 text-center">
-            <p className="text-lg text-gray-600 dark:text-gray-400 mb-4">
+          {/* Image */}
+          <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 sm:p-6 text-center flex flex-col min-h-0">
+            <p className="flex-shrink-0 text-sm sm:text-lg text-gray-600 dark:text-gray-400 mb-2 sm:mb-4">
               {isOriginal ? '📷 Mémorisez cette image !' : `🖼️ Dessin de l'équipe ${myAssignment?.sourceTeam}`}
             </p>
             
-            {imageToShow ? (
-              <img src={imageToShow} alt="Image à mémoriser" className="max-w-full max-h-96 mx-auto rounded-lg shadow-lg" />
-            ) : (
-              <div className="bg-gray-200 dark:bg-gray-700 rounded-lg p-12">
-                <Image className="w-16 h-16 mx-auto text-gray-400" />
-                <p className="text-gray-500 dark:text-gray-400 mt-4">Image non disponible</p>
-              </div>
-            )}
+            <div className="flex-1 flex items-center justify-center min-h-0">
+              {imageToShow ? (
+                <img 
+                  src={imageToShow} 
+                  alt="Image à mémoriser" 
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-lg" 
+                />
+              ) : (
+                <div className="bg-gray-200 dark:bg-gray-700 rounded-lg p-8 sm:p-12">
+                  <Image className="w-12 h-12 sm:w-16 sm:h-16 mx-auto text-gray-400" />
+                  <p className="text-gray-500 dark:text-gray-400 mt-4 text-sm sm:text-base">Image non disponible</p>
+                </div>
+              )}
+            </div>
             
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">{myAssignment?.referenceName || 'Image'}</p>
+            <p className="flex-shrink-0 text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2 sm:mt-4">
+              {myAssignment?.referenceName || 'Image'}
+            </p>
           </div>
         </div>
       </div>
@@ -412,34 +448,98 @@ const RelayLobbyView = ({
   
   // Phase de dessin
   if (gameState.phase === 'drawing') {
-    return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
-        <div className="max-w-5xl mx-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 mb-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-bold dark:text-white">✏️ À vos crayons !</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Passage {gameState.currentRound + 1} / {gameState.totalRounds} • {myAssignment?.referenceName || 'Image'}
-                </p>
-              </div>
-              <div className={`text-3xl font-bold ${
-                gameState.phaseTimeRemaining <= 30 ? 'text-red-500 animate-pulse' : 'text-green-600 dark:text-green-400'
-              }`}>
-                <Clock className="w-6 h-6 inline mr-2" />
-                {formatTime(gameState.phaseTimeRemaining)}
-              </div>
+    // Mobile portrait : demander de tourner
+    if (isMobile && isPortrait) {
+      return (
+        <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex flex-col items-center justify-center p-6 text-center">
+          <div className="animate-bounce mb-6">
+            <Smartphone className="w-16 h-16 text-purple-400 transform rotate-90" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">Tournez votre téléphone</h2>
+          <p className="text-gray-300 mb-6">Pour dessiner confortablement, passez en mode paysage</p>
+          <div className="flex items-center gap-2 text-purple-400">
+            <RotateCcw className="w-5 h-5 animate-spin" style={{ animationDuration: '3s' }} />
+            <span className="text-sm">Rotation automatique</span>
+          </div>
+          <div className="mt-8 p-4 bg-gray-800/50 rounded-lg">
+            <p className="text-sm text-gray-400">Passage {gameState.currentRound + 1}/{gameState.totalRounds}</p>
+            <p className={`text-lg font-bold ${gameState.phaseTimeRemaining <= 30 ? 'text-red-400' : 'text-green-400'}`}>
+              ⏱️ {formatTime(gameState.phaseTimeRemaining)}
+            </p>
+          </div>
+        </div>
+      );
+    }
+    
+    // Mobile paysage : plein écran
+    if (isMobile) {
+      return (
+        <div className="fixed inset-0 flex flex-col bg-gray-900 overflow-hidden">
+          <div 
+            className="flex-shrink-0 bg-gray-800 px-2 py-1 flex items-center justify-between"
+            style={{ paddingTop: 'max(0.25rem, env(safe-area-inset-top))', paddingLeft: 'max(0.5rem, env(safe-area-inset-left))', paddingRight: 'max(0.5rem, env(safe-area-inset-right))' }}
+          >
+            <div className={`flex items-center gap-1 ${
+              gameState.phaseTimeRemaining <= 30 ? 'text-red-500 animate-pulse' : 'text-green-400'
+            }`}>
+              <Clock className="w-4 h-4" />
+              <span className="text-lg font-bold">{formatTime(gameState.phaseTimeRemaining)}</span>
             </div>
+            <span className="text-xs text-gray-400">
+              Passage {gameState.currentRound + 1}/{gameState.totalRounds}
+            </span>
+            <span className="text-xs text-purple-400 truncate max-w-[100px]">
+              {myAssignment?.referenceName}
+            </span>
           </div>
           
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
-            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
-              <p className="text-blue-700 dark:text-blue-300">🎨 Toute l'équipe peut dessiner en même temps !</p>
-            </div>
-            
+          <div className="flex-1 relative bg-white">
             <DrawingCanvas
-              width={700}
-              height={450}
+              width={CANVAS_WIDTH}
+              height={CANVAS_HEIGHT}
+              canDraw={true}
+              showTools={true}
+              collaborative={true}
+              socket={socket}
+              lobbyId={lobby.id}
+              odId={currentUser?.id}
+              teamId={myTeam}
+              externalStrokes={externalStrokes}
+              clearSignal={clearSignal}
+              externalCanvasRef={canvasRef}
+            />
+          </div>
+        </div>
+      );
+    }
+    
+    // Desktop
+    return (
+      <div className="h-screen bg-gray-100 dark:bg-gray-900 p-2 flex flex-col overflow-hidden">
+        <div className="flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg shadow px-4 py-2 mb-2 flex justify-between items-center">
+          <div>
+            <h2 className="text-lg font-bold dark:text-white">✏️ À vos crayons !</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Passage {gameState.currentRound + 1}/{gameState.totalRounds} • {myAssignment?.referenceName || 'Image'}
+            </p>
+          </div>
+          <div className={`text-2xl font-bold ${
+            gameState.phaseTimeRemaining <= 30 ? 'text-red-500 animate-pulse' : 'text-green-600 dark:text-green-400'
+          }`}>
+            <Clock className="w-5 h-5 inline mr-1" />
+            {formatTime(gameState.phaseTimeRemaining)}
+          </div>
+        </div>
+        
+        <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow p-3 flex flex-col min-h-0">
+          <div className="flex-shrink-0 mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center text-sm">
+            <p className="text-blue-700 dark:text-blue-300">🎨 Toute l'équipe peut dessiner en même temps !</p>
+          </div>
+          
+          <div className="flex-1 min-h-0">
+            <DrawingCanvas
+              width={CANVAS_WIDTH}
+              height={CANVAS_HEIGHT}
               canDraw={true}
               showTools={true}
               collaborative={true}
