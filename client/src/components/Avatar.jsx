@@ -26,6 +26,7 @@ export const AVATARS = {
   deer: { image: '/avatars/deer.png', label: 'Cerf', category: 'Animaux' },
   squirrel: { image: '/avatars/squirrel.png', label: 'Écureuil', category: 'Animaux' },
   hedgehog: { image: '/avatars/hedgehog.png', label: 'Hérisson', category: 'Animaux' },
+  flamant: { image: '/avatars/flamant.png', label: 'Flamant rose', category: 'Animaux' },
   
   // Personnages
   robot: { image: '/avatars/robot.png', label: 'Robot', category: 'Personnages' },
