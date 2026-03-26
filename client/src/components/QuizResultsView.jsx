@@ -110,37 +110,43 @@ const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeav
   const teamRejectedCount = teamStats.reduce((acc, member) => acc + member.rejectedCount, 0);
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+    <div 
+      className="min-h-screen bg-gray-100 dark:bg-gray-900 p-2 sm:p-4"
+      style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
+    >
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 mb-6 text-center">
-          <Trophy className="w-16 h-16 mx-auto text-yellow-500 mb-4" />
-          <h2 className="text-3xl font-bold mb-2 dark:text-white">Quiz Terminé !</h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400 mb-4">{quiz.title}</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6 md:p-8 mb-4 sm:mb-6 text-center">
+          <Trophy className="w-12 h-12 sm:w-16 sm:h-16 mx-auto text-yellow-500 mb-3 sm:mb-4" />
+          <h2 className="text-2xl sm:text-3xl font-bold mb-2 dark:text-white">Quiz Terminé !</h2>
+          <p className="text-base sm:text-lg text-gray-600 dark:text-gray-400 mb-4">{quiz.title}</p>
           
           {/* Toggle Personnel / Équipe */}
-          <div className="flex justify-center gap-2 mb-6">
+          <div className="flex justify-center gap-2 mb-4 sm:mb-6">
             <button
               onClick={() => setViewMode('personal')}
-              className={`px-6 py-3 rounded-lg font-semibold transition flex items-center gap-2 ${
+              className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold transition flex items-center gap-1 sm:gap-2 text-sm sm:text-base ${
                 viewMode === 'personal'
                   ? 'bg-purple-600 dark:bg-purple-700 text-white'
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
               }`}
             >
-              <Target className="w-5 h-5" />
-              Mes Résultats
+              <Target className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Mes Résultats</span>
+              <span className="sm:hidden">Perso</span>
             </button>
             <button
               onClick={() => setViewMode('team')}
-              className={`px-6 py-3 rounded-lg font-semibold transition flex items-center gap-2 ${
+              className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold transition flex items-center gap-1 sm:gap-2 text-sm sm:text-base ${
                 viewMode === 'team'
                   ? 'bg-purple-600 dark:bg-purple-700 text-white'
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
               }`}
             >
-              <Users className="w-5 h-5" />
-              Mon Équipe ({teamMembers.length})
+              <Users className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Mon Équipe</span>
+              <span className="sm:hidden">Équipe</span>
+              <span className="text-xs">({teamMembers.length})</span>
             </button>
           </div>
 
@@ -148,34 +154,34 @@ const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeav
           {viewMode === 'personal' && (
             <>
               {/* Stats personnelles */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                  <Target className="w-8 h-8 mx-auto text-blue-600 dark:text-blue-400 mb-2" />
-                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{myAnsweredCount}/{questions.length}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Réponses</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 mt-4 sm:mt-6">
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 sm:p-4">
+                  <Target className="w-6 h-6 sm:w-8 sm:h-8 mx-auto text-blue-600 dark:text-blue-400 mb-1 sm:mb-2" />
+                  <p className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{myAnsweredCount}/{questions.length}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Réponses</p>
                 </div>
-                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-                  <CheckCircle className="w-8 h-8 mx-auto text-green-600 dark:text-green-400 mb-2" />
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">{myValidatedCount}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Validées</p>
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 sm:p-4">
+                  <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 mx-auto text-green-600 dark:text-green-400 mb-1 sm:mb-2" />
+                  <p className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">{myValidatedCount}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Validées</p>
                 </div>
-                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
-                  <XCircle className="w-8 h-8 mx-auto text-red-600 dark:text-red-400 mb-2" />
-                  <p className="text-2xl font-bold text-red-600 dark:text-red-400">{myRejectedCount}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Refusées</p>
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 sm:p-4">
+                  <XCircle className="w-6 h-6 sm:w-8 sm:h-8 mx-auto text-red-600 dark:text-red-400 mb-1 sm:mb-2" />
+                  <p className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">{myRejectedCount}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Refusées</p>
                 </div>
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4">
-                  <Clock className="w-8 h-8 mx-auto text-yellow-600 dark:text-yellow-400 mb-2" />
-                  <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{myPendingCount}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">En attente</p>
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 sm:p-4">
+                  <Clock className="w-6 h-6 sm:w-8 sm:h-8 mx-auto text-yellow-600 dark:text-yellow-400 mb-1 sm:mb-2" />
+                  <p className="text-xl sm:text-2xl font-bold text-yellow-600 dark:text-yellow-400">{myPendingCount}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">En attente</p>
                 </div>
               </div>
 
-              <div className="mt-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border-2 border-purple-500 dark:border-purple-600">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Votre score actuel</p>
-                <p className="text-4xl font-bold text-purple-600 dark:text-purple-400">{myTotalPoints} points</p>
+              <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border-2 border-purple-500 dark:border-purple-600">
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Votre score actuel</p>
+                <p className="text-3xl sm:text-4xl font-bold text-purple-600 dark:text-purple-400">{myTotalPoints} points</p>
                 {myPendingCount > 0 && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2">
                     ⏳ {myPendingCount} réponse{myPendingCount > 1 ? 's' : ''} en attente de validation
                   </p>
                 )}
@@ -187,10 +193,10 @@ const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeav
           {viewMode === 'team' && (
             <>
               {/* Stats de l'équipe */}
-              <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-6 mb-6 border-2 border-purple-300 dark:border-purple-600">
-                <div className="flex items-center justify-center gap-3 mb-4">
-                  <Users className="w-10 h-10 text-purple-600 dark:text-purple-400" />
-                  <h3 className="text-2xl font-bold dark:text-white">Équipe {currentUser.teamName}</h3>
+              <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6 border-2 border-purple-300 dark:border-purple-600">
+                <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                  <Users className="w-8 h-8 sm:w-10 sm:h-10 text-purple-600 dark:text-purple-400" />
+                  <h3 className="text-xl sm:text-2xl font-bold dark:text-white">Équipe {currentUser.teamName}</h3>
                 </div>
                 
                 <div className="grid grid-cols-3 gap-4">

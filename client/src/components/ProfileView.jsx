@@ -176,18 +176,18 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
   // Classes du conteneur selon le mode
   const containerClass = embedded 
     ? "" 
-    : "min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 p-4";
+    : "min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 p-2 sm:p-4";
 
   return (
-    <div className={containerClass}>
+    <div className={containerClass} style={!embedded ? { paddingTop: 'max(0.5rem, env(safe-area-inset-top))' } : undefined}>
       <div className="max-w-lg mx-auto">
         {/* Header avec Avatar */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-4">
-          <div className="flex justify-between items-center">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6 mb-4">
+          <div className="flex justify-between items-start gap-3">
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => setShowAvatarSelector(!showAvatarSelector)}
-                className="relative group"
+                className="relative group flex-shrink-0"
                 title="Changer d'avatar"
               >
                 <Avatar avatarId={selectedAvatar} size="xl" />
@@ -195,13 +195,13 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
                   <Smile className="w-6 h-6 text-white" />
                 </div>
               </button>
-              <div>
-                <h2 className="text-2xl font-bold dark:text-white">{currentUser?.pseudo}</h2>
-                <p className="text-gray-600 dark:text-gray-400">
+              <div className="min-w-0">
+                <h2 className="text-xl sm:text-2xl font-bold dark:text-white truncate">{currentUser?.pseudo}</h2>
+                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
                   {currentUser?.teamName ? (
                     <span className="flex items-center gap-1">
-                      <Users className="w-4 h-4" />
-                      {currentUser.teamName}
+                      <Users className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">{currentUser.teamName}</span>
                     </span>
                   ) : (
                     <span className="text-orange-600 dark:text-orange-400">Sans equipe</span>
@@ -215,9 +215,9 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
             {!embedded && (
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition flex-shrink-0"
               >
-                <X className="w-6 h-6 text-gray-500" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-500" />
               </button>
             )}
           </div>

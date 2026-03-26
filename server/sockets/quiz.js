@@ -304,6 +304,9 @@ function register(socket, io) {
     const questions = getQuizQuestions(lobby, quiz);
     const currentQuestion = questions[updatedLobby.session?.currentQuestionIndex || 0];
     
+    // Catégorie du quiz (groupName) pour attribution des points
+    const quizCategory = quiz?.groupName || 'Sans catégorie';
+    
     // Auto-validation pour QCM
     let autoValidated = false;
     if (currentQuestion && currentQuestion.type === 'qcm') {
@@ -319,7 +322,7 @@ function register(socket, io) {
           if (!validation?.qcm_team_scored) {
             const team = await db.getTeamByName(updatedParticipant.teamName);
             if (team) {
-              await db.addTeamScore(team.id, currentQuestion.points || 1);
+              await db.addTeamScoreByCategory(team.id, quizCategory, currentQuestion.points || 1);
               await db.markQcmTeamScored(lobbyId, odId, questionId);
             }
           }
@@ -357,6 +360,10 @@ function register(socket, io) {
     
     const lobby = await db.getLobbyById(lobbyId);
     
+    // Récupérer la catégorie du quiz
+    const quiz = await db.getQuizById(lobby?.quizId);
+    const quizCategory = quiz?.groupName || 'Sans catégorie';
+    
     // Ajouter les points seulement si correct ET pas en mode entraînement
     if (isCorrect && !lobby?.trainingMode) {
       const participant = lobby?.participants.find(p => p.participantId === odId);
@@ -364,8 +371,8 @@ function register(socket, io) {
       if (participant && participant.teamName) {
         const team = await db.getTeamByName(participant.teamName);
         if (team) {
-          await db.addTeamScore(team.id, points || 1);
-          console.log(`[SCORE] +${points || 1} point(s) pour équipe "${participant.teamName}"`);
+          await db.addTeamScoreByCategory(team.id, quizCategory, points || 1);
+          console.log(`[SCORE] +${points || 1} point(s) pour équipe "${participant.teamName}" dans catégorie "${quizCategory}"`);
         }
       }
     }

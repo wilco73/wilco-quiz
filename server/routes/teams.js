@@ -20,7 +20,7 @@ router.get('/', async (req, res) => {
 
 // Créer une équipe
 router.post('/create', async (req, res) => {
-  const { name, score } = req.body;
+  const { name } = req.body;
   
   if (!name || !name.trim()) {
     return res.json({ success: false, message: 'Le nom de l\'équipe est requis' });
@@ -33,26 +33,61 @@ router.post('/create', async (req, res) => {
   }
   
   const team = await db.createTeam(normalizedName);
-  if (score !== undefined && score > 0) {
-    await db.updateTeamScore(team.id, score);
-  }
   
   if (broadcastFunctions?.teams) await broadcastFunctions.teams();
   res.json({ success: true, team: await db.getTeamById(team.id) });
 });
 
-// Modifier une équipe
-router.put('/:id', async (req, res) => {
+// Modifier le score d'une équipe dans une catégorie
+router.put('/:id/score', async (req, res) => {
   const { id } = req.params;
-  const { score } = req.body;
+  const { category, score } = req.body;
   
   const team = await db.getTeamById(parseInt(id));
   if (!team) {
     return res.json({ success: false, message: 'Équipe introuvable' });
   }
   
-  if (score !== undefined) {
-    await db.updateTeamScore(team.id, parseInt(score));
+  if (category === undefined || score === undefined) {
+    return res.json({ success: false, message: 'Catégorie et score requis' });
+  }
+  
+  await db.setTeamScoreByCategory(team.id, category, parseInt(score));
+  
+  if (broadcastFunctions?.teams) await broadcastFunctions.teams();
+  res.json({ success: true, team: await db.getTeamById(team.id) });
+});
+
+// Supprimer une catégorie de score pour une équipe
+router.delete('/:id/score/:category', async (req, res) => {
+  const { id, category } = req.params;
+  
+  const team = await db.getTeamById(parseInt(id));
+  if (!team) {
+    return res.json({ success: false, message: 'Équipe introuvable' });
+  }
+  
+  await db.deleteTeamScoreCategory(team.id, decodeURIComponent(category));
+  
+  if (broadcastFunctions?.teams) await broadcastFunctions.teams();
+  res.json({ success: true, team: await db.getTeamById(team.id) });
+});
+
+// Modifier une équipe (DEPRECATED - garder pour compatibilité)
+router.put('/:id', async (req, res) => {
+  const { id } = req.params;
+  const { score, scoresByCategory } = req.body;
+  
+  const team = await db.getTeamById(parseInt(id));
+  if (!team) {
+    return res.json({ success: false, message: 'Équipe introuvable' });
+  }
+  
+  // Nouveau format : scoresByCategory
+  if (scoresByCategory) {
+    for (const [category, catScore] of Object.entries(scoresByCategory)) {
+      await db.setTeamScoreByCategory(team.id, category, parseInt(catScore));
+    }
   }
   
   if (broadcastFunctions?.teams) await broadcastFunctions.teams();

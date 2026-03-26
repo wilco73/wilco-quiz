@@ -66,15 +66,15 @@ const HistoryView = ({ currentUser, lobbies, quizzes, onViewResults, onBack, emb
   const content = (
     <div className="max-w-4xl mx-auto">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
-        <div className="flex justify-between items-center">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <div className="flex items-center gap-3">
-            <div className="bg-indigo-100 dark:bg-indigo-900/50 rounded-full p-3">
-              <History className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+            <div className="bg-indigo-100 dark:bg-indigo-900/50 rounded-full p-2 sm:p-3 flex-shrink-0">
+              <History className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-600 dark:text-indigo-400" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold dark:text-white">Mon historique</h2>
-              <p className="text-gray-600 dark:text-gray-400">
+              <h2 className="text-xl sm:text-2xl font-bold dark:text-white">Mon historique</h2>
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
                 {myFinishedLobbies.length} quiz terminé{myFinishedLobbies.length > 1 ? 's' : ''}
               </p>
             </div>
@@ -82,10 +82,10 @@ const HistoryView = ({ currentUser, lobbies, quizzes, onViewResults, onBack, emb
           {!embedded && (
             <button
               onClick={onBack}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center gap-2"
+              className="px-3 sm:px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center gap-2 self-start sm:self-center text-sm sm:text-base"
             >
               <ArrowLeft className="w-4 h-4" />
-              Retour
+              <span className="hidden sm:inline">Retour</span>
             </button>
           )}
         </div>
@@ -93,16 +93,16 @@ const HistoryView = ({ currentUser, lobbies, quizzes, onViewResults, onBack, emb
 
       {/* Liste des quiz terminés */}
       {myFinishedLobbies.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-12 text-center">
-          <History className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-          <p className="text-xl text-gray-600 dark:text-gray-400">Aucun quiz dans votre historique</p>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 sm:p-12 text-center">
+          <History className="w-12 h-12 sm:w-16 sm:h-16 mx-auto text-gray-400 mb-4" />
+          <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400">Aucun quiz dans votre historique</p>
           <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
             Participez à des quiz pour les voir apparaître ici
           </p>
         </div>
       ) : (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <div className="space-y-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6">
+          <div className="space-y-3 sm:space-y-4">
             {paginatedLobbies.map(lobby => {
               const quiz = quizzes.find(q => q.id === lobby.quizId);
               const myParticipation = lobby.participants.find(p => p.participantId === currentUser.id);
@@ -116,36 +116,36 @@ const HistoryView = ({ currentUser, lobbies, quizzes, onViewResults, onBack, emb
               return (
                 <div 
                   key={lobby.id} 
-                  className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-md transition"
+                  className="border border-gray-200 dark:border-gray-700 rounded-xl p-3 sm:p-4 hover:shadow-md transition"
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-bold dark:text-white mb-2">{quiz?.title || 'Quiz'}</h3>
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base sm:text-lg font-bold dark:text-white mb-2 truncate">{quiz?.title || 'Quiz'}</h3>
                       
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2 sm:mb-3">
                         <span className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
+                          <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
                           {formatDate(lobby.createdAt)}
                         </span>
                         <span className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
-                          {lobby.participants?.length || 0} participants
+                          <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+                          {lobby.participants?.length || 0}
                         </span>
                       </div>
                       
                       {/* Statistiques */}
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div className="w-20 sm:w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                             <div 
                               className="bg-green-500 h-2 rounded-full transition-all" 
                               style={{ width: `${scorePercent}%` }} 
                             />
                           </div>
-                          <span className="text-sm font-semibold dark:text-white">{scorePercent}%</span>
+                          <span className="text-xs sm:text-sm font-semibold dark:text-white">{scorePercent}%</span>
                         </div>
                         
-                        <div className="flex items-center gap-3 text-sm">
+                        <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">
                           <span className="text-green-600 dark:text-green-400 font-semibold">
                             ✓ {myValidatedCount}
                           </span>
@@ -153,8 +153,8 @@ const HistoryView = ({ currentUser, lobbies, quizzes, onViewResults, onBack, emb
                             ✗ {myRefusedCount}
                           </span>
                           {pendingCount > 0 && (
-                            <span className="text-orange-600 dark:text-orange-400">
-                              ⏳ {pendingCount} en attente
+                            <span className="text-orange-600 dark:text-orange-400 hidden sm:inline">
+                              ⏳ {pendingCount}
                             </span>
                           )}
                         </div>
@@ -163,10 +163,11 @@ const HistoryView = ({ currentUser, lobbies, quizzes, onViewResults, onBack, emb
                     
                     <button
                       onClick={() => onViewResults(lobby)}
-                      className="ml-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+                      className="w-full sm:w-auto sm:ml-4 px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center justify-center gap-2 text-sm"
                     >
                       <Trophy className="w-4 h-4" />
-                      Voir résultats
+                      <span className="sm:hidden">Résultats</span>
+                      <span className="hidden sm:inline">Voir résultats</span>
                     </button>
                   </div>
                 </div>

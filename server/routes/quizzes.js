@@ -17,6 +17,17 @@ function init(broadcasts) {
 
 // ==================== QUIZZES ====================
 
+// Liste des catégories de quiz (pour autocomplete)
+router.get('/quizzes/categories', async (req, res) => {
+  try {
+    const categories = await db.getAllQuizCategories();
+    res.json(categories);
+  } catch (error) {
+    console.error('Erreur récupération catégories:', error);
+    res.json([]);
+  }
+});
+
 // Liste des quiz
 router.get('/quizzes', async (req, res) => {
   res.json(await db.getAllQuizzes());

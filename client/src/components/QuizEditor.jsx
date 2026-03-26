@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, X, Plus, Trash2, ChevronDown, ChevronUp, Shuffle, Filter, Eye, EyeOff, Tag } from 'lucide-react';
 import { useToast } from './ToastProvider';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
 const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
   const [title, setTitle] = useState(quiz?.title || '');
@@ -12,6 +14,9 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [selectedTags, setSelectedTags] = useState([]); // Nouveau: filtre par tags
   const toast = useToast();
+  
+  // Catégories de quiz pour autocomplete
+  const [quizCategories, setQuizCategories] = useState([]);
 
   // États pour sélection aléatoire
   const [showRandomPicker, setShowRandomPicker] = useState(false);
@@ -21,6 +26,20 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
   
   // ✅ NOUVEAU: Affichage des réponses
   const [showAnswers, setShowAnswers] = useState(true);
+  
+  // Charger les catégories de quiz existantes
+  useEffect(() => {
+    const loadQuizCategories = async () => {
+      try {
+        const response = await fetch(`${API_URL}/quizzes/categories`);
+        const categories = await response.json();
+        setQuizCategories(categories || []);
+      } catch (error) {
+        console.error('Erreur chargement catégories:', error);
+      }
+    };
+    loadQuizCategories();
+  }, []);
 
   const availableQuestions = questions.filter(q => 
     !selectedQuestions.find(sq => sq.id === q.id)
@@ -138,13 +157,24 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
           onChange={(e) => setTitle(e.target.value)}
           className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
         />
-        <input
-          type="text"
-          placeholder="Groupe / Thème (ex: Soirée Culture G, Spéciale Jeux Vidéo...)"
-          value={groupName}
-          onChange={(e) => setGroupName(e.target.value)}
-          className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-        />
+        <div className="relative">
+          <input
+            type="text"
+            list="quiz-categories"
+            placeholder="Catégorie / Groupe (ex: Wilco quiz s2, Culture G...)"
+            value={groupName}
+            onChange={(e) => setGroupName(e.target.value)}
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          />
+          <datalist id="quiz-categories">
+            {quizCategories.map(cat => (
+              <option key={cat} value={cat} />
+            ))}
+          </datalist>
+          <p className="text-xs text-gray-500 mt-1">
+            💡 La catégorie détermine où les points seront comptabilisés dans le classement
+          </p>
+        </div>
         <textarea
           placeholder="Description"
           value={description}

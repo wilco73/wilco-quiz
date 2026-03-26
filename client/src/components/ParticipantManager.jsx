@@ -63,11 +63,13 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
 
   // Etats pour creation equipe
   const [showCreateTeam, setShowCreateTeam] = useState(false);
-  const [newTeam, setNewTeam] = useState({ name: '', score: 0 });
+  const [newTeam, setNewTeam] = useState({ name: '' });
 
-  // Etats pour edition equipe
+  // Etats pour edition equipe (scores par catégorie)
   const [editingTeam, setEditingTeam] = useState(null);
-  const [editTeamScore, setEditTeamScore] = useState(0);
+  const [editScoresByCategory, setEditScoresByCategory] = useState({});
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryScore, setNewCategoryScore] = useState(0);
 
   // Etats pour creation participant
   const [showCreateParticipant, setShowCreateParticipant] = useState(false);
@@ -156,25 +158,78 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
     }
   };
 
-  const handleUpdateTeamScore = async (team) => {
+  // Mettre à jour le score d'une catégorie spécifique
+  const handleUpdateCategoryScore = async (team, category, score) => {
     try {
-      const response = await fetch(`${API_URL}/teams/${team.id}`, {
+      const response = await fetch(`${API_URL}/teams/${team.id}/score`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ score: editTeamScore })
+        body: JSON.stringify({ category, score })
       });
       const data = await response.json();
       
       if (data.success) {
-        toast.success(`Score de "${team.name}" mis a jour`);
-        setEditingTeam(null);
+        toast.success(`Score "${category}" mis à jour`);
+        // Mettre à jour l'état local
+        setEditScoresByCategory(prev => ({ ...prev, [category]: score }));
         onRefreshData();
       } else {
         toast.error(data.message);
       }
     } catch (error) {
-      toast.error('Erreur lors de la mise a jour');
+      toast.error('Erreur lors de la mise à jour');
     }
+  };
+
+  // Supprimer une catégorie de score
+  const handleDeleteCategoryScore = async (team, category) => {
+    if (!window.confirm(`Supprimer la catégorie "${category}" et son score ?`)) return;
+    
+    try {
+      const response = await fetch(`${API_URL}/teams/${team.id}/score/${encodeURIComponent(category)}`, {
+        method: 'DELETE'
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        toast.success(`Catégorie "${category}" supprimée`);
+        // Mettre à jour l'état local
+        const newScores = { ...editScoresByCategory };
+        delete newScores[category];
+        setEditScoresByCategory(newScores);
+        onRefreshData();
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  // Ajouter une nouvelle catégorie
+  const handleAddCategory = async (team) => {
+    if (!newCategoryName.trim()) {
+      toast.error('Nom de catégorie requis');
+      return;
+    }
+    
+    await handleUpdateCategoryScore(team, newCategoryName.trim(), newCategoryScore);
+    setNewCategoryName('');
+    setNewCategoryScore(0);
+  };
+
+  // Ouvrir l'éditeur de scores par catégorie
+  const openTeamScoreEditor = (team) => {
+    setEditingTeam(team);
+    setEditScoresByCategory(team.scoresByCategory || {});
+    setNewCategoryName('');
+    setNewCategoryScore(0);
+  };
+
+  // DEPRECATED - garder pour compatibilité
+  const handleUpdateTeamScore = async (team) => {
+    // Ne fait plus rien - utiliser handleUpdateCategoryScore
+    console.warn('handleUpdateTeamScore est deprecated');
   };
 
   const handleDeleteTeam = async (teamName) => {
@@ -494,9 +549,9 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
                           </div>
                           <div className="flex gap-1">
                             <button
-                              onClick={() => { setEditingTeam(team); setEditTeamScore(team.validatedScore || 0); }}
+                              onClick={() => openTeamScoreEditor(team)}
                               className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
-                              title="Modifier score"
+                              title="Modifier scores"
                             >
                               <Edit2 className="w-3 h-3" />
                             </button>
@@ -511,23 +566,71 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
                         </div>
                         
                         {isEditing && (
-                          <div className="flex items-center gap-1 mb-2">
-                            <input
-                              type="number"
-                              value={editTeamScore}
-                              onChange={(e) => setEditTeamScore(parseInt(e.target.value) || 0)}
-                              className="w-16 px-2 py-1 text-xs border rounded bg-white dark:bg-gray-700 dark:text-white"
-                            />
-                            <button onClick={() => handleUpdateTeamScore(team)} className="p-1 bg-green-600 text-white rounded text-xs">
-                              <Check className="w-3 h-3" />
-                            </button>
-                            <button onClick={() => setEditingTeam(null)} className="p-1 bg-gray-400 text-white rounded text-xs">
-                              <X className="w-3 h-3" />
+                          <div className="mb-2 p-2 bg-gray-50 dark:bg-gray-700 rounded text-xs">
+                            <p className="font-semibold mb-1 dark:text-white">Scores par catégorie :</p>
+                            {Object.entries(editScoresByCategory).length > 0 ? (
+                              <div className="space-y-1 mb-2">
+                                {Object.entries(editScoresByCategory).map(([cat, score]) => (
+                                  <div key={cat} className="flex items-center gap-1">
+                                    <span className="flex-1 truncate dark:text-gray-300">{cat}:</span>
+                                    <input
+                                      type="number"
+                                      value={score}
+                                      onChange={(e) => setEditScoresByCategory(prev => ({
+                                        ...prev,
+                                        [cat]: parseInt(e.target.value) || 0
+                                      }))}
+                                      className="w-14 px-1 py-0.5 border rounded bg-white dark:bg-gray-600 dark:text-white text-center"
+                                    />
+                                    <button 
+                                      onClick={() => handleUpdateCategoryScore(team, cat, editScoresByCategory[cat])}
+                                      className="p-0.5 bg-green-600 text-white rounded"
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDeleteCategoryScore(team, cat)}
+                                      className="p-0.5 bg-red-600 text-white rounded"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-gray-400 italic mb-2">Aucune catégorie</p>
+                            )}
+                            <div className="flex items-center gap-1 pt-1 border-t dark:border-gray-600">
+                              <input
+                                type="text"
+                                value={newCategoryName}
+                                onChange={(e) => setNewCategoryName(e.target.value)}
+                                placeholder="Catégorie"
+                                className="flex-1 px-1 py-0.5 border rounded bg-white dark:bg-gray-600 dark:text-white text-xs"
+                              />
+                              <input
+                                type="number"
+                                value={newCategoryScore}
+                                onChange={(e) => setNewCategoryScore(parseInt(e.target.value) || 0)}
+                                className="w-12 px-1 py-0.5 border rounded bg-white dark:bg-gray-600 dark:text-white text-center"
+                              />
+                              <button 
+                                onClick={() => handleAddCategory(team)}
+                                className="p-0.5 bg-purple-600 text-white rounded"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <button 
+                              onClick={() => setEditingTeam(null)}
+                              className="w-full mt-2 py-1 bg-gray-400 text-white rounded text-xs"
+                            >
+                              Fermer
                             </button>
                           </div>
                         )}
                         
-                        {teamMembers.length > 0 && (
+                        {teamMembers.length > 0 && !isEditing && (
                           <div className="flex flex-wrap gap-1">
                             {teamMembers.slice(0, 4).map(p => (
                               <span key={p.id} className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded">
@@ -558,7 +661,7 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
                     ? 'bg-orange-50 dark:bg-orange-900/20' 
                     : 'bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20'
                 }`}>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-start">
                     <div className="flex items-center gap-3">
                       <div className={`rounded-full p-2 ${
                         isEmpty ? 'bg-orange-100 dark:bg-orange-900/50' : 'bg-purple-100 dark:bg-purple-900/50'
@@ -576,45 +679,20 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
                             </span>
                           )}
                         </h3>
-                        {isEditing ? (
-                          <div className="flex items-center gap-2 mt-1">
-                            <Trophy className="w-4 h-4 text-yellow-500" />
-                            <input
-                              type="number"
-                              value={editTeamScore}
-                              onChange={(e) => setEditTeamScore(parseInt(e.target.value) || 0)}
-                              className="w-20 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-700 dark:text-white"
-                            />
-                            <span className="text-sm text-gray-600 dark:text-gray-400">points</span>
-                            <button
-                              onClick={() => handleUpdateTeamScore(team)}
-                              className="p-1 bg-green-600 text-white rounded hover:bg-green-700"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setEditingTeam(null)}
-                              className="p-1 bg-gray-400 text-white rounded hover:bg-gray-500"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {teamMembers.length} membre{teamMembers.length > 1 ? 's' : ''} - {team.validatedScore || 0} points
-                          </p>
-                        )}
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {teamMembers.length} membre{teamMembers.length > 1 ? 's' : ''} - {team.validatedScore || 0} points total
+                        </p>
                       </div>
                     </div>
 
                     <div className="flex gap-2">
                       {!isEditing && (
                         <button
-                          onClick={() => { setEditingTeam(team); setEditTeamScore(team.validatedScore || 0); }}
+                          onClick={() => openTeamScoreEditor(team)}
                           className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1"
                         >
                           <Edit2 className="w-4 h-4" />
-                          Score
+                          Scores
                         </button>
                       )}
                       <button
@@ -625,10 +703,88 @@ const ParticipantManager = ({ participants, teams, onUpdateParticipant, onDelete
                       </button>
                     </div>
                   </div>
+                  
+                  {/* Éditeur de scores par catégorie */}
+                  {isEditing && (
+                    <div className="mt-4 p-4 bg-white dark:bg-gray-700 rounded-lg border dark:border-gray-600">
+                      <h4 className="font-semibold mb-3 dark:text-white flex items-center gap-2">
+                        <Trophy className="w-5 h-5 text-yellow-500" />
+                        Scores par catégorie
+                      </h4>
+                      
+                      {Object.entries(editScoresByCategory).length > 0 ? (
+                        <div className="space-y-2 mb-4">
+                          {Object.entries(editScoresByCategory).map(([cat, score]) => (
+                            <div key={cat} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-600 p-2 rounded">
+                              <span className="flex-1 font-medium dark:text-white">{cat}</span>
+                              <input
+                                type="number"
+                                value={score}
+                                onChange={(e) => setEditScoresByCategory(prev => ({
+                                  ...prev,
+                                  [cat]: parseInt(e.target.value) || 0
+                                }))}
+                                className="w-20 px-2 py-1 border rounded bg-white dark:bg-gray-700 dark:text-white text-center"
+                              />
+                              <span className="text-sm text-gray-500">pts</span>
+                              <button 
+                                onClick={() => handleUpdateCategoryScore(team, cat, editScoresByCategory[cat])}
+                                className="p-1 bg-green-600 text-white rounded hover:bg-green-700"
+                                title="Sauvegarder"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteCategoryScore(team, cat)}
+                                className="p-1 bg-red-600 text-white rounded hover:bg-red-700"
+                                title="Supprimer"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-400 italic mb-4">Aucune catégorie de score</p>
+                      )}
+                      
+                      {/* Ajouter une catégorie */}
+                      <div className="flex items-center gap-2 pt-3 border-t dark:border-gray-500">
+                        <input
+                          type="text"
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          placeholder="Nouvelle catégorie..."
+                          className="flex-1 px-3 py-2 border rounded bg-white dark:bg-gray-600 dark:text-white"
+                        />
+                        <input
+                          type="number"
+                          value={newCategoryScore}
+                          onChange={(e) => setNewCategoryScore(parseInt(e.target.value) || 0)}
+                          className="w-20 px-2 py-2 border rounded bg-white dark:bg-gray-600 dark:text-white text-center"
+                          placeholder="0"
+                        />
+                        <button 
+                          onClick={() => handleAddCategory(team)}
+                          className="px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-1"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Ajouter
+                        </button>
+                      </div>
+                      
+                      <button 
+                        onClick={() => setEditingTeam(null)}
+                        className="w-full mt-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
+                      >
+                        Fermer
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Membres */}
-                {!isEmpty && (
+                {!isEmpty && !isEditing && (
                   <div className="p-4">
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
                       {teamMembers.map(participant => (

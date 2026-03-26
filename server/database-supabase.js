@@ -21,43 +21,6 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 const SALT_ROUNDS = 10;
 
-// ==================== CONSTANTES ROLES ====================
-
-const ROLES = {
-  USER: 'user',
-  ADMIN: 'admin',
-  SUPERADMIN: 'superadmin'
-};
-
-const ROLE_HIERARCHY = {
-  'user': 0,
-  'admin': 1,
-  'superadmin': 2
-};
-
-/**
- * Vérifie si un rôle a les permissions d'un autre rôle
- */
-function hasRole(userRole, requiredRole) {
-  const userLevel = ROLE_HIERARCHY[userRole] || 0;
-  const requiredLevel = ROLE_HIERARCHY[requiredRole] || 0;
-  return userLevel >= requiredLevel;
-}
-
-/**
- * Vérifie si l'utilisateur est au moins admin
- */
-function isAdmin(role) {
-  return hasRole(role, ROLES.ADMIN);
-}
-
-/**
- * Vérifie si l'utilisateur est superadmin
- */
-function isSuperAdmin(role) {
-  return role === ROLES.SUPERADMIN;
-}
-
 /**
  * Initialise la connexion à la base de données
  */
@@ -182,44 +145,33 @@ async function verifyAdmin(username, password) {
 async function getAllTeams() {
   const { data, error } = await supabase
     .from('teams')
-    .select('id, name, validated_score, scores_by_category, created_at')
+    .select('id, name, validated_score, created_at')
     .order('name');
   
   if (error) throw error;
   
-  return data.map(t => {
-    const scoresByCategory = t.scores_by_category || {};
-    // Le score validé est maintenant calculé comme la somme des scores par catégorie
-    const calculatedScore = Object.values(scoresByCategory).reduce((sum, score) => sum + (score || 0), 0);
-    
-    return {
-      id: t.id,
-      name: t.name,
-      validatedScore: calculatedScore,
-      scoresByCategory: scoresByCategory,
-      createdAt: t.created_at
-    };
-  });
+  return data.map(t => ({
+    id: t.id,
+    name: t.name,
+    validatedScore: t.validated_score,
+    createdAt: t.created_at
+  }));
 }
 
 async function getTeamByName(name) {
   const normalizedName = normalizeTeamName(name);
   const { data } = await supabase
     .from('teams')
-    .select('id, name, validated_score, scores_by_category, created_at')
+    .select('id, name, validated_score, created_at')
     .ilike('name', normalizedName)
     .single();
   
   if (!data) return null;
   
-  const scoresByCategory = data.scores_by_category || {};
-  const calculatedScore = Object.values(scoresByCategory).reduce((sum, score) => sum + (score || 0), 0);
-  
   return {
     id: data.id,
     name: data.name,
-    validatedScore: calculatedScore,
-    scoresByCategory: scoresByCategory,
+    validatedScore: data.validated_score,
     createdAt: data.created_at
   };
 }
@@ -227,20 +179,16 @@ async function getTeamByName(name) {
 async function getTeamById(id) {
   const { data } = await supabase
     .from('teams')
-    .select('id, name, validated_score, scores_by_category, created_at')
+    .select('id, name, validated_score, created_at')
     .eq('id', id)
     .single();
   
   if (!data) return null;
   
-  const scoresByCategory = data.scores_by_category || {};
-  const calculatedScore = Object.values(scoresByCategory).reduce((sum, score) => sum + (score || 0), 0);
-  
   return {
     id: data.id,
     name: data.name,
-    validatedScore: calculatedScore,
-    scoresByCategory: scoresByCategory,
+    validatedScore: data.validated_score,
     createdAt: data.created_at
   };
 }
@@ -252,7 +200,7 @@ async function createTeam(name) {
   
   const { data, error } = await supabase
     .from('teams')
-    .insert({ name: normalizedName, scores_by_category: {} })
+    .insert({ name: normalizedName })
     .select()
     .single();
   
@@ -261,85 +209,33 @@ async function createTeam(name) {
   return {
     id: data.id,
     name: data.name,
-    validatedScore: 0,
-    scoresByCategory: {},
+    validatedScore: data.validated_score,
     createdAt: data.created_at
   };
 }
 
-// DEPRECATED - garder pour compatibilité mais ne devrait plus être utilisé
 async function updateTeamScore(teamId, score) {
-  console.warn('[DEPRECATED] updateTeamScore - utiliser updateTeamScoreByCategory');
-  // Ne fait plus rien car le score est calculé depuis scores_by_category
-}
-
-// Ajouter des points à une équipe dans une catégorie spécifique
-async function addTeamScoreByCategory(teamId, category, points) {
-  const team = await getTeamById(teamId);
-  if (!team) return;
-  
-  const categoryKey = category || 'Sans catégorie';
-  const currentScores = team.scoresByCategory || {};
-  const currentCategoryScore = currentScores[categoryKey] || 0;
-  
-  const updatedScores = {
-    ...currentScores,
-    [categoryKey]: currentCategoryScore + points
-  };
-  
   await supabase
     .from('teams')
-    .update({ scores_by_category: updatedScores })
-    .eq('id', teamId);
-  
-  console.log(`[SCORE] +${points} point(s) pour équipe id=${teamId} dans catégorie "${categoryKey}"`);
-}
-
-// Définir le score d'une équipe dans une catégorie (pour édition admin)
-async function setTeamScoreByCategory(teamId, category, score) {
-  const team = await getTeamById(teamId);
-  if (!team) return;
-  
-  const categoryKey = category || 'Sans catégorie';
-  const currentScores = team.scoresByCategory || {};
-  
-  const updatedScores = {
-    ...currentScores,
-    [categoryKey]: score
-  };
-  
-  await supabase
-    .from('teams')
-    .update({ scores_by_category: updatedScores })
+    .update({ validated_score: score })
     .eq('id', teamId);
 }
 
-// Supprimer une catégorie des scores d'une équipe
-async function deleteTeamScoreCategory(teamId, category) {
-  const team = await getTeamById(teamId);
-  if (!team) return;
-  
-  const currentScores = { ...team.scoresByCategory };
-  delete currentScores[category];
-  
-  await supabase
-    .from('teams')
-    .update({ scores_by_category: currentScores })
-    .eq('id', teamId);
-}
-
-// DEPRECATED - garder pour compatibilité
 async function addTeamScore(teamId, points) {
-  console.warn('[DEPRECATED] addTeamScore appelé sans catégorie - utiliser addTeamScoreByCategory');
-  // Fallback: ajouter dans "Sans catégorie"
-  await addTeamScoreByCategory(teamId, 'Sans catégorie', points);
+  const team = await getTeamById(teamId);
+  if (team) {
+    await supabase
+      .from('teams')
+      .update({ validated_score: (team.validatedScore || 0) + points })
+      .eq('id', teamId);
+  }
 }
 
 async function resetAllTeamScores() {
   await supabase
     .from('teams')
-    .update({ scores_by_category: {} })
-    .neq('id', 0);
+    .update({ validated_score: 0 })
+    .neq('id', 0); // Met à jour toutes les lignes
 }
 
 async function deleteTeam(teamId) {
@@ -352,18 +248,12 @@ async function saveAllTeams(teams) {
     if (existing) {
       await supabase
         .from('teams')
-        .update({ 
-          name: team.name, 
-          scores_by_category: team.scoresByCategory || {} 
-        })
+        .update({ name: team.name, validated_score: team.validatedScore || 0 })
         .eq('id', team.id);
     } else {
       await supabase
         .from('teams')
-        .insert({ 
-          name: team.name, 
-          scores_by_category: team.scoresByCategory || {} 
-        });
+        .insert({ name: team.name, validated_score: team.validatedScore || 0 });
     }
   }
 }
@@ -374,7 +264,7 @@ async function getAllParticipants() {
   const { data, error } = await supabase
     .from('participants')
     .select(`
-      id, pseudo, password_hash, team_id, avatar, role, created_at,
+      id, pseudo, password_hash, team_id, avatar, created_at,
       teams (name)
     `)
     .order('pseudo');
@@ -388,20 +278,18 @@ async function getAllParticipants() {
     teamId: p.team_id,
     teamName: p.teams?.name || null,
     avatar: p.avatar || 'default',
-    role: p.role || 'user',
     createdAt: p.created_at
   }));
 }
 
 async function getParticipantByPseudo(pseudo) {
-  // Recherche insensible à la casse avec ilike
   const { data } = await supabase
     .from('participants')
     .select(`
-      id, pseudo, password_hash, team_id, avatar, role, created_at,
+      id, pseudo, password_hash, team_id, avatar, created_at,
       teams (name)
     `)
-    .ilike('pseudo', pseudo)
+    .eq('pseudo', pseudo)
     .single();
   
   if (!data) return null;
@@ -413,7 +301,6 @@ async function getParticipantByPseudo(pseudo) {
     teamId: data.team_id,
     teamName: data.teams?.name || null,
     avatar: data.avatar || 'default',
-    role: data.role || 'user',
     createdAt: data.created_at
   };
 }
@@ -422,7 +309,7 @@ async function getParticipantById(id) {
   const { data } = await supabase
     .from('participants')
     .select(`
-      id, pseudo, password_hash, team_id, avatar, role, created_at,
+      id, pseudo, password_hash, team_id, avatar, created_at,
       teams (name)
     `)
     .eq('id', id)
@@ -437,12 +324,11 @@ async function getParticipantById(id) {
     teamId: data.team_id,
     teamName: data.teams?.name || null,
     avatar: data.avatar || 'default',
-    role: data.role || 'user',
     createdAt: data.created_at
   };
 }
 
-async function createParticipant(id, pseudo, password, teamId, avatar = 'default', role = 'user') {
+async function createParticipant(id, pseudo, password, teamId, avatar = 'default') {
   const passwordHash = hashPasswordSync(password);
   
   const { error } = await supabase
@@ -452,8 +338,7 @@ async function createParticipant(id, pseudo, password, teamId, avatar = 'default
       pseudo,
       password_hash: passwordHash,
       team_id: teamId,
-      avatar,
-      role
+      avatar
     });
   
   if (error) throw error;
@@ -478,11 +363,10 @@ async function updateParticipantAvatar(participantId, avatar) {
 }
 
 async function verifyParticipantPassword(pseudo, password) {
-  // Recherche insensible à la casse avec ilike
   const { data } = await supabase
     .from('participants')
     .select('password_hash')
-    .ilike('pseudo', pseudo)
+    .eq('pseudo', pseudo)
     .single();
   
   if (!data) {
@@ -503,13 +387,6 @@ async function updateParticipantPassword(participantId, newPassword) {
     .eq('id', participantId);
 }
 
-async function updateParticipantPseudo(participantId, newPseudo) {
-  await supabase
-    .from('participants')
-    .update({ pseudo: newPseudo })
-    .eq('id', participantId);
-}
-
 async function deleteParticipant(participantId) {
   // Supprimer des lobbies d'abord
   await supabase.from('lobby_participants').delete().eq('participant_id', participantId);
@@ -517,69 +394,6 @@ async function deleteParticipant(participantId) {
   await supabase.from('drawing_lobby_participants').delete().eq('participant_id', participantId);
   // Puis supprimer le participant
   await supabase.from('participants').delete().eq('id', participantId);
-}
-
-// ==================== GESTION DES ROLES ====================
-
-async function updateParticipantRole(participantId, role) {
-  if (!Object.values(ROLES).includes(role)) {
-    throw new Error(`Rôle invalide: ${role}`);
-  }
-  
-  await supabase
-    .from('participants')
-    .update({ role })
-    .eq('id', participantId);
-  
-  return getParticipantById(participantId);
-}
-
-async function getParticipantsByRole(role) {
-  const { data, error } = await supabase
-    .from('participants')
-    .select(`
-      id, pseudo, password_hash, team_id, avatar, role, created_at,
-      teams (name)
-    `)
-    .eq('role', role)
-    .order('pseudo');
-  
-  if (error) throw error;
-  
-  return data.map(p => ({
-    id: p.id,
-    pseudo: p.pseudo,
-    password: p.password_hash,
-    teamId: p.team_id,
-    teamName: p.teams?.name || null,
-    avatar: p.avatar || 'default',
-    role: p.role || 'user',
-    createdAt: p.created_at
-  }));
-}
-
-async function getAdminParticipants() {
-  const { data, error } = await supabase
-    .from('participants')
-    .select(`
-      id, pseudo, password_hash, team_id, avatar, role, created_at,
-      teams (name)
-    `)
-    .in('role', ['admin', 'superadmin'])
-    .order('pseudo');
-  
-  if (error) throw error;
-  
-  return data.map(p => ({
-    id: p.id,
-    pseudo: p.pseudo,
-    password: p.password_hash,
-    teamId: p.team_id,
-    teamName: p.teams?.name || null,
-    avatar: p.avatar || 'default',
-    role: p.role,
-    createdAt: p.created_at
-  }));
 }
 
 async function saveAllParticipants(participants) {
@@ -602,19 +416,14 @@ async function saveAllParticipants(participants) {
 // ==================== QUESTIONS ====================
 
 async function getAllQuestions() {
-  // Supabase a une limite par défaut de 1000 lignes
-  // On récupère toutes les questions avec une limite plus élevée
-  const { data, error, count } = await supabase
+  const { data, error } = await supabase
     .from('questions')
-    .select('*', { count: 'exact' })
-    .order('created_at', { ascending: false })
-    .range(0, 9999); // Récupérer jusqu'à 10000 questions
+    .select('*')
+    .order('created_at', { ascending: false });
   
   if (error) throw error;
   
-  console.log(`[DB] getAllQuestions: ${data?.length || 0} questions récupérées (total en base: ${count})`);
-  
-  return (data || []).map(q => ({
+  return data.map(q => ({
     id: q.id,
     text: q.text,
     answer: q.answer,
@@ -753,21 +562,6 @@ async function mergeQuestions(questions, mode = 'update') {
 }
 
 // ==================== QUIZZES ====================
-
-// Récupérer toutes les catégories de quiz existantes (pour autocomplete)
-async function getAllQuizCategories() {
-  const { data, error } = await supabase
-    .from('quizzes')
-    .select('group_name')
-    .not('group_name', 'is', null)
-    .order('group_name');
-  
-  if (error) throw error;
-  
-  // Extraire les catégories uniques
-  const categories = [...new Set(data.map(q => q.group_name).filter(Boolean))];
-  return categories;
-}
 
 async function getAllQuizzes() {
   const { data, error } = await supabase
@@ -967,7 +761,6 @@ async function getLobbyById(id) {
     currentQuestionIndex: lobby.current_question_index,
     shuffled: lobby.shuffled === 1,
     shuffledQuestions: lobby.shuffled_questions ? JSON.parse(lobby.shuffled_questions) : null,
-    trainingMode: lobby.training_mode === 1,
     startTime: lobby.start_time,
     archived: lobby.archived === 1,
     createdAt: lobby.created_at,
@@ -1033,7 +826,7 @@ async function getLobbyParticipants(lobbyId) {
   return result;
 }
 
-async function createLobby(quizId, shuffle = false, trainingMode = false) {
+async function createLobby(quizId, shuffle = false) {
   const id = Date.now().toString();
   const quiz = await getQuizById(quizId);
   
@@ -1047,8 +840,7 @@ async function createLobby(quizId, shuffle = false, trainingMode = false) {
     id,
     quiz_id: quizId,
     shuffled: shuffle ? 1 : 0,
-    shuffled_questions: shuffledQuestions,
-    training_mode: trainingMode ? 1 : 0
+    shuffled_questions: shuffledQuestions
   });
   
   return getLobbyById(id);
@@ -1780,42 +1572,13 @@ async function joinDrawingLobby(lobbyId, participantId, teamName) {
 }
 
 async function leaveDrawingLobby(lobbyId, participantId) {
-  // Récupérer le lobby avant de retirer le participant
-  const lobby = await getDrawingLobbyById(lobbyId);
-  if (!lobby) return null;
-  
-  // Retirer le participant
   await supabase
     .from('drawing_lobby_participants')
     .delete()
     .eq('lobby_id', lobbyId)
     .eq('participant_id', participantId);
   
-  // Récupérer le lobby mis à jour
-  const updatedLobby = await getDrawingLobbyById(lobbyId);
-  
-  // Si le lobby est vide et en attente → le supprimer
-  if (updatedLobby && updatedLobby.status === 'waiting' && 
-      (!updatedLobby.participants || updatedLobby.participants.length === 0)) {
-    console.log(`[DRAWING] Lobby ${lobbyId} vide et en attente → suppression automatique`);
-    await deleteDrawingLobby(lobbyId);
-    return null; // Retourner null pour indiquer que le lobby a été supprimé
-  }
-  
-  // Si le créateur est parti mais il reste des participants → transférer la propriété
-  if (updatedLobby && updatedLobby.creator_id === participantId && 
-      updatedLobby.participants && updatedLobby.participants.length > 0) {
-    const newCreator = updatedLobby.participants[0];
-    console.log(`[DRAWING] Transfert de propriété du lobby ${lobbyId} à ${newCreator.odId}`);
-    await supabase
-      .from('drawing_lobbies')
-      .update({ creator_id: newCreator.odId })
-      .eq('id', lobbyId);
-    
-    return getDrawingLobbyById(lobbyId);
-  }
-  
-  return updatedLobby;
+  return getDrawingLobbyById(lobbyId);
 }
 
 async function startDrawingLobby(lobbyId, gameState) {
@@ -1994,694 +1757,6 @@ async function getDrawingLobbyResults(lobbyId) {
   return { lobby, drawings, scores, ranking };
 }
 
-// ==================== MYSTERY GRID (Case Mystère) ====================
-
-// Récupérer toutes les grilles mystères
-async function getAllMysteryGrids() {
-  const { data, error } = await supabase
-    .from('mystery_grids')
-    .select('*')
-    .order('created_at', { ascending: false });
-  
-  // Si erreur (table n'existe pas), retourner tableau vide
-  if (error) {
-    console.error('[DB] Erreur getAllMysteryGrids:', error.message);
-    return [];
-  }
-  
-  if (!data || data.length === 0) return [];
-  
-  // Récupérer les types pour chaque grille
-  const grids = await Promise.all(data.map(async (grid) => {
-    const types = await getMysteryGridTypes(grid.id);
-    const totalOccurrences = types.reduce((sum, t) => sum + t.occurrence, 0);
-    return {
-      id: grid.id,
-      title: grid.title,
-      gridSize: grid.grid_size,
-      defaultSoundUrl: grid.default_sound_url,
-      thumbnailDefault: grid.thumbnail_default,
-      types,
-      totalOccurrences,
-      isValid: totalOccurrences === grid.grid_size,
-      createdAt: grid.created_at,
-      updatedAt: grid.updated_at
-    };
-  }));
-  
-  return grids;
-}
-
-// Récupérer une grille par ID
-async function getMysteryGridById(gridId) {
-  const { data, error } = await supabase
-    .from('mystery_grids')
-    .select('*')
-    .eq('id', gridId)
-    .single();
-  
-  if (error) return null;
-  
-  const types = await getMysteryGridTypes(gridId);
-  const totalOccurrences = types.reduce((sum, t) => sum + t.occurrence, 0);
-  
-  return {
-    id: data.id,
-    title: data.title,
-    gridSize: data.grid_size,
-    defaultSoundUrl: data.default_sound_url,
-    thumbnailDefault: data.thumbnail_default,
-    types,
-    totalOccurrences,
-    isValid: totalOccurrences === data.grid_size,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at
-  };
-}
-
-// Créer une grille mystère
-async function createMysteryGrid(gridData) {
-  const { data, error } = await supabase
-    .from('mystery_grids')
-    .insert({
-      title: gridData.title,
-      grid_size: gridData.gridSize,
-      default_sound_url: gridData.defaultSoundUrl || null,
-      thumbnail_default: gridData.thumbnailDefault || null
-    })
-    .select()
-    .single();
-  
-  if (error) throw error;
-  
-  return {
-    id: data.id,
-    title: data.title,
-    gridSize: data.grid_size,
-    defaultSoundUrl: data.default_sound_url,
-    thumbnailDefault: data.thumbnail_default,
-    types: [],
-    totalOccurrences: 0,
-    isValid: false,
-    createdAt: data.created_at
-  };
-}
-
-// Mettre à jour une grille mystère
-async function updateMysteryGrid(gridId, gridData) {
-  const updateData = {};
-  if (gridData.title !== undefined) updateData.title = gridData.title;
-  if (gridData.gridSize !== undefined) updateData.grid_size = gridData.gridSize;
-  if (gridData.defaultSoundUrl !== undefined) updateData.default_sound_url = gridData.defaultSoundUrl;
-  if (gridData.thumbnailDefault !== undefined) updateData.thumbnail_default = gridData.thumbnailDefault;
-  
-  const { data, error } = await supabase
-    .from('mystery_grids')
-    .update(updateData)
-    .eq('id', gridId)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  
-  return getMysteryGridById(gridId);
-}
-
-// Supprimer une grille mystère
-async function deleteMysteryGrid(gridId) {
-  const { error } = await supabase
-    .from('mystery_grids')
-    .delete()
-    .eq('id', gridId);
-  
-  if (error) throw error;
-  return true;
-}
-
-// Récupérer les types d'une grille
-async function getMysteryGridTypes(gridId) {
-  const { data, error } = await supabase
-    .from('mystery_grid_types')
-    .select('*')
-    .eq('grid_id', gridId)
-    .order('created_at');
-  
-  // Si erreur, retourner tableau vide
-  if (error) {
-    console.error('[DB] Erreur getMysteryGridTypes:', error.message);
-    return [];
-  }
-  
-  if (!data) return [];
-  
-  return data.map(t => ({
-    id: t.id,
-    gridId: t.grid_id,
-    name: t.name,
-    imageUrl: t.image_url,
-    thumbnailUrl: t.thumbnail_url,
-    soundUrl: t.sound_url,
-    occurrence: t.occurrence,
-    createdAt: t.created_at
-  }));
-}
-
-// Créer un type de case
-async function createMysteryGridType(gridId, typeData) {
-  const { data, error } = await supabase
-    .from('mystery_grid_types')
-    .insert({
-      grid_id: gridId,
-      name: typeData.name,
-      image_url: typeData.imageUrl || null,
-      thumbnail_url: typeData.thumbnailUrl || null,
-      sound_url: typeData.soundUrl || null,
-      occurrence: typeData.occurrence || 1
-    })
-    .select()
-    .single();
-  
-  if (error) throw error;
-  
-  return {
-    id: data.id,
-    gridId: data.grid_id,
-    name: data.name,
-    imageUrl: data.image_url,
-    thumbnailUrl: data.thumbnail_url,
-    soundUrl: data.sound_url,
-    occurrence: data.occurrence,
-    createdAt: data.created_at
-  };
-}
-
-// Mettre à jour un type de case
-async function updateMysteryGridType(typeId, typeData) {
-  const updateData = {};
-  if (typeData.name !== undefined) updateData.name = typeData.name;
-  if (typeData.imageUrl !== undefined) updateData.image_url = typeData.imageUrl;
-  if (typeData.thumbnailUrl !== undefined) updateData.thumbnail_url = typeData.thumbnailUrl;
-  if (typeData.soundUrl !== undefined) updateData.sound_url = typeData.soundUrl;
-  if (typeData.occurrence !== undefined) updateData.occurrence = typeData.occurrence;
-  
-  const { data, error } = await supabase
-    .from('mystery_grid_types')
-    .update(updateData)
-    .eq('id', typeId)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  
-  return {
-    id: data.id,
-    gridId: data.grid_id,
-    name: data.name,
-    imageUrl: data.image_url,
-    thumbnailUrl: data.thumbnail_url,
-    soundUrl: data.sound_url,
-    occurrence: data.occurrence,
-    createdAt: data.created_at
-  };
-}
-
-// Supprimer un type de case
-async function deleteMysteryGridType(typeId) {
-  const { error } = await supabase
-    .from('mystery_grid_types')
-    .delete()
-    .eq('id', typeId);
-  
-  if (error) throw error;
-  return true;
-}
-
-// ==================== MYSTERY LOBBIES ====================
-
-// Récupérer tous les lobbies mystère
-async function getAllMysteryLobbies() {
-  const { data, error } = await supabase
-    .from('mystery_lobbies')
-    .select('*, mystery_grids(title)')
-    .order('created_at', { ascending: false });
-  
-  // Si erreur (table n'existe pas), retourner tableau vide
-  if (error) {
-    console.error('[DB] Erreur getAllMysteryLobbies:', error.message);
-    return [];
-  }
-  
-  if (!data) return [];
-  
-  return data.map(l => ({
-    id: l.id,
-    gridId: l.grid_id,
-    gridTitle: l.mystery_grids?.title,
-    status: l.status,
-    gameState: l.game_state,
-    participants: l.participants || [],
-    currentReveal: l.current_reveal,
-    mutedParticipants: l.muted_participants || {},
-    createdBy: l.created_by,
-    createdAt: l.created_at,
-    finishedAt: l.finished_at
-  }));
-}
-
-// Récupérer un lobby par ID
-async function getMysteryLobbyById(lobbyId) {
-  const { data, error } = await supabase
-    .from('mystery_lobbies')
-    .select('*, mystery_grids(*)')
-    .eq('id', lobbyId)
-    .single();
-  
-  if (error) return null;
-  
-  // Récupérer les types de la grille
-  const types = data.mystery_grids ? await getMysteryGridTypes(data.grid_id) : [];
-  
-  return {
-    id: data.id,
-    gridId: data.grid_id,
-    grid: data.mystery_grids ? {
-      id: data.mystery_grids.id,
-      title: data.mystery_grids.title,
-      gridSize: data.mystery_grids.grid_size,
-      defaultSoundUrl: data.mystery_grids.default_sound_url,
-      thumbnailDefault: data.mystery_grids.thumbnail_default,
-      types
-    } : null,
-    status: data.status,
-    gameState: data.game_state,
-    participants: data.participants || [],
-    currentReveal: data.current_reveal,
-    mutedParticipants: data.muted_participants || {},
-    createdBy: data.created_by,
-    createdAt: data.created_at,
-    finishedAt: data.finished_at
-  };
-}
-
-// Créer un lobby mystère
-async function createMysteryLobby(gridId, createdBy = null) {
-  const grid = await getMysteryGridById(gridId);
-  if (!grid) throw new Error('Grille non trouvée');
-  if (!grid.isValid) throw new Error('La grille n\'est pas valide (nombre de cases incorrect)');
-  
-  // Générer l'état initial du jeu avec les cases mélangées
-  const cells = [];
-  grid.types.forEach(type => {
-    for (let i = 0; i < type.occurrence; i++) {
-      cells.push({
-        typeId: type.id,
-        revealed: false
-      });
-    }
-  });
-  
-  // Mélanger les cases (Fisher-Yates)
-  for (let i = cells.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [cells[i], cells[j]] = [cells[j], cells[i]];
-  }
-  
-  // Ajouter les index
-  const gameState = {
-    cells: cells.map((cell, index) => ({ ...cell, index })),
-    revealedCount: 0,
-    totalCells: cells.length
-  };
-  
-  const lobbyId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  
-  const { data, error } = await supabase
-    .from('mystery_lobbies')
-    .insert({
-      id: lobbyId,
-      grid_id: gridId,
-      status: 'waiting',
-      game_state: gameState,
-      participants: [],
-      muted_participants: {},
-      created_by: createdBy
-    })
-    .select()
-    .single();
-  
-  if (error) throw error;
-  
-  return getMysteryLobbyById(lobbyId);
-}
-
-// Rejoindre un lobby mystère
-async function joinMysteryLobby(lobbyId, odId, pseudo, teamName) {
-  const lobby = await getMysteryLobbyById(lobbyId);
-  if (!lobby) throw new Error('Lobby non trouvé');
-  
-  // Vérifier si déjà participant
-  const existing = lobby.participants.find(p => p.odId === odId);
-  if (existing) return lobby;
-  
-  const participants = [...lobby.participants, {
-    odId,
-    pseudo,
-    teamName,
-    joinedAt: new Date().toISOString()
-  }];
-  
-  const { error } = await supabase
-    .from('mystery_lobbies')
-    .update({ participants })
-    .eq('id', lobbyId);
-  
-  if (error) throw error;
-  
-  return getMysteryLobbyById(lobbyId);
-}
-
-// Quitter un lobby mystère
-async function leaveMysteryLobby(lobbyId, odId) {
-  const lobby = await getMysteryLobbyById(lobbyId);
-  if (!lobby) return null;
-  
-  const participants = lobby.participants.filter(p => p.odId !== odId);
-  
-  const { error } = await supabase
-    .from('mystery_lobbies')
-    .update({ participants })
-    .eq('id', lobbyId);
-  
-  if (error) throw error;
-  
-  return getMysteryLobbyById(lobbyId);
-}
-
-// Démarrer un lobby mystère
-async function startMysteryLobby(lobbyId) {
-  const { data, error } = await supabase
-    .from('mystery_lobbies')
-    .update({ status: 'playing' })
-    .eq('id', lobbyId)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  
-  return getMysteryLobbyById(lobbyId);
-}
-
-// Révéler une case
-async function revealMysteryCell(lobbyId, cellIndex) {
-  const lobby = await getMysteryLobbyById(lobbyId);
-  if (!lobby) throw new Error('Lobby non trouvé');
-  if (lobby.status !== 'playing') throw new Error('Le jeu n\'est pas en cours');
-  
-  const gameState = lobby.gameState;
-  const cell = gameState.cells.find(c => c.index === cellIndex);
-  
-  if (!cell) throw new Error('Case non trouvée');
-  if (cell.revealed) throw new Error('Case déjà révélée');
-  
-  // Trouver le type de la case
-  const cellType = lobby.grid.types.find(t => t.id === cell.typeId);
-  if (!cellType) throw new Error('Type de case non trouvé');
-  
-  // Marquer comme révélée
-  cell.revealed = true;
-  gameState.revealedCount++;
-  
-  // Préparer les infos de révélation
-  const currentReveal = {
-    index: cellIndex,
-    typeId: cell.typeId,
-    name: cellType.name,
-    imageUrl: cellType.imageUrl,
-    thumbnailUrl: cellType.thumbnailUrl || cellType.imageUrl || lobby.grid.thumbnailDefault,
-    soundUrl: cellType.soundUrl || lobby.grid.defaultSoundUrl
-  };
-  
-  const { error } = await supabase
-    .from('mystery_lobbies')
-    .update({ 
-      game_state: gameState,
-      current_reveal: currentReveal
-    })
-    .eq('id', lobbyId);
-  
-  if (error) throw error;
-  
-  return {
-    lobby: await getMysteryLobbyById(lobbyId),
-    reveal: currentReveal,
-    allRevealed: gameState.revealedCount === gameState.totalCells
-  };
-}
-
-// Fermer la modale de révélation
-async function closeMysteryReveal(lobbyId) {
-  const { error } = await supabase
-    .from('mystery_lobbies')
-    .update({ current_reveal: null })
-    .eq('id', lobbyId);
-  
-  if (error) throw error;
-  
-  return getMysteryLobbyById(lobbyId);
-}
-
-// Toggle mute pour un participant
-async function toggleMysteryMute(lobbyId, odId, muted) {
-  const lobby = await getMysteryLobbyById(lobbyId);
-  if (!lobby) throw new Error('Lobby non trouvé');
-  
-  const mutedParticipants = { ...lobby.mutedParticipants, [odId]: muted };
-  
-  const { error } = await supabase
-    .from('mystery_lobbies')
-    .update({ muted_participants: mutedParticipants })
-    .eq('id', lobbyId);
-  
-  if (error) throw error;
-  
-  return getMysteryLobbyById(lobbyId);
-}
-
-// Terminer un lobby mystère
-async function finishMysteryLobby(lobbyId) {
-  const { error } = await supabase
-    .from('mystery_lobbies')
-    .update({ 
-      status: 'finished',
-      current_reveal: null,
-      finished_at: new Date().toISOString()
-    })
-    .eq('id', lobbyId);
-  
-  if (error) throw error;
-  
-  return getMysteryLobbyById(lobbyId);
-}
-
-// Supprimer un lobby mystère
-async function deleteMysteryLobby(lobbyId) {
-  const { error } = await supabase
-    .from('mystery_lobbies')
-    .delete()
-    .eq('id', lobbyId);
-  
-  if (error) throw error;
-  return true;
-}
-
-// ==================== MEDIA LIBRARY ====================
-
-// Rechercher des médias avec pagination
-async function searchMedia(searchTerm = '', mediaType = '', tag = '', limit = 20, offset = 0) {
-  let query = supabase
-    .from('media_library')
-    .select('*', { count: 'exact' });
-  
-  if (searchTerm) {
-    query = query.or(`name.ilike.%${searchTerm}%,tags.cs.["${searchTerm}"]`);
-  }
-  
-  if (mediaType) {
-    query = query.eq('type', mediaType);
-  }
-  
-  if (tag) {
-    query = query.contains('tags', [tag]);
-  }
-  
-  const { data, error, count } = await query
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
-  
-  if (error) throw error;
-  
-  return {
-    media: data || [],
-    total: count || 0
-  };
-}
-
-// Récupérer un média par ID
-async function getMediaById(id) {
-  const { data, error } = await supabase
-    .from('media_library')
-    .select('*')
-    .eq('id', id)
-    .single();
-  
-  if (error && error.code !== 'PGRST116') throw error;
-  return data;
-}
-
-// Créer un média
-async function createMedia({ name, type, url, thumbnailUrl, tags, durationSeconds, fileSize, createdBy, autoplay, defaultVolume }) {
-  const { data, error } = await supabase
-    .from('media_library')
-    .insert({
-      name,
-      type,
-      url,
-      thumbnail_url: thumbnailUrl,
-      tags: tags || [],
-      duration_seconds: durationSeconds,
-      file_size: fileSize,
-      created_by: createdBy,
-      autoplay: autoplay !== false,
-      default_volume: defaultVolume !== undefined ? defaultVolume : 80
-    })
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-// Modifier un média
-async function updateMedia(id, { name, tags, thumbnailUrl, autoplay, defaultVolume }) {
-  const updates = {};
-  if (name !== undefined) updates.name = name;
-  if (tags !== undefined) updates.tags = tags;
-  if (thumbnailUrl !== undefined) updates.thumbnail_url = thumbnailUrl;
-  if (autoplay !== undefined) updates.autoplay = autoplay;
-  if (defaultVolume !== undefined) updates.default_volume = defaultVolume;
-  
-  const { data, error } = await supabase
-    .from('media_library')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-// Supprimer un média
-async function deleteMedia(id) {
-  const { error } = await supabase
-    .from('media_library')
-    .delete()
-    .eq('id', id);
-  
-  if (error) throw error;
-  return true;
-}
-
-// Récupérer les médias associés à une grille mystère
-async function getGridMedia(gridId) {
-  const { data, error } = await supabase
-    .from('mystery_grid_media')
-    .select(`
-      id,
-      sort_order,
-      media:media_id (
-        id, name, type, url, thumbnail_url, tags, duration_seconds
-      )
-    `)
-    .eq('grid_id', gridId)
-    .order('sort_order', { ascending: true });
-  
-  if (error) throw error;
-  
-  // Aplatir la structure
-  return (data || []).map(item => ({
-    linkId: item.id,
-    sortOrder: item.sort_order,
-    ...item.media
-  }));
-}
-
-// Ajouter un média à une grille
-async function addMediaToGrid(gridId, mediaId, sortOrder = 0) {
-  const { data, error } = await supabase
-    .from('mystery_grid_media')
-    .insert({
-      grid_id: gridId,
-      media_id: mediaId,
-      sort_order: sortOrder
-    })
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-// Retirer un média d'une grille
-async function removeMediaFromGrid(gridId, mediaId) {
-  const { error } = await supabase
-    .from('mystery_grid_media')
-    .delete()
-    .eq('grid_id', gridId)
-    .eq('media_id', mediaId);
-  
-  if (error) throw error;
-  return true;
-}
-
-// Sauvegarder un broadcast dans l'historique
-async function saveBroadcast({ lobbyId, lobbyType, senderId, senderPseudo, message, mediaId, options }) {
-  const { data, error } = await supabase
-    .from('broadcast_history')
-    .insert({
-      lobby_id: lobbyId,
-      lobby_type: lobbyType,
-      sender_id: senderId,
-      sender_pseudo: senderPseudo,
-      message,
-      media_id: mediaId,
-      options: options || {}
-    })
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-// Récupérer l'historique des broadcasts d'un lobby
-async function getBroadcastHistory(lobbyId, limit = 20) {
-  const { data, error } = await supabase
-    .from('broadcast_history')
-    .select(`
-      *,
-      media:media_id (
-        id, name, type, url, thumbnail_url
-      )
-    `)
-    .eq('lobby_id', lobbyId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  
-  if (error) throw error;
-  return data || [];
-}
-
 // ==================== EXPORTS ====================
 
 module.exports = {
@@ -2702,11 +1777,8 @@ module.exports = {
   getTeamByName,
   getTeamById,
   createTeam,
-  updateTeamScore, // DEPRECATED
-  addTeamScore, // DEPRECATED - utiliser addTeamScoreByCategory
-  addTeamScoreByCategory,
-  setTeamScoreByCategory,
-  deleteTeamScoreCategory,
+  updateTeamScore,
+  addTeamScore,
   resetAllTeamScores,
   deleteTeam,
   saveAllTeams,
@@ -2719,7 +1791,6 @@ module.exports = {
   updateParticipantTeam,
   updateParticipantAvatar,
   updateParticipantPassword,
-  updateParticipantPseudo,
   deleteParticipant,
   verifyParticipantPassword,
   saveAllParticipants,
@@ -2735,7 +1806,6 @@ module.exports = {
   
   // Quizzes
   getAllQuizzes,
-  getAllQuizCategories,
   getQuizById,
   getQuizQuestions,
   createQuiz,
@@ -2812,50 +1882,5 @@ module.exports = {
   saveDrawing,
   getDrawingsByLobby,
   getDrawingById,
-  getDrawingScoresByLobby,
-  
-  // Roles
-  ROLES,
-  hasRole,
-  isAdmin,
-  isSuperAdmin,
-  updateParticipantRole,
-  getParticipantsByRole,
-  getAdminParticipants,
-  
-  // Mystery Grids (Case Mystère)
-  getAllMysteryGrids,
-  getMysteryGridById,
-  createMysteryGrid,
-  updateMysteryGrid,
-  deleteMysteryGrid,
-  getMysteryGridTypes,
-  createMysteryGridType,
-  updateMysteryGridType,
-  deleteMysteryGridType,
-  
-  // Mystery Lobbies
-  getAllMysteryLobbies,
-  getMysteryLobbyById,
-  createMysteryLobby,
-  joinMysteryLobby,
-  leaveMysteryLobby,
-  startMysteryLobby,
-  revealMysteryCell,
-  closeMysteryReveal,
-  toggleMysteryMute,
-  finishMysteryLobby,
-  deleteMysteryLobby,
-  
-  // Media Library
-  searchMedia,
-  getMediaById,
-  createMedia,
-  updateMedia,
-  deleteMedia,
-  getGridMedia,
-  addMediaToGrid,
-  removeMediaFromGrid,
-  saveBroadcast,
-  getBroadcastHistory
+  getDrawingScoresByLobby
 };

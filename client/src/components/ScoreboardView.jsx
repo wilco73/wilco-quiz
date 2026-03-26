@@ -1,13 +1,37 @@
-import React, { useState } from 'react';
-import { Trophy, Medal, Users, TrendingUp, Star, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Trophy, Medal, Users, TrendingUp, Star, ArrowLeft, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 
 const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedCategory, setSelectedCategory] = useState('all'); // 'all' = toutes catégories
   const teamsPerPage = embedded ? 10 : 5;
   
-  const sortedTeams = [...teams].sort((a, b) => (b.validatedScore || 0) - (a.validatedScore || 0));
+  // Extraire toutes les catégories disponibles depuis les équipes
+  const allCategories = useMemo(() => {
+    const categories = new Set();
+    teams.forEach(team => {
+      if (team.scoresByCategory) {
+        Object.keys(team.scoresByCategory).forEach(cat => categories.add(cat));
+      }
+    });
+    return Array.from(categories).sort();
+  }, [teams]);
+  
+  // Calculer les scores selon la catégorie sélectionnée
+  const getTeamScore = (team) => {
+    if (selectedCategory === 'all') {
+      return team.validatedScore || 0;
+    }
+    return team.scoresByCategory?.[selectedCategory] || 0;
+  };
+  
+  const sortedTeams = useMemo(() => {
+    return [...teams].sort((a, b) => getTeamScore(b) - getTeamScore(a));
+  }, [teams, selectedCategory]);
+  
   const userTeam = teams.find(t => t.name === currentUser?.teamName);
   const userRank = sortedTeams.findIndex(t => t.name === currentUser?.teamName) + 1;
+  const userScore = userTeam ? getTeamScore(userTeam) : 0;
 
   // Pagination
   const totalPages = Math.ceil(sortedTeams.length / teamsPerPage);
@@ -37,6 +61,29 @@ const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
   const goToPage = (page) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
+  
+  // Reset page quand on change de catégorie
+  const handleCategoryChange = (category) => {
+    setSelectedCategory(category);
+    setCurrentPage(1);
+  };
+
+  // Composant sélecteur de catégorie
+  const CategorySelector = ({ compact = false }) => (
+    <div className={`flex items-center gap-2 ${compact ? 'text-sm' : ''}`}>
+      <Filter className={`${compact ? 'w-4 h-4' : 'w-5 h-5'} text-gray-500`} />
+      <select
+        value={selectedCategory}
+        onChange={(e) => handleCategoryChange(e.target.value)}
+        className={`${compact ? 'px-2 py-1 text-sm' : 'px-3 py-2'} bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500`}
+      >
+        <option value="all">Toutes catégories</option>
+        {allCategories.map(cat => (
+          <option key={cat} value={cat}>{cat}</option>
+        ))}
+      </select>
+    </div>
+  );
 
   // Version compacte pour embedded
   if (embedded) {
@@ -48,9 +95,7 @@ const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
             <Trophy className="w-6 h-6 text-yellow-500" />
             Classement
           </h1>
-          <span className="text-sm text-gray-500">
-            {teams.length} équipes
-          </span>
+          <CategorySelector compact />
         </div>
 
         {/* Votre équipe - compact */}
@@ -63,7 +108,7 @@ const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
               </div>
               <div className="flex items-center gap-4">
                 <span className="text-purple-600 font-bold">#{userRank}</span>
-                <span className="text-purple-600 font-bold">{userTeam.validatedScore || 0} pts</span>
+                <span className="text-purple-600 font-bold">{userScore} pts</span>
               </div>
             </div>
           </div>
@@ -79,7 +124,7 @@ const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
                   <span className="font-bold text-sm">{idx + 1}</span>
                 </div>
                 <p className="font-semibold text-sm truncate dark:text-white">{sortedTeams[idx]?.name}</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">{sortedTeams[idx]?.validatedScore || 0} pts</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">{getTeamScore(sortedTeams[idx])} pts</p>
               </div>
             ))}
           </div>
@@ -107,12 +152,12 @@ const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
                         <span className="text-sm font-bold text-gray-500">#{rank}</span>
                       )}
                     </div>
-                    <span className={`font-medium text-sm truncate max-w-[300px] ${isUserTeam ? 'text-purple-700 dark:text-purple-300' : 'dark:text-white'}`}>
+                    <span className={`font-medium text-sm truncate max-w-[150px] ${isUserTeam ? 'text-purple-700 dark:text-purple-300' : 'dark:text-white'}`}>
                       {team.name}
                     </span>
                   </div>
                   <span className="font-bold text-purple-600 dark:text-purple-400 text-sm">
-                    {team.validatedScore || 0}
+                    {getTeamScore(team)}
                   </span>
                 </div>
               );
@@ -147,54 +192,58 @@ const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
   }
 
   // Version complète (non embedded)
-  const containerClass = "min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 dark:from-gray-900 dark:to-gray-800 p-4";
+  const containerClass = "min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 dark:from-gray-900 dark:to-gray-800 p-2 sm:p-4";
 
   return (
-    <div className={containerClass}>
+    <div className={containerClass} style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
       <div className="max-w-4xl mx-auto">
         {/* Header avec bouton retour */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3 sm:mb-4">
             {/* Bouton Retour - seulement si pas embedded */}
             {!embedded && onBack && (
               <button
                 onClick={onBack}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition font-semibold text-gray-800 dark:text-gray-200"
+                className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition font-semibold text-gray-800 dark:text-gray-200 text-sm sm:text-base"
               >
-                <ArrowLeft className="w-5 h-5" />
-                Retour
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Retour</span>
               </button>
             )}
-            <div className="flex-1" />
+            <CategorySelector />
           </div>
           
           <div className="text-center">
-            <Trophy className="w-16 h-16 mx-auto text-yellow-500 dark:text-yellow-400 mb-4" />
-            <h1 className="text-4xl font-bold mb-2 dark:text-white">🏆 Classement Général</h1>
-            <p className="text-gray-600 dark:text-gray-400">Scores actuels de toutes les équipes</p>
+            <Trophy className="w-12 h-12 sm:w-16 sm:h-16 mx-auto text-yellow-500 dark:text-yellow-400 mb-3 sm:mb-4" />
+            <h1 className="text-2xl sm:text-4xl font-bold mb-2 dark:text-white">🏆 Classement</h1>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
+              {selectedCategory === 'all' ? 'Toutes catégories' : selectedCategory}
+            </p>
           </div>
         </div>
 
         {/* Votre équipe */}
         {userTeam && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 mb-6 border-4 border-purple-500 dark:border-purple-600">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="bg-purple-100 dark:bg-purple-900/50 rounded-full p-3">
-                  <Users className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-4 sm:p-6 mb-4 sm:mb-6 border-2 sm:border-4 border-purple-500 dark:border-purple-600">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="bg-purple-100 dark:bg-purple-900/50 rounded-full p-2 sm:p-3">
+                  <Users className="w-5 h-5 sm:w-8 sm:h-8 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Votre équipe</p>
-                  <h3 className="text-2xl font-bold dark:text-white">{userTeam.name}</h3>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Votre équipe</p>
+                  <h3 className="text-lg sm:text-2xl font-bold dark:text-white">{userTeam.name}</h3>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-600 dark:text-gray-400">Position</p>
-                <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">#{userRank}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-600 dark:text-gray-400">Score</p>
-                <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{userTeam.validatedScore || 0} pts</p>
+              <div className="flex gap-4 sm:gap-6">
+                <div className="text-center">
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Position</p>
+                  <p className="text-xl sm:text-3xl font-bold text-purple-600 dark:text-purple-400">#{userRank}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Score</p>
+                  <p className="text-xl sm:text-3xl font-bold text-purple-600 dark:text-purple-400">{userScore} pts</p>
+                </div>
               </div>
             </div>
           </div>
@@ -202,49 +251,50 @@ const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
 
         {/* Podium Top 3 */}
         {sortedTeams.length >= 3 && (
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
             {/* 2ème place */}
-            <div className="pt-8">
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 text-center border-4 border-gray-400 dark:border-gray-600">
-                <Medal className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500 mb-2" />
-                <p className="text-4xl font-bold mb-1 dark:text-white">2</p>
-                <h3 className="font-bold text-lg mb-2 truncate dark:text-white">{sortedTeams[1]?.name}</h3>
-                <p className="text-2xl font-bold text-gray-600 dark:text-gray-400">{sortedTeams[1]?.validatedScore || 0}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">points</p>
+            <div className="pt-4 sm:pt-8">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 sm:p-4 text-center border-2 sm:border-4 border-gray-400 dark:border-gray-600">
+                <Medal className="w-8 h-8 sm:w-12 sm:h-12 mx-auto text-gray-400 dark:text-gray-500 mb-1 sm:mb-2" />
+                <p className="text-2xl sm:text-4xl font-bold mb-1 dark:text-white">2</p>
+                <h3 className="font-bold text-xs sm:text-lg mb-1 sm:mb-2 truncate dark:text-white">{sortedTeams[1]?.name}</h3>
+                <p className="text-lg sm:text-2xl font-bold text-gray-600 dark:text-gray-400">{getTeamScore(sortedTeams[1])}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">points</p>
               </div>
             </div>
 
             {/* 1ère place */}
             <div className="pt-0">
-              <div className="bg-gradient-to-br from-yellow-100 to-yellow-200 dark:from-yellow-900/40 dark:to-yellow-800/40 rounded-lg shadow-2xl p-4 text-center border-4 border-yellow-500 dark:border-yellow-600">
-                <Trophy className="w-16 h-16 mx-auto text-yellow-600 dark:text-yellow-400 mb-2 animate-bounce" />
-                <p className="text-5xl font-bold mb-1 dark:text-white">1</p>
-                <h3 className="font-bold text-xl mb-2 truncate dark:text-white">{sortedTeams[0]?.name}</h3>
-                <p className="text-3xl font-bold text-yellow-700 dark:text-yellow-300">{sortedTeams[0]?.validatedScore || 0}</p>
-                <p className="text-sm text-yellow-600 dark:text-yellow-400">points</p>
-                <Star className="w-8 h-8 mx-auto mt-2 text-yellow-600 dark:text-yellow-400" />
+              <div className="bg-gradient-to-br from-yellow-100 to-yellow-200 dark:from-yellow-900/40 dark:to-yellow-800/40 rounded-lg shadow-2xl p-2 sm:p-4 text-center border-2 sm:border-4 border-yellow-500 dark:border-yellow-600">
+                <Trophy className="w-10 h-10 sm:w-16 sm:h-16 mx-auto text-yellow-600 dark:text-yellow-400 mb-1 sm:mb-2 animate-bounce" />
+                <p className="text-3xl sm:text-5xl font-bold mb-1 dark:text-white">1</p>
+                <h3 className="font-bold text-sm sm:text-xl mb-1 sm:mb-2 truncate dark:text-white">{sortedTeams[0]?.name}</h3>
+                <p className="text-xl sm:text-3xl font-bold text-yellow-700 dark:text-yellow-300">{getTeamScore(sortedTeams[0])}</p>
+                <p className="text-xs sm:text-sm text-yellow-600 dark:text-yellow-400 hidden sm:block">points</p>
+                <Star className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mt-1 sm:mt-2 text-yellow-600 dark:text-yellow-400" />
               </div>
             </div>
 
             {/* 3ème place */}
-            <div className="pt-8">
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 text-center border-4 border-orange-500 dark:border-orange-600">
-                <Medal className="w-12 h-12 mx-auto text-orange-600 dark:text-orange-500 mb-2" />
-                <p className="text-4xl font-bold mb-1 dark:text-white">3</p>
-                <h3 className="font-bold text-lg mb-2 truncate dark:text-white">{sortedTeams[2]?.name}</h3>
-                <p className="text-2xl font-bold text-orange-600 dark:text-orange-500">{sortedTeams[2]?.validatedScore || 0}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">points</p>
+            <div className="pt-4 sm:pt-8">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 sm:p-4 text-center border-2 sm:border-4 border-orange-500 dark:border-orange-600">
+                <Medal className="w-8 h-8 sm:w-12 sm:h-12 mx-auto text-orange-600 dark:text-orange-500 mb-1 sm:mb-2" />
+                <p className="text-2xl sm:text-4xl font-bold mb-1 dark:text-white">3</p>
+                <h3 className="font-bold text-xs sm:text-lg mb-1 sm:mb-2 truncate dark:text-white">{sortedTeams[2]?.name}</h3>
+                <p className="text-lg sm:text-2xl font-bold text-orange-600 dark:text-orange-500">{getTeamScore(sortedTeams[2])}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">points</p>
               </div>
             </div>
           </div>
         )}
 
         {/* Classement complet avec pagination */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-2xl font-bold flex items-center gap-2 dark:text-white">
-              <TrendingUp className="w-6 h-6" />
-              Classement Complet
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h3 className="text-lg sm:text-2xl font-bold flex items-center gap-2 dark:text-white">
+              <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6" />
+              <span className="hidden sm:inline">Classement Complet</span>
+              <span className="sm:hidden">Classement</span>
             </h3>
             
             {/* Indicateur de page */}
@@ -292,7 +342,7 @@ const ScoreboardView = ({ teams, currentUser, onBack, embedded = false }) => {
                       
                       <div className="text-right">
                         <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
-                          {team.validatedScore || 0}
+                          {getTeamScore(team)}
                         </p>
                         <p className="text-sm text-gray-600 dark:text-gray-400">points</p>
                       </div>

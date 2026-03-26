@@ -30,27 +30,30 @@ const LoginView = ({ onLogin, isLoading }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4 relative">
-      <div className="absolute top-4 right-4">
+    <div 
+      className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4 relative"
+      style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+    >
+      <div className="absolute top-4 right-4" style={{ top: 'max(1rem, env(safe-area-inset-top))' }}>
         <DarkModeToggle />
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 w-full max-w-md">
-        <div className="flex content-center item-center text-center mb-8">
-          <div className="text-center m-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-md">
+        <div className="flex flex-col sm:flex-row items-center text-center sm:text-left gap-4 mb-6 sm:mb-8">
+          <div className="flex-shrink-0">
             <img 
               src="/resources/images/aurore_question.png" 
-              className="mx-auto icone text-purple-600 mb-4" 
+              className="w-20 h-20 sm:w-24 sm:h-24 object-contain" 
               alt="Logo"
               onError={(e) => {
                 e.target.style.display = 'none';
               }}
             />
           </div>
-          <div className="text-center m-auto">
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Wilco Quiz</h1>
-            <h3 className="text-3xl text-gray-800 dark:text-gray-200 mt-2">2e édition</h3>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
+          <div className="flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white">Wilco Quiz</h1>
+            <h3 className="text-xl sm:text-2xl text-gray-600 dark:text-gray-200 mt-1">2e édition</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Connectez-vous pour participer
             </p>
           </div>
@@ -69,7 +72,8 @@ const LoginView = ({ onLogin, isLoading }) => {
             value={pseudo}
             onChange={(e) => setPseudo(e.target.value)}
             disabled={isLoading}
-            className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+            autoComplete="username"
+            className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 text-base"
           />
           <input
             type="password"
@@ -77,7 +81,8 @@ const LoginView = ({ onLogin, isLoading }) => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={isLoading}
-            className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+            autoComplete="current-password"
+            className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 text-base"
           />
           
           <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
