@@ -31,7 +31,8 @@ const QuestionEditor = ({
     tags: [],
     tagsInput: '',
     choices: ['', '', '', ''],
-    correctChoice: 0
+    correctChoice: 0,
+    silhouetteMode: false
   });
 
   // Initialiser le formulaire quand une question est passée
@@ -57,7 +58,8 @@ const QuestionEditor = ({
         tags: question.tags || [],
         tagsInput: '',
         choices: choices,
-        correctChoice: correctChoice
+        correctChoice: correctChoice,
+        silhouetteMode: question.silhouetteMode || false
       });
     } else {
       resetForm();
@@ -77,7 +79,8 @@ const QuestionEditor = ({
       tags: [],
       tagsInput: '',
       choices: ['', '', '', ''],
-      correctChoice: 0
+      correctChoice: 0,
+      silhouetteMode: false
     });
   };
 
@@ -441,6 +444,26 @@ const QuestionEditor = ({
                     type={formData.type === 'qcm' ? formData.mediaType : formData.type} 
                     url={formData.media} 
                   />
+                  
+                  {/* Option silhouette (uniquement pour images) */}
+                  {((formData.type === 'image') || (formData.type === 'qcm' && formData.mediaType === 'image')) && formData.media && (
+                    <label className="flex items-center gap-2 mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg cursor-pointer border border-purple-200 dark:border-purple-800">
+                      <input
+                        type="checkbox"
+                        checked={formData.silhouetteMode}
+                        onChange={(e) => setFormData({ ...formData, silhouetteMode: e.target.checked })}
+                        className="w-4 h-4 text-purple-600 rounded"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                          🎭 Mode silhouette
+                        </span>
+                        <p className="text-xs text-purple-500 dark:text-purple-400">
+                          L'image sera affichée en noir jusqu'à révélation (Who's that Pokémon?)
+                        </p>
+                      </div>
+                    </label>
+                  )}
                 </>
               )}
             </div>

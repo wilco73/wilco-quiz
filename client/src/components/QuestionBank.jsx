@@ -81,6 +81,7 @@ const QuestionBank = ({ questions, onSave }) => {
       'Réponse',
       'Média (URL)',
       'Type Média',
+      'Silhouette',
       'Points',
       'Timer (secondes)',
       'Choix 1',
@@ -112,6 +113,7 @@ const QuestionBank = ({ questions, onSave }) => {
         `"${(q.answer || '').replace(/"/g, '""')}"`,
         q.media || '',
         q.mediaType || '',
+        q.silhouetteMode ? 'oui' : '',
         q.points || 1,
         q.timer || 0,
         choices[0] ? `"${choices[0].replace(/"/g, '""')}"` : '',
@@ -185,6 +187,7 @@ const QuestionBank = ({ questions, onSave }) => {
           answer: getColumnIndex(['réponse', 'reponse', 'answer']),
           media: getColumnIndex(['média', 'media', 'url']),
           mediaType: getColumnIndex(['type média', 'type media', 'mediatype']),
+          silhouette: getColumnIndex(['silhouette', 'silhouette mode', 'mode silhouette']),
           points: getColumnIndex(['points', 'point']),
           timer: getColumnIndex(['timer', 'temps', 'secondes']),
           choice1: getColumnIndex(['choix 1', 'choice 1', 'choix1']),
@@ -228,6 +231,10 @@ const QuestionBank = ({ questions, onSave }) => {
             const tagsStr = getValue('tags');
             const tags = tagsStr ? tagsStr.split('|').map(t => t.trim()).filter(Boolean) : [];
 
+            // Parser le mode silhouette (oui, yes, true, 1 = activé)
+            const silhouetteValue = getValue('silhouette').toLowerCase();
+            const silhouetteMode = ['oui', 'yes', 'true', '1', 'vrai'].includes(silhouetteValue);
+
             const question = {
               id: getValue('id') || `import-${Date.now()}-${index}`,
               type: getValue('type') || 'text',
@@ -237,6 +244,7 @@ const QuestionBank = ({ questions, onSave }) => {
               answer: getValue('answer') || '',
               media: getValue('media') || '',
               mediaType: getValue('mediaType') || '',
+              silhouetteMode: silhouetteMode,
               points: parseInt(getValue('points')) || 1,
               timer: parseInt(getValue('timer')) || 0
             };
@@ -1305,7 +1313,7 @@ const QuestionBank = ({ questions, onSave }) => {
           <div key={question.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md transition bg-white dark:bg-gray-700">
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   {getTypeIcon(question.type)}
                   {question.category && (
                     <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded">
@@ -1321,6 +1329,11 @@ const QuestionBank = ({ questions, onSave }) => {
                     <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded">
                       QCM
                       </span>
+                  )}
+                  {question.silhouetteMode && (
+                    <span className="px-2 py-1 bg-gray-800 dark:bg-gray-900 text-white text-xs rounded">
+                      🎭 Silhouette
+                    </span>
                   )}
                   <span className="text-xs text-gray-500 dark:text-gray-400">{question.points} pts</span>
                   {question.timer > 0 && (

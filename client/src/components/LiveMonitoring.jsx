@@ -249,14 +249,27 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
           <div className="bg-white dark:bg-gray-800 rounded-lg p-2 border border-purple-200 dark:border-purple-600">
             {(currentQuestion.type === 'image' || currentQuestion.type === 'qcm') && currentQuestion.media && (
               <div className="text-center">
+                {/* Badge silhouette mode */}
+                {currentQuestion.silhouetteMode && !showAnswers && (
+                  <div className="mb-2 inline-flex items-center gap-2 px-3 py-1 bg-gray-800 text-white text-xs rounded-full">
+                    🎭 Mode silhouette actif
+                  </div>
+                )}
                 <img 
                   src={currentQuestion.media} 
                   alt="Question" 
-                  className="max-h-24 sm:max-h-32 w-auto rounded mx-auto border border-gray-300 dark:border-gray-600 cursor-pointer hover:opacity-80 transition-opacity"
+                  className="max-h-24 sm:max-h-32 w-auto rounded mx-auto border border-gray-300 dark:border-gray-600 cursor-pointer hover:opacity-80 transition-all duration-300"
+                  style={{
+                    filter: (currentQuestion.silhouetteMode && !showAnswers) ? 'brightness(0)' : 'none'
+                  }}
                   onClick={() => setZoomedImage(currentQuestion.media)}
                   title="Cliquer pour agrandir"
                 />
-                <p className="text-xs text-gray-500 mt-1">Cliquer pour agrandir</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {currentQuestion.silhouetteMode && !showAnswers 
+                    ? 'Activez "Afficher" pour révéler l\'image' 
+                    : 'Cliquer pour agrandir'}
+                </p>
               </div>
             )}
             

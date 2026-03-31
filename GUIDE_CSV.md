@@ -14,7 +14,7 @@ Le système permet d'**importer** et **exporter** vos questions au format CSV po
 
 ### Format du fichier
 
-Votre fichier CSV doit contenir **17 colonnes** dans cet ordre :
+Votre fichier CSV doit contenir **18 colonnes** dans cet ordre :
 
 | # | Colonne | Description | Requis | Exemple |
 |---|---------|-------------|--------|---------|
@@ -26,15 +26,42 @@ Votre fichier CSV doit contenir **17 colonnes** dans cet ordre :
 | 6 | Réponse | Réponse correcte | ✅ Oui | `Paris` |
 | 7 | Média (URL) | URL du média (image/video/audio) | ❌ Non | `https://example.com/image.jpg` |
 | 8 | Type Média | Type du média pour QCM | ❌ Non | `image`, `video`, `audio` |
-| 9 | Points | Nombre de points | ✅ Oui | `1`, `2`, `5` |
-| 10 | Timer (secondes) | Temps limite (0 = illimité) | ✅ Oui | `30`, `0` |
-| 11 | Choix 1 | Premier choix (QCM uniquement) | ❌ Non | `Paris` |
-| 12 | Choix 2 | Deuxième choix (QCM uniquement) | ❌ Non | `Londres` |
-| 13 | Choix 3 | Troisième choix (QCM uniquement) | ❌ Non | `Berlin` |
-| 14 | Choix 4 | Quatrième choix (QCM uniquement) | ❌ Non | `Madrid` |
-| 15 | Choix 5 | Cinquième choix (optionnel) | ❌ Non | `Rome` |
-| 16 | Choix 6 | Sixième choix (optionnel) | ❌ Non | `Lisbonne` |
-| 17 | Index Réponse Correcte | Index du bon choix (QCM) | ❌ Non | `0` (= Choix 1) |
+| 9 | Silhouette | Mode silhouette (Who's that Pokémon?) | ❌ Non | `oui`, `yes`, `true`, `1` |
+| 10 | Points | Nombre de points | ✅ Oui | `1`, `2`, `5` |
+| 11 | Timer (secondes) | Temps limite (0 = illimité) | ✅ Oui | `30`, `0` |
+| 12 | Choix 1 | Premier choix (QCM uniquement) | ❌ Non | `Paris` |
+| 13 | Choix 2 | Deuxième choix (QCM uniquement) | ❌ Non | `Londres` |
+| 14 | Choix 3 | Troisième choix (QCM uniquement) | ❌ Non | `Berlin` |
+| 15 | Choix 4 | Quatrième choix (QCM uniquement) | ❌ Non | `Madrid` |
+| 16 | Choix 5 | Cinquième choix (optionnel) | ❌ Non | `Rome` |
+| 17 | Choix 6 | Sixième choix (optionnel) | ❌ Non | `Lisbonne` |
+| 18 | Index Réponse Correcte | Index du bon choix (QCM) | ❌ Non | `0` (= Choix 1) |
+
+---
+
+## 🎭 **Mode Silhouette**
+
+### Qu'est-ce que le mode silhouette ?
+
+Le mode silhouette permet d'afficher une image en **noir complet** (comme "Who's that Pokémon?") puis de la révéler :
+- 🎭 L'image apparaît comme une silhouette noire
+- ✨ Elle est révélée quand le timer expire, tout le monde a répondu, ou le joueur a répondu
+
+### Quand l'utiliser ?
+
+- Images de personnages (Pokémon, Disney, super-héros...)
+- Logos à deviner
+- Silhouettes de monuments
+- Tout PNG avec fond transparent !
+
+### ⚠️ Limitations
+
+- Fonctionne uniquement avec des images **PNG à fond transparent**
+- Les images avec fond plein apparaîtront comme un rectangle noir
+
+### Valeurs acceptées
+
+La colonne `Silhouette` accepte : `oui`, `yes`, `true`, `1`, `vrai`
 
 ---
 
@@ -72,15 +99,15 @@ blindtest|années80|rock
 ### 1️⃣ Question Texte Simple avec Tags
 
 ```csv
-ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
-,text,Géographie,facile|europe|capitales,"Quelle est la capitale de la France ?","Paris",,,1,30,,,,,,,
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Silhouette,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,text,Géographie,facile|europe|capitales,"Quelle est la capitale de la France ?","Paris",,,,1,30,,,,,,,
 ```
 
 ### 2️⃣ Question QCM avec Tags
 
 ```csv
-ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
-,qcm,Histoire,moyen|révolution|dates,"En quelle année a eu lieu la Révolution française ?","1789",,,2,20,"1789","1792","1804","1815",,,0
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Silhouette,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,qcm,Histoire,moyen|révolution|dates,"En quelle année a eu lieu la Révolution française ?","1789",,,,2,20,"1789","1792","1804","1815",,,0
 ```
 
 **Notes QCM** :
@@ -91,22 +118,29 @@ ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer 
 ### 3️⃣ Question avec Image et Tags
 
 ```csv
-ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
-,image,Art,difficile|renaissance|peinture,"Qui a peint ce tableau ?","Leonardo da Vinci","https://example.com/mona-lisa.jpg",,1,0,,,,,,,
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Silhouette,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,image,Art,difficile|renaissance|peinture,"Qui a peint ce tableau ?","Leonardo da Vinci","https://example.com/mona-lisa.jpg",,,1,0,,,,,,,
 ```
 
-### 4️⃣ Question Audio (Blindtest) avec Tags
+### 4️⃣ Question Image en Mode Silhouette 🎭
 
 ```csv
-ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
-,audio,Musique,blindtest|années60|rock,"Qui interprète cette chanson ?","The Beatles","https://example.com/song.mp3",,1,15,,,,,,,
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Silhouette,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,image,Pokémon,facile|gen1,"Qui est ce Pokémon ?","Pikachu","https://example.com/pikachu.png",,oui,1,15,,,,,,,
 ```
 
-### 5️⃣ Question Vidéo avec Tags
+### 5️⃣ Question Audio (Blindtest) avec Tags
 
 ```csv
-ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
-,video,Cinéma,facile|sf|classique,"De quel film est extraite cette scène ?","Star Wars","https://example.com/scene.mp4",,2,0,,,,,,,
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Silhouette,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,audio,Musique,blindtest|années60|rock,"Qui interprète cette chanson ?","The Beatles","https://example.com/song.mp3",,,1,15,,,,,,,
+```
+
+### 6️⃣ Question Vidéo avec Tags
+
+```csv
+ID,Type,Catégorie,Tags,Question,Réponse,Média (URL),Type Média,Silhouette,Points,Timer (secondes),Choix 1,Choix 2,Choix 3,Choix 4,Choix 5,Choix 6,Index Réponse Correcte
+,video,Cinéma,facile|sf|classique,"De quel film est extraite cette scène ?","Star Wars","https://example.com/scene.mp4",,,2,0,,,,,,,
 ```
 
 ---
@@ -245,12 +279,13 @@ Exportez votre banque après chaque grosse session de création !
 
 ## 📋 **Checklist avant import**
 
-- [ ] La première ligne contient les 17 en-têtes
+- [ ] La première ligne contient les 18 en-têtes
 - [ ] Chaque question a : Type, Question, Réponse, Points, Timer
 - [ ] Les QCM ont au moins 2 choix
 - [ ] Les index de réponses correctes sont valides (0-5)
 - [ ] Les URLs de médias sont complètes
 - [ ] Les tags sont séparés par `|`
+- [ ] Les images en mode silhouette sont des PNG transparents
 - [ ] Le fichier est en UTF-8
 - [ ] Pas de lignes vides au milieu
 

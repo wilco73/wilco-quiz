@@ -180,6 +180,11 @@ const QuizView = ({
   const hasVideoMedia = question?.media && (question?.type === 'video' || (question?.type === 'qcm' && question?.mediaType === 'video'));
   const hasAudioMedia = question?.media && (question?.type === 'audio' || (question?.type === 'qcm' && question?.mediaType === 'audio'));
 
+  // Mode silhouette : l'image est révélée quand le timer expire OU tout le monde a répondu OU l'utilisateur a répondu
+  const isSilhouetteMode = question?.silhouetteMode && hasImageMedia;
+  const allAnswered = currentLobby?.participants?.every(p => p.hasAnswered) || false;
+  const shouldRevealSilhouette = !isSilhouetteMode || isTimeExpired || allAnswered || hasAnswered;
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-2 sm:p-4">
       <div className="max-w-4xl mx-auto">
@@ -240,24 +245,44 @@ const QuizView = ({
           {/* Média (image, vidéo, audio) */}
           {question?.media && (
             <div className="mb-4 sm:mb-6">
-              {/* Image avec zoom */}
+              {/* Image avec zoom et mode silhouette */}
               {hasImageMedia && (
-                <div className="flex justify-center">
+                <div className="flex flex-col items-center">
+                  {/* Badge mode silhouette */}
+                  {isSilhouetteMode && !shouldRevealSilhouette && (
+                    <div className="mb-2 px-3 py-1 bg-gray-800 text-white text-sm rounded-full flex items-center gap-2">
+                      <span>🎭</span>
+                      <span>Qui est ce personnage ?</span>
+                    </div>
+                  )}
+                  {isSilhouetteMode && shouldRevealSilhouette && !hasAnswered && (
+                    <div className="mb-2 px-3 py-1 bg-green-600 text-white text-sm rounded-full flex items-center gap-2 animate-pulse">
+                      <span>✨</span>
+                      <span>Révélé !</span>
+                    </div>
+                  )}
+                  
                   <div 
                     className="relative cursor-pointer group"
-                    onClick={() => setZoomedImage(question.media)}
+                    onClick={() => shouldRevealSilhouette ? setZoomedImage(question.media) : null}
                   >
                     <img 
                       src={question.media} 
                       alt="Question" 
-                      className="max-w-full w-auto max-h-[40vh] sm:max-h-[50vh] md:max-h-[60vh] rounded-lg object-contain" 
+                      className="max-w-full w-auto max-h-[40vh] sm:max-h-[50vh] md:max-h-[60vh] rounded-lg object-contain transition-all duration-500" 
+                      style={{
+                        filter: shouldRevealSilhouette ? 'none' : 'brightness(0)',
+                        transform: shouldRevealSilhouette && isSilhouetteMode ? 'scale(1.02)' : 'scale(1)'
+                      }}
                     />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-lg flex items-center justify-center">
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 text-white px-2 py-1 rounded text-xs sm:text-sm flex items-center gap-1">
-                        <ZoomIn className="w-3 h-3 sm:w-4 sm:h-4" />
-                        Agrandir
+                    {shouldRevealSilhouette && (
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-lg flex items-center justify-center">
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 text-white px-2 py-1 rounded text-xs sm:text-sm flex items-center gap-1">
+                          <ZoomIn className="w-3 h-3 sm:w-4 sm:h-4" />
+                          Agrandir
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               )}
