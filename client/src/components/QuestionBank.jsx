@@ -49,6 +49,7 @@ const QuestionBank = ({ questions, onSave }) => {
       'Média (URL)',
       'Type Média',
       'Silhouette',
+      'Rotation',
       'Points',
       'Timer (secondes)',
       'Choix 1',
@@ -81,6 +82,7 @@ const QuestionBank = ({ questions, onSave }) => {
         q.media || '',
         q.mediaType || '',
         q.silhouetteMode ? 'oui' : '',
+        q.silhouetteRotation ? 'oui' : '',
         q.points || 1,
         q.timer || 0,
         choices[0] ? `"${choices[0].replace(/"/g, '""')}"` : '',
@@ -155,6 +157,7 @@ const QuestionBank = ({ questions, onSave }) => {
           media: getColumnIndex(['média', 'media', 'url']),
           mediaType: getColumnIndex(['type média', 'type media', 'mediatype']),
           silhouette: getColumnIndex(['silhouette', 'silhouette mode', 'mode silhouette']),
+          rotation: getColumnIndex(['rotation', 'silhouette rotation', 'rotation aléatoire']),
           points: getColumnIndex(['points', 'point']),
           timer: getColumnIndex(['timer', 'temps', 'secondes']),
           choice1: getColumnIndex(['choix 1', 'choice 1', 'choix1']),
@@ -202,6 +205,10 @@ const QuestionBank = ({ questions, onSave }) => {
             const silhouetteValue = getValue('silhouette').toLowerCase();
             const silhouetteMode = ['oui', 'yes', 'true', '1', 'vrai'].includes(silhouetteValue);
 
+            // Parser le mode rotation (oui, yes, true, 1 = activé)
+            const rotationValue = getValue('rotation').toLowerCase();
+            const silhouetteRotation = ['oui', 'yes', 'true', '1', 'vrai'].includes(rotationValue);
+
             const question = {
               id: getValue('id') || `import-${Date.now()}-${index}`,
               type: getValue('type') || 'text',
@@ -212,6 +219,7 @@ const QuestionBank = ({ questions, onSave }) => {
               media: getValue('media') || '',
               mediaType: getValue('mediaType') || '',
               silhouetteMode: silhouetteMode,
+              silhouetteRotation: silhouetteRotation,
               points: parseInt(getValue('points')) || 1,
               timer: parseInt(getValue('timer')) || 0
             };
@@ -932,8 +940,9 @@ const QuestionBank = ({ questions, onSave }) => {
                       </span>
                   )}
                   {question.silhouetteMode && (
-                    <span className="px-2 py-1 bg-gray-800 dark:bg-gray-900 text-white text-xs rounded">
+                    <span className="px-2 py-1 bg-gray-800 dark:bg-gray-900 text-white text-xs rounded flex items-center gap-1">
                       🎭 Silhouette
+                      {question.silhouetteRotation && <span className="text-orange-400">🔄</span>}
                     </span>
                   )}
                   <span className="text-xs text-gray-500 dark:text-gray-400">{question.points} pts</span>

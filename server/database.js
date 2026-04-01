@@ -626,6 +626,7 @@ async function getAllQuestions() {
     media: q.media,
     mediaType: q.media_type,
     silhouetteMode: q.silhouette_mode || false,
+    silhouetteRotation: q.silhouette_rotation || false,
     choices: q.choices ? JSON.parse(q.choices) : null,
     createdAt: q.created_at
   }));
@@ -652,6 +653,7 @@ async function getQuestionById(id) {
     media: data.media,
     mediaType: data.media_type,
     silhouetteMode: data.silhouette_mode || false,
+    silhouetteRotation: data.silhouette_rotation || false,
     choices: data.choices ? JSON.parse(data.choices) : null,
     createdAt: data.created_at
   };
@@ -674,6 +676,7 @@ async function createQuestion(question) {
       media: question.media || null,
       media_type: question.mediaType || null,
       silhouette_mode: question.silhouetteMode || false,
+      silhouette_rotation: question.silhouetteRotation || false,
       choices: question.choices ? JSON.stringify(question.choices) : null
     });
   
@@ -696,6 +699,7 @@ async function updateQuestion(id, question) {
       media: question.media || null,
       media_type: question.mediaType || null,
       silhouette_mode: question.silhouetteMode || false,
+      silhouette_rotation: question.silhouetteRotation || false,
       choices: question.choices ? JSON.stringify(question.choices) : null
     })
     .eq('id', id);
@@ -842,6 +846,7 @@ async function getQuizQuestions(quizId) {
     media: row.questions.media,
     mediaType: row.questions.media_type,
     silhouetteMode: row.questions.silhouette_mode || false,
+    silhouetteRotation: row.questions.silhouette_rotation || false,
     choices: row.questions.choices ? JSON.parse(row.questions.choices) : null
   }));
 }

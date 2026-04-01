@@ -32,7 +32,8 @@ const QuestionEditor = ({
     tagsInput: '',
     choices: ['', '', '', ''],
     correctChoice: 0,
-    silhouetteMode: false
+    silhouetteMode: false,
+    silhouetteRotation: false
   });
 
   // Initialiser le formulaire quand une question est passée
@@ -59,7 +60,8 @@ const QuestionEditor = ({
         tagsInput: '',
         choices: choices,
         correctChoice: correctChoice,
-        silhouetteMode: question.silhouetteMode || false
+        silhouetteMode: question.silhouetteMode || false,
+        silhouetteRotation: question.silhouetteRotation || false
       });
     } else {
       resetForm();
@@ -80,7 +82,8 @@ const QuestionEditor = ({
       tagsInput: '',
       choices: ['', '', '', ''],
       correctChoice: 0,
-      silhouetteMode: false
+      silhouetteMode: false,
+      silhouetteRotation: false
     });
   };
 
@@ -447,22 +450,44 @@ const QuestionEditor = ({
                   
                   {/* Option silhouette (uniquement pour images) */}
                   {((formData.type === 'image') || (formData.type === 'qcm' && formData.mediaType === 'image')) && formData.media && (
-                    <label className="flex items-center gap-2 mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg cursor-pointer border border-purple-200 dark:border-purple-800">
-                      <input
-                        type="checkbox"
-                        checked={formData.silhouetteMode}
-                        onChange={(e) => setFormData({ ...formData, silhouetteMode: e.target.checked })}
-                        className="w-4 h-4 text-purple-600 rounded"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
-                          🎭 Mode silhouette
-                        </span>
-                        <p className="text-xs text-purple-500 dark:text-purple-400">
-                          L'image sera affichée en noir jusqu'à révélation (Who's that Pokémon?)
-                        </p>
-                      </div>
-                    </label>
+                    <div className="space-y-2 mt-3">
+                      <label className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg cursor-pointer border border-purple-200 dark:border-purple-800">
+                        <input
+                          type="checkbox"
+                          checked={formData.silhouetteMode}
+                          onChange={(e) => setFormData({ ...formData, silhouetteMode: e.target.checked })}
+                          className="w-4 h-4 text-purple-600 rounded"
+                        />
+                        <div>
+                          <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                            🎭 Mode silhouette
+                          </span>
+                          <p className="text-xs text-purple-500 dark:text-purple-400">
+                            L'image sera affichée en noir jusqu'à révélation
+                          </p>
+                        </div>
+                      </label>
+                      
+                      {/* Option rotation aléatoire (seulement si silhouette activé) */}
+                      {formData.silhouetteMode && (
+                        <label className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg cursor-pointer border border-orange-200 dark:border-orange-800 ml-4">
+                          <input
+                            type="checkbox"
+                            checked={formData.silhouetteRotation}
+                            onChange={(e) => setFormData({ ...formData, silhouetteRotation: e.target.checked })}
+                            className="w-4 h-4 text-orange-600 rounded"
+                          />
+                          <div>
+                            <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                              🔄 Rotation aléatoire
+                            </span>
+                            <p className="text-xs text-orange-500 dark:text-orange-400">
+                              L'image sera tournée aléatoirement (0-360°)
+                            </p>
+                          </div>
+                        </label>
+                      )}
+                    </div>
                   )}
                 </>
               )}

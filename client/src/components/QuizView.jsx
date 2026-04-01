@@ -19,6 +19,7 @@ const QuizView = ({
   const [zoomedImage, setZoomedImage] = useState(null);
   const [autoplayFailed, setAutoplayFailed] = useState(false);
   const [silhouetteImageReady, setSilhouetteImageReady] = useState(false);
+  const [silhouetteRotationAngle, setSilhouetteRotationAngle] = useState(0);
 
   // Utiliser les props renommees avec protection null
   const currentLobby = lobby;
@@ -33,9 +34,11 @@ const QuizView = ({
   // Timer depuis le serveur
   const timeRemaining = timerRemaining;
 
-  // Reset l'état de l'image quand la question change
+  // Reset l'état de l'image et générer une rotation aléatoire quand la question change
   useEffect(() => {
     setSilhouetteImageReady(false);
+    // Générer un angle aléatoire entre 0 et 360 pour chaque nouvelle question
+    setSilhouetteRotationAngle(Math.floor(Math.random() * 360));
   }, [questionIndex, question?.id]);
 
   // Mettre à jour le src audio/video quand la question change (sans recréer l'élément)
@@ -206,10 +209,25 @@ const QuizView = ({
   const hasVideoMedia = question?.media && (question?.type === 'video' || (question?.type === 'qcm' && question?.mediaType === 'video'));
   const hasAudioMedia = question?.media && (question?.type === 'audio' || (question?.type === 'qcm' && question?.mediaType === 'audio'));
 
-  // Mode silhouette : l'image est révélée quand le timer expire OU tout le monde a répondu OU l'utilisateur a répondu
+  // Mode silhouette : l'image est révélée quand :
+  // - Le timer expire OU
+  // - Tout le monde (global) a répondu OU  
+  // - Tous les membres de MON ÉQUIPE ont répondu (si en équipe)
+  // - L'utilisateur a répondu ET il n'est pas en équipe
   const isSilhouetteMode = question?.silhouetteMode && hasImageMedia;
   const allAnswered = currentLobby?.participants?.every(p => p.hasAnswered) || false;
-  const shouldRevealSilhouette = !isSilhouetteMode || isTimeExpired || allAnswered || hasAnswered;
+  
+  // Trouver mon équipe et vérifier si tous les membres ont répondu
+  const myParticipant = currentLobby?.participants?.find(p => p.odooUserId === currentUser?.odooUserId);
+  const myTeamId = myParticipant?.teamId;
+  const myTeammates = myTeamId 
+    ? currentLobby?.participants?.filter(p => p.teamId === myTeamId) 
+    : [];
+  const allTeammatesAnswered = myTeammates.length > 0 
+    ? myTeammates.every(p => p.hasAnswered) 
+    : hasAnswered; // Si pas d'équipe, juste vérifier si l'utilisateur a répondu
+  
+  const shouldRevealSilhouette = !isSilhouetteMode || isTimeExpired || allAnswered || allTeammatesAnswered;
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-2 sm:p-4">
@@ -279,9 +297,10 @@ const QuizView = ({
                     <div className="mb-2 px-3 py-1 bg-gray-800 text-white text-sm rounded-full flex items-center gap-2">
                       <span>🎭</span>
                       <span>Qui est ce personnage ?</span>
+                      {question?.silhouetteRotation && <span className="text-orange-400">🔄</span>}
                     </div>
                   )}
-                  {isSilhouetteMode && shouldRevealSilhouette && !hasAnswered && (
+                  {isSilhouetteMode && shouldRevealSilhouette && !allTeammatesAnswered && (
                     <div className="mb-2 px-3 py-1 bg-green-600 text-white text-sm rounded-full flex items-center gap-2 animate-pulse">
                       <span>✨</span>
                       <span>Révélé !</span>
@@ -308,7 +327,11 @@ const QuizView = ({
                         isSilhouetteMode ? (shouldRevealSilhouette ? 'silhouette-revealed' : 'silhouette-mode') : ''
                       }`}
                       style={{
-                        transform: shouldRevealSilhouette && isSilhouetteMode ? 'scale(1.02)' : 'scale(1)'
+                        transform: shouldRevealSilhouette && isSilhouetteMode 
+                          ? 'scale(1.02) rotate(0deg)' 
+                          : isSilhouetteMode && question?.silhouetteRotation 
+                            ? `scale(1) rotate(${silhouetteRotationAngle}deg)` 
+                            : 'scale(1) rotate(0deg)'
                       }}
                       onLoad={() => {
                         if (isSilhouetteMode) {
