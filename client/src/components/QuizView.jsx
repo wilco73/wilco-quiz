@@ -38,6 +38,26 @@ const QuizView = ({
     setSilhouetteImageReady(false);
   }, [questionIndex, question?.id]);
 
+  // Mettre à jour le src audio/video quand la question change (sans recréer l'élément)
+  useEffect(() => {
+    if (audioRef.current && question?.media) {
+      const isAudio = question?.type === 'audio' || (question?.type === 'qcm' && question?.mediaType === 'audio');
+      if (isAudio) {
+        audioRef.current.src = question.media;
+        audioRef.current.load();
+      }
+    }
+    if (videoRef.current && question?.media) {
+      const isVideo = question?.type === 'video' || (question?.type === 'qcm' && question?.mediaType === 'video');
+      if (isVideo) {
+        videoRef.current.src = question.media;
+        videoRef.current.load();
+      }
+    }
+    // Reset autoplay state
+    setAutoplayFailed(false);
+  }, [questionIndex, question?.id, question?.media, question?.type, question?.mediaType]);
+
   // Handler pour changement de reponse texte
   const handleAnswerChange = (e) => {
     onAnswerChange(e.target.value);
@@ -190,14 +210,6 @@ const QuizView = ({
   const isSilhouetteMode = question?.silhouetteMode && hasImageMedia;
   const allAnswered = currentLobby?.participants?.every(p => p.hasAnswered) || false;
   const shouldRevealSilhouette = !isSilhouetteMode || isTimeExpired || allAnswered || hasAnswered;
-
-  // DEBUG - À retirer après diagnostic
-  console.log('🎵 QuizView Debug:', {
-    questionType: question?.type,
-    questionMedia: question?.media,
-    hasAudioMedia,
-    mediaType: question?.mediaType
-  });
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-2 sm:p-4">

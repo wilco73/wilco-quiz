@@ -96,13 +96,17 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
     setShowAnswers(false);
   }, [activeLobby?.session?.currentQuestionIndex]);
 
-  // Definir le volume a 30% pour les medias de l'admin
+  // Definir le volume a 30% pour les medias de l'admin et autoplay
   useEffect(() => {
     if (adminVideoRef.current) {
       adminVideoRef.current.volume = 0.3;
+      // Autoplay vidéo
+      adminVideoRef.current.play().catch(() => {});
     }
     if (adminAudioRef.current) {
       adminAudioRef.current.volume = 0.3;
+      // Autoplay audio
+      adminAudioRef.current.play().catch(() => {});
     }
   }, [activeLobby?.session?.currentQuestionIndex]);
 
