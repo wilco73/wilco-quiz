@@ -322,28 +322,15 @@ const QuizView = ({
                 <div className="relative">
                   <video
                     ref={videoRef}
-                    key={`video-${currentSession?.currentQuestionIndex}-${question.id}`}
                     controls
                     playsInline
-                    preload="auto"
                     className="w-full rounded-lg max-h-[40vh] sm:max-h-[50vh] md:max-h-[60vh]"
+                    src={question.media}
                     onError={(e) => {
                       console.error('Erreur vidéo:', e.target.error);
                       console.log('URL vidéo:', question.media);
                     }}
-                  >
-                    <source 
-                      src={question.media} 
-                      type={
-                        question.media?.endsWith('.mp4') ? 'video/mp4' :
-                        question.media?.endsWith('.webm') ? 'video/webm' :
-                        question.media?.endsWith('.ogg') || question.media?.endsWith('.ogv') ? 'video/ogg' :
-                        question.media?.endsWith('.mov') ? 'video/quicktime' :
-                        'video/mp4'
-                      }
-                    />
-                    Votre navigateur ne supporte pas l'élément vidéo.
-                  </video>
+                  />
                   {autoplayFailed && (
                     <button
                       onClick={handleManualPlay}
@@ -362,29 +349,14 @@ const QuizView = ({
                 <div className="space-y-2">
                   <audio
                     ref={audioRef}
-                    key={`audio-${currentSession?.currentQuestionIndex}-${question.id}`}
                     controls
                     className="w-full"
-                    preload="auto"
+                    src={question.media}
                     onError={(e) => {
                       console.error('Erreur audio:', e.target.error);
                       console.log('URL audio:', question.media);
                     }}
-                  >
-                    {/* Essayer plusieurs formats pour meilleure compatibilité */}
-                    <source 
-                      src={question.media} 
-                      type={
-                        question.media?.endsWith('.ogg') ? 'audio/ogg' :
-                        question.media?.endsWith('.mp3') ? 'audio/mpeg' :
-                        question.media?.endsWith('.wav') ? 'audio/wav' :
-                        question.media?.endsWith('.m4a') ? 'audio/mp4' :
-                        question.media?.endsWith('.webm') ? 'audio/webm' :
-                        'audio/mpeg'
-                      }
-                    />
-                    Votre navigateur ne supporte pas l'élément audio.
-                  </audio>
+                  />
                   {autoplayFailed && (
                     <button
                       onClick={handleManualPlay}
