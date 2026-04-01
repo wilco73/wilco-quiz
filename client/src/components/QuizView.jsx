@@ -18,6 +18,7 @@ const QuizView = ({
   const audioRef = useRef(null);
   const [zoomedImage, setZoomedImage] = useState(null);
   const [autoplayFailed, setAutoplayFailed] = useState(false);
+  const [silhouetteImageReady, setSilhouetteImageReady] = useState(false);
 
   // Utiliser les props renommees avec protection null
   const currentLobby = lobby;
@@ -31,6 +32,11 @@ const QuizView = ({
   
   // Timer depuis le serveur
   const timeRemaining = timerRemaining;
+
+  // Reset l'état de l'image quand la question change
+  useEffect(() => {
+    setSilhouetteImageReady(false);
+  }, [questionIndex, question?.id]);
 
   // Handler pour changement de reponse texte
   const handleAnswerChange = (e) => {
@@ -249,7 +255,7 @@ const QuizView = ({
               {hasImageMedia && (
                 <div className="flex flex-col items-center">
                   {/* Badge mode silhouette */}
-                  {isSilhouetteMode && !shouldRevealSilhouette && (
+                  {isSilhouetteMode && !shouldRevealSilhouette && silhouetteImageReady && (
                     <div className="mb-2 px-3 py-1 bg-gray-800 text-white text-sm rounded-full flex items-center gap-2">
                       <span>🎭</span>
                       <span>Qui est ce personnage ?</span>
@@ -262,17 +268,33 @@ const QuizView = ({
                     </div>
                   )}
                   
+                  {/* Loader pendant le chargement de l'image silhouette */}
+                  {isSilhouetteMode && !silhouetteImageReady && (
+                    <div className="w-48 h-48 sm:w-64 sm:h-64 bg-gray-800 rounded-lg flex items-center justify-center animate-pulse">
+                      <span className="text-4xl">🎭</span>
+                    </div>
+                  )}
+                  
                   <div 
                     className="relative cursor-pointer group"
                     onClick={() => shouldRevealSilhouette ? setZoomedImage(question.media) : null}
+                    style={{ display: (isSilhouetteMode && !silhouetteImageReady) ? 'none' : 'block' }}
                   >
+                    {/* Image avec filtre appliqué via classe CSS pour éviter le flash */}
                     <img 
                       src={question.media} 
                       alt="Question" 
-                      className="max-w-full w-auto max-h-[40vh] sm:max-h-[50vh] md:max-h-[60vh] rounded-lg object-contain transition-all duration-500" 
+                      className={`max-w-full w-auto max-h-[40vh] sm:max-h-[50vh] md:max-h-[60vh] rounded-lg object-contain transition-all duration-500 ${
+                        isSilhouetteMode ? (shouldRevealSilhouette ? 'silhouette-revealed' : 'silhouette-mode') : ''
+                      }`}
                       style={{
-                        filter: shouldRevealSilhouette ? 'none' : 'brightness(0)',
                         transform: shouldRevealSilhouette && isSilhouetteMode ? 'scale(1.02)' : 'scale(1)'
+                      }}
+                      onLoad={() => {
+                        if (isSilhouetteMode) {
+                          // Petit délai pour s'assurer que le CSS est appliqué
+                          setTimeout(() => setSilhouetteImageReady(true), 50);
+                        }
                       }}
                     />
                     {shouldRevealSilhouette && (
