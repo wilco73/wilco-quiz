@@ -617,12 +617,14 @@ const QuestionBank = ({ questions, onSave }) => {
     }
   };
 
-  // ✅ FILTRAGE avec catégorie, type et tags
+  // ✅ FILTRAGE avec catégorie, type et tags + recherche dans réponses
   const filteredQuestions = localQuestions.filter(q => {
     const qTags = q.tags || [];
-    const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      q.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      qTags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = q.text.toLowerCase().includes(searchLower) ||
+      q.answer?.toLowerCase().includes(searchLower) ||
+      q.category?.toLowerCase().includes(searchLower) ||
+      qTags.some(tag => tag.toLowerCase().includes(searchLower));
     const matchesCategory = !filterCategory || q.category === filterCategory;
     const matchesType = !filterType || q.type === filterType;
     const matchesTag = !filterTag || qTags.includes(filterTag);
@@ -865,7 +867,7 @@ const QuestionBank = ({ questions, onSave }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <input
           type="text"
-          placeholder="Rechercher une question..."
+          placeholder="Rechercher (question, réponse, tag)..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"

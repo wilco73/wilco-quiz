@@ -65,8 +65,10 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
   }, [searchTerm, categoryFilter, selectedTags]);
 
   const filteredQuestions = availableQuestions.filter(q => {
-    const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         q.category?.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = q.text.toLowerCase().includes(searchLower) ||
+                         q.answer?.toLowerCase().includes(searchLower) ||
+                         q.category?.toLowerCase().includes(searchLower);
     const matchesCategory = !categoryFilter || q.category === categoryFilter;
     // Nouveau: filtre par tags (la question doit avoir TOUS les tags sélectionnés)
     const matchesTags = selectedTags.length === 0 || 
@@ -453,7 +455,7 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
           <div className="flex gap-3 mb-3">
             <input
               type="text"
-              placeholder="Rechercher..."
+              placeholder="Question ou réponse..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
