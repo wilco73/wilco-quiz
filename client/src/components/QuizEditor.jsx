@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Save, X, Plus, Trash2, ChevronDown, ChevronUp, Shuffle, Filter, Eye, EyeOff, Tag } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import Pagination from './Pagination';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -27,6 +28,14 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
   // ✅ NOUVEAU: Affichage des réponses
   const [showAnswers, setShowAnswers] = useState(true);
   
+  // ✅ Pagination pour les questions sélectionnées
+  const [selectedPage, setSelectedPage] = useState(1);
+  const [selectedPerPage, setSelectedPerPage] = useState(10);
+  
+  // ✅ Pagination pour le picker de questions
+  const [pickerPage, setPickerPage] = useState(1);
+  const [pickerPerPage, setPickerPerPage] = useState(10);
+  
   // Charger les catégories de quiz existantes
   useEffect(() => {
     const loadQuizCategories = async () => {
@@ -49,6 +58,11 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
   const allTags = [...new Set(
     questions.flatMap(q => q.tags || []).filter(Boolean)
   )].sort();
+
+  // Reset la page du picker quand les filtres changent
+  useEffect(() => {
+    setPickerPage(1);
+  }, [searchTerm, categoryFilter, selectedTags]);
 
   const filteredQuestions = availableQuestions.filter(q => {
     const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -184,18 +198,38 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
         />
       </div>
 
+      {/* Boutons d'action sticky en haut sur mobile */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 py-2 mb-4 -mx-4 sm:-mx-6 px-4 sm:px-6 border-b border-gray-200 dark:border-gray-700 sm:hidden">
+        <div className="flex gap-2">
+          <button
+            onClick={handleSave}
+            className="flex-1 py-2 bg-green-600 text-white rounded-lg flex items-center justify-center gap-2 text-sm font-semibold"
+          >
+            <Save className="w-4 h-4" />
+            Enregistrer
+          </button>
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2 bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg flex items-center justify-center gap-2 text-sm"
+          >
+            <X className="w-4 h-4" />
+            Annuler
+          </button>
+        </div>
+      </div>
+
       {/* Questions sélectionnées */}
       <div className="mb-6">
-        <div className="flex justify-between items-center mb-3">
-          <h4 className="text-xl font-bold dark:text-white">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
+          <h4 className="text-lg sm:text-xl font-bold dark:text-white">
             Questions du quiz ({selectedQuestions.length})
           </h4>
           
-          {/* ✅ NOUVEAU: Bouton pour afficher/masquer les réponses */}
+          {/* Bouton pour afficher/masquer les réponses */}
           {selectedQuestions.length > 0 && (
             <button
               onClick={() => setShowAnswers(!showAnswers)}
-              className={`flex items-center gap-2 px-3 py-1 rounded-lg transition ${
+              className={`flex items-center gap-2 px-3 py-1 rounded-lg transition text-sm ${
                 showAnswers 
                   ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
@@ -203,7 +237,7 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
               title={showAnswers ? 'Masquer les réponses' : 'Afficher les réponses'}
             >
               {showAnswers ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-              <span className="text-sm">{showAnswers ? 'Masquer' : 'Afficher'} réponses</span>
+              <span>{showAnswers ? 'Masquer' : 'Afficher'} réponses</span>
             </button>
           )}
         </div>
@@ -211,61 +245,94 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
         {selectedQuestions.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400 text-center py-8">Aucune question ajoutée</p>
         ) : (
-          <div className="space-y-2">
-            {selectedQuestions.map((q, index) => (
-              <div key={q.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-700">
-                <div className="flex items-start gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-purple-600 dark:text-purple-400 min-w-[30px]">#{index + 1}</span>
-                    <span className="text-lg">{getTypeIcon(q.type)}</span>
-                  </div>
-                  
-                  <div className="flex-1">
-                    <p className="font-semibold dark:text-white">{q.text}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {q.category && <span className="text-purple-600 dark:text-purple-400">{q.category} • </span>}
-                      {q.type === 'qcm' && <span className="text-blue-600 dark:text-blue-400">QCM • </span>}
-                      {q.points} pts • {q.timer > 0 ? `${q.timer}s` : 'Pas de timer'}
-                    </p>
-                    
-                    {/* ✅ NOUVEAU: Afficher la réponse si activé */}
-                    {showAnswers && (
-                      <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded">
-                        <p className="text-xs text-green-700 dark:text-green-400 font-semibold">
-                          ✅ Réponse : <span className="font-bold">{q.answer}</span>
-                        </p>
+          <>
+            {/* Pagination en haut */}
+            {selectedQuestions.length > selectedPerPage && (
+              <Pagination
+                currentPage={selectedPage}
+                totalItems={selectedQuestions.length}
+                itemsPerPage={selectedPerPage}
+                onPageChange={setSelectedPage}
+                onItemsPerPageChange={(n) => { setSelectedPerPage(n); setSelectedPage(1); }}
+                itemsPerPageOptions={[5, 10, 25, 50]}
+                compact
+              />
+            )}
+            
+            <div className="space-y-2">
+              {selectedQuestions
+                .slice((selectedPage - 1) * selectedPerPage, selectedPage * selectedPerPage)
+                .map((q, idx) => {
+                  const index = (selectedPage - 1) * selectedPerPage + idx;
+                  return (
+                    <div key={q.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-2 sm:p-3 bg-gray-50 dark:bg-gray-700">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                          <span className="font-bold text-purple-600 dark:text-purple-400 text-sm sm:text-base min-w-[24px] sm:min-w-[30px]">#{index + 1}</span>
+                          <span className="text-base sm:text-lg">{getTypeIcon(q.type)}</span>
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold dark:text-white text-sm sm:text-base truncate">{q.text}</p>
+                          <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                            {q.category && <span className="text-purple-600 dark:text-purple-400">{q.category} • </span>}
+                            {q.type === 'qcm' && <span className="text-blue-600 dark:text-blue-400">QCM • </span>}
+                            {q.points} pts • {q.timer > 0 ? `${q.timer}s` : 'Pas de timer'}
+                          </p>
+                          
+                          {/* Afficher la réponse si activé */}
+                          {showAnswers && (
+                            <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded">
+                              <p className="text-xs text-green-700 dark:text-green-400 font-semibold">
+                                ✅ Réponse : <span className="font-bold">{q.answer}</span>
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex gap-1 shrink-0">
+                          {index > 0 && (
+                            <button
+                              onClick={() => moveQuestion(index, -1)}
+                              className="p-1 bg-gray-300 dark:bg-gray-600 rounded hover:bg-gray-400 dark:hover:bg-gray-500"
+                            >
+                              <ChevronUp className="w-3 h-3 sm:w-4 sm:h-4 dark:text-white" />
+                            </button>
+                          )}
+                          {index < selectedQuestions.length - 1 && (
+                            <button
+                              onClick={() => moveQuestion(index, 1)}
+                              className="p-1 bg-gray-300 dark:bg-gray-600 rounded hover:bg-gray-400 dark:hover:bg-gray-500"
+                            >
+                              <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4 dark:text-white" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => removeQuestion(q.id)}
+                            className="p-1 bg-red-500 text-white rounded hover:bg-red-600"
+                          >
+                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                          </button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex gap-1">
-                    {index > 0 && (
-                      <button
-                        onClick={() => moveQuestion(index, -1)}
-                        className="p-1 bg-gray-300 dark:bg-gray-600 rounded hover:bg-gray-400 dark:hover:bg-gray-500"
-                      >
-                        <ChevronUp className="w-4 h-4 dark:text-white" />
-                      </button>
-                    )}
-                    {index < selectedQuestions.length - 1 && (
-                      <button
-                        onClick={() => moveQuestion(index, 1)}
-                        className="p-1 bg-gray-300 dark:bg-gray-600 rounded hover:bg-gray-400 dark:hover:bg-gray-500"
-                      >
-                        <ChevronDown className="w-4 h-4 dark:text-white" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => removeQuestion(q.id)}
-                      className="p-1 bg-red-500 text-white rounded hover:bg-red-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                    </div>
+                  );
+                })}
+            </div>
+            
+            {/* Pagination en bas */}
+            {selectedQuestions.length > selectedPerPage && (
+              <Pagination
+                currentPage={selectedPage}
+                totalItems={selectedQuestions.length}
+                itemsPerPage={selectedPerPage}
+                onPageChange={setSelectedPage}
+                onItemsPerPageChange={(n) => { setSelectedPerPage(n); setSelectedPage(1); }}
+                itemsPerPageOptions={[5, 10, 25, 50]}
+                compact
+              />
+            )}
+          </>
         )}
       </div>
 
@@ -436,12 +503,20 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
             </div>
           )}
           
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-            {filteredQuestions.length} question(s) disponible(s)
-            {selectedTags.length > 0 && ` avec ${selectedTags.length} tag(s) sélectionné(s)`}
-          </p>
+          {/* Pagination du picker */}
+          {filteredQuestions.length > pickerPerPage && (
+            <Pagination
+              currentPage={pickerPage}
+              totalItems={filteredQuestions.length}
+              itemsPerPage={pickerPerPage}
+              onPageChange={setPickerPage}
+              onItemsPerPageChange={(n) => { setPickerPerPage(n); setPickerPage(1); }}
+              itemsPerPageOptions={[5, 10, 25, 50]}
+              compact
+            />
+          )}
           
-          <div className="max-h-96 overflow-y-auto space-y-2">
+          <div className="max-h-[50vh] overflow-y-auto space-y-2">
             {filteredQuestions.length === 0 ? (
               <p className="text-center text-gray-500 dark:text-gray-400 py-4">
                 {availableQuestions.length === 0 
@@ -449,33 +524,35 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
                   : 'Aucune question trouvée'}
               </p>
             ) : (
-              filteredQuestions.map(question => (
+              filteredQuestions
+                .slice((pickerPage - 1) * pickerPerPage, pickerPage * pickerPerPage)
+                .map(question => (
                 <div
                   key={question.id}
                   onClick={() => addQuestion(question)}
-                  className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-700 hover:bg-green-50 dark:hover:bg-green-900/20 cursor-pointer transition"
+                  className="border border-gray-300 dark:border-gray-600 rounded-lg p-2 sm:p-3 bg-white dark:bg-gray-700 hover:bg-green-50 dark:hover:bg-green-900/20 cursor-pointer transition"
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg">{getTypeIcon(question.type)}</span>
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1">
+                        <span className="text-base sm:text-lg">{getTypeIcon(question.type)}</span>
                         {question.category && (
-                          <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded">
+                          <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded">
                             {question.category}
                           </span>
                         )}
                         {question.type === 'qcm' && (
-                          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded">
+                          <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded">
                             QCM
                           </span>
                         )}
                       </div>
-                      <p className="font-semibold dark:text-white mb-1">{question.text}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="font-semibold dark:text-white mb-1 text-sm sm:text-base">{question.text}</p>
+                      <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                         {question.points} pts • {question.timer > 0 ? `${question.timer}s` : 'Pas de timer'}
                       </p>
                       
-                      {/* ✅ NOUVEAU: Afficher réponse dans le picker aussi */}
+                      {/* Afficher réponse dans le picker aussi */}
                       {showAnswers && (
                         <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded">
                           <p className="text-xs text-green-700 dark:text-green-400 font-semibold">
@@ -484,7 +561,7 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
                         </div>
                       )}
                     </div>
-                    <Plus className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 dark:text-green-400 shrink-0" />
                   </div>
                 </div>
               ))
@@ -493,8 +570,8 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
         </div>
       )}
 
-      {/* Boutons d'action */}
-      <div className="flex gap-4">
+      {/* Boutons d'action - cachés sur mobile car sticky en haut */}
+      <div className="hidden sm:flex gap-4">
         <button
           onClick={handleSave}
           className="flex-1 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 flex items-center justify-center gap-2"
