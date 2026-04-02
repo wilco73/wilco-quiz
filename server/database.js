@@ -925,38 +925,102 @@ async function saveAllQuizzes(quizzes) {
 // ==================== LOBBIES ====================
 
 async function getAllLobbies() {
+  // Requête 1: Récupérer tous les lobbies
   const { data, error } = await supabase
     .from('lobbies')
     .select('*')
     .order('created_at', { ascending: false });
   
   if (error) throw error;
+  if (!data || data.length === 0) return [];
   
-  const lobbies = [];
-  for (const lobby of data) {
-    const participants = await getLobbyParticipants(lobby.id);
+  const lobbyIds = data.map(l => l.id);
+  
+  // Requête 2: Récupérer TOUS les participants de tous les lobbies en une seule requête
+  const { data: allParticipants } = await supabase
+    .from('lobby_participants')
+    .select(`
+      lobby_id,
+      participant_id,
+      team_name,
+      has_answered,
+      current_answer,
+      draft_answer,
+      participants (pseudo)
+    `)
+    .in('lobby_id', lobbyIds);
+  
+  // Requête 3: Récupérer TOUTES les réponses de tous les lobbies
+  const { data: allAnswers } = await supabase
+    .from('lobby_answers')
+    .select('lobby_id, participant_id, question_id, answer, validation, qcm_team_scored, has_pasted')
+    .in('lobby_id', lobbyIds);
+  
+  // Indexer les réponses par lobby_id + participant_id
+  const answersIndex = {};
+  (allAnswers || []).forEach(a => {
+    const key = `${a.lobby_id}:${a.participant_id}`;
+    if (!answersIndex[key]) answersIndex[key] = [];
+    answersIndex[key].push(a);
+  });
+  
+  // Indexer les participants par lobby_id
+  const participantsByLobby = {};
+  (allParticipants || []).forEach(p => {
+    if (!participantsByLobby[p.lobby_id]) participantsByLobby[p.lobby_id] = [];
+    
+    const answers = answersIndex[`${p.lobby_id}:${p.participant_id}`] || [];
+    
+    const answersByQuestionId = {};
+    const validationsByQuestionId = {};
+    const qcmTeamScored = {};
+    const pastedByQuestionId = {};
+    
+    answers.forEach(a => {
+      if (a.answer !== null) answersByQuestionId[a.question_id] = a.answer;
+      if (a.validation !== null) validationsByQuestionId[a.question_id] = a.validation === 1;
+      if (a.qcm_team_scored) qcmTeamScored[a.question_id] = true;
+      if (a.has_pasted) pastedByQuestionId[a.question_id] = true;
+    });
+    
+    participantsByLobby[p.lobby_id].push({
+      participantId: p.participant_id,
+      pseudo: p.participants?.pseudo,
+      teamName: p.team_name,
+      hasAnswered: p.has_answered === 1,
+      currentAnswer: p.current_answer,
+      draftAnswer: p.draft_answer,
+      answersByQuestionId,
+      validationsByQuestionId,
+      qcmTeamScored,
+      pastedByQuestionId
+    });
+  });
+  
+  // Construire le résultat
+  return data.map(lobby => {
+    const participants = participantsByLobby[lobby.id] || [];
     const session = lobby.status !== 'waiting' ? {
       currentQuestionIndex: lobby.current_question_index,
       startTime: lobby.start_time,
       status: lobby.status === 'finished' ? 'finished' : undefined
     } : null;
     
-    lobbies.push({
+    return {
       id: lobby.id,
       quizId: lobby.quiz_id,
       status: lobby.status,
       currentQuestionIndex: lobby.current_question_index,
       shuffled: lobby.shuffled === 1,
       shuffledQuestions: lobby.shuffled_questions ? JSON.parse(lobby.shuffled_questions) : null,
+      trainingMode: lobby.training_mode === 1,
       startTime: lobby.start_time,
       archived: lobby.archived === 1,
       createdAt: lobby.created_at,
       participants,
       session
-    });
-  }
-  
-  return lobbies;
+    };
+  });
 }
 
 async function getLobbyById(id) {
@@ -991,6 +1055,7 @@ async function getLobbyById(id) {
 }
 
 async function getLobbyParticipants(lobbyId) {
+  // Requête 1: Récupérer tous les participants du lobby
   const { data: participants } = await supabase
     .from('lobby_participants')
     .select(`
@@ -1003,30 +1068,42 @@ async function getLobbyParticipants(lobbyId) {
     `)
     .eq('lobby_id', lobbyId);
   
-  if (!participants) return [];
+  if (!participants || participants.length === 0) return [];
   
-  const result = [];
-  for (const p of participants) {
-    // Récupérer les réponses
-    const { data: answers } = await supabase
-      .from('lobby_answers')
-      .select('question_id, answer, validation, qcm_team_scored, has_pasted')
-      .eq('lobby_id', lobbyId)
-      .eq('participant_id', p.participant_id);
+  // Requête 2: Récupérer TOUTES les réponses du lobby en une seule requête
+  const participantIds = participants.map(p => p.participant_id);
+  const { data: allAnswers } = await supabase
+    .from('lobby_answers')
+    .select('participant_id, question_id, answer, validation, qcm_team_scored, has_pasted')
+    .eq('lobby_id', lobbyId)
+    .in('participant_id', participantIds);
+  
+  // Indexer les réponses par participant_id pour accès O(1)
+  const answersByParticipant = {};
+  (allAnswers || []).forEach(a => {
+    if (!answersByParticipant[a.participant_id]) {
+      answersByParticipant[a.participant_id] = [];
+    }
+    answersByParticipant[a.participant_id].push(a);
+  });
+  
+  // Construire le résultat
+  return participants.map(p => {
+    const answers = answersByParticipant[p.participant_id] || [];
     
     const answersByQuestionId = {};
     const validationsByQuestionId = {};
     const qcmTeamScored = {};
     const pastedByQuestionId = {};
     
-    (answers || []).forEach(a => {
+    answers.forEach(a => {
       if (a.answer !== null) answersByQuestionId[a.question_id] = a.answer;
       if (a.validation !== null) validationsByQuestionId[a.question_id] = a.validation === 1;
       if (a.qcm_team_scored) qcmTeamScored[a.question_id] = true;
       if (a.has_pasted) pastedByQuestionId[a.question_id] = true;
     });
     
-    result.push({
+    return {
       participantId: p.participant_id,
       pseudo: p.participants?.pseudo,
       teamName: p.team_name,
@@ -1037,10 +1114,8 @@ async function getLobbyParticipants(lobbyId) {
       validationsByQuestionId,
       qcmTeamScored,
       pastedByQuestionId
-    });
-  }
-  
-  return result;
+    };
+  });
 }
 
 async function createLobby(quizId, shuffle = false, trainingMode = false) {

@@ -1,19 +1,49 @@
 /**
- * Fonctions de broadcast Socket.IO - Version optimisée
+ * Fonctions de broadcast Socket.IO - Version optimisée v2
  * 
- * Stratégie d'optimisation :
- * - Broadcasts ciblés par type de données
- * - Pas d'envoi systématique de toutes les questions
- * - Deltas quand possible
+ * Optimisations :
+ * - Debounce pour éviter les rafales de broadcasts
+ * - Requêtes batch optimisées
+ * - Logs réduits
  */
 
 const db = require('../database');
 const { getLobbyWithTimer } = require('./helpers');
+const debounce = require('./debounce');
+
+// Compteur de broadcasts pour monitoring
+let broadcastCount = 0;
+setInterval(() => {
+  if (broadcastCount > 0) {
+    console.log(`[BROADCAST] ${broadcastCount} broadcasts dans la dernière minute`);
+    broadcastCount = 0;
+  }
+}, 60000);
 
 /**
- * Émet l'état d'un lobby à tous ses participants
+ * Émet l'état d'un lobby à tous ses participants (avec debounce)
  */
 async function broadcastLobbyState(io, lobbyId) {
+  debounce.schedule('lobby', async () => {
+    const lobby = await db.getLobbyById(lobbyId);
+    if (!lobby) return;
+    
+    const quiz = await db.getQuizById(lobby.quizId);
+    const lobbyWithTimer = getLobbyWithTimer(lobby);
+    
+    io.to(`lobby:${lobbyId}`).emit('lobby:state', {
+      lobby: lobbyWithTimer,
+      quiz
+    });
+    broadcastCount++;
+  }, lobbyId);
+}
+
+/**
+ * Émet l'état d'un lobby immédiatement (sans debounce)
+ * À utiliser pour les actions critiques (démarrage quiz, changement question)
+ */
+async function broadcastLobbyStateImmediate(io, lobbyId) {
   const lobby = await db.getLobbyById(lobbyId);
   if (!lobby) return;
   
@@ -24,84 +54,95 @@ async function broadcastLobbyState(io, lobbyId) {
     lobby: lobbyWithTimer,
     quiz
   });
+  broadcastCount++;
 }
 
 /**
- * Émet uniquement les lobbies mis à jour
- * Utilisé quand un lobby change (création, join, leave, status)
+ * Émet la liste des lobbies (avec debounce)
  */
 async function broadcastLobbiesUpdate(io) {
+  debounce.schedule('lobbies', async () => {
+    const allLobbies = await db.getAllLobbies();
+    const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
+    
+    io.emit('global:lobbiesUpdate', { lobbies });
+    broadcastCount++;
+  });
+}
+
+/**
+ * Émet la liste des lobbies immédiatement
+ */
+async function broadcastLobbiesUpdateImmediate(io) {
   const allLobbies = await db.getAllLobbies();
   const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
   
-  console.log(`[BROADCAST] lobbiesUpdate - ${lobbies.length} lobbies, participants: ${lobbies.map(l => l.participants?.length || 0).join(',')}`);
   io.emit('global:lobbiesUpdate', { lobbies });
+  broadcastCount++;
 }
 
 /**
- * Émet uniquement les équipes mises à jour
- * Utilisé quand une équipe change (score, création, suppression)
+ * Émet uniquement les équipes mises à jour (avec debounce)
  */
 async function broadcastTeamsUpdate(io) {
-  const teams = await db.getAllTeams();
-  
-  io.emit('global:teamsUpdate', { teams });
+  debounce.schedule('teams', async () => {
+    const teams = await db.getAllTeams();
+    io.emit('global:teamsUpdate', { teams });
+    broadcastCount++;
+  });
 }
 
 /**
- * Émet uniquement les participants mis à jour
- * Utilisé quand un participant change (inscription, équipe, rôle)
+ * Émet uniquement les participants mis à jour (avec debounce)
  */
 async function broadcastParticipantsUpdate(io) {
-  const allParticipants = await db.getAllParticipants();
-  const participants = allParticipants.map(p => ({ ...p, password: '********' }));
-  
-  io.emit('global:participantsUpdate', { participants });
+  debounce.schedule('participants', async () => {
+    const allParticipants = await db.getAllParticipants();
+    const participants = allParticipants.map(p => ({ ...p, password: '********' }));
+    io.emit('global:participantsUpdate', { participants });
+    broadcastCount++;
+  });
 }
 
 /**
- * Émet uniquement les quizzes mis à jour
- * Utilisé quand un quiz change (création, modification, suppression)
+ * Émet uniquement les quizzes mis à jour (avec debounce)
  */
 async function broadcastQuizzesUpdate(io) {
-  const quizzes = await db.getAllQuizzes();
-  
-  io.emit('global:quizzesUpdate', { quizzes });
+  debounce.schedule('quizzes', async () => {
+    const quizzes = await db.getAllQuizzes();
+    io.emit('global:quizzesUpdate', { quizzes });
+    broadcastCount++;
+  });
 }
 
 /**
- * Émet uniquement les questions mises à jour
- * Utilisé uniquement quand les questions changent (import, création, modification)
- * NE PAS utiliser pour les actions de jeu !
+ * Émet uniquement les questions mises à jour (avec debounce)
  */
 async function broadcastQuestionsUpdate(io) {
-  const questions = await db.getAllQuestions();
-  
-  io.emit('global:questionsUpdate', { questions });
+  debounce.schedule('questions', async () => {
+    const questions = await db.getAllQuestions();
+    io.emit('global:questionsUpdate', { questions });
+    broadcastCount++;
+  });
 }
 
 /**
  * Émet l'état global complet - À UTILISER AVEC PARCIMONIE
- * Uniquement pour l'initialisation d'un nouveau client
  */
 async function broadcastGlobalState(io) {
-  // Version allégée : ne broadcast que lobbies, teams et participants
-  // Les quizzes et questions sont chargés à la demande
   const allLobbies = await db.getAllLobbies();
   const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
   const teams = await db.getAllTeams();
   const allParticipants = await db.getAllParticipants();
   const participants = allParticipants.map(p => ({ ...p, password: '********' }));
-  
-  // Note: On envoie encore quizzes pour compatibilité, mais pas questions
   const quizzes = await db.getAllQuizzes();
   
   io.emit('global:state', { lobbies, teams, participants, quizzes });
+  broadcastCount++;
 }
 
 /**
  * Émet l'état global initial à un socket spécifique
- * Inclut les questions car c'est un chargement initial
  */
 async function emitInitialState(socket) {
   const allLobbies = await db.getAllLobbies();
@@ -113,6 +154,7 @@ async function emitInitialState(socket) {
   const questions = await db.getAllQuestions();
   
   socket.emit('global:state', { lobbies, teams, participants, quizzes, questions });
+  broadcastCount++;
 }
 
 /**
@@ -158,19 +200,21 @@ async function smartBroadcast(io, types) {
 }
 
 /**
- * Émet la liste des mystery lobbies mise à jour
- * Utilisé quand un lobby mystery change (création, join, leave, status)
+ * Émet la liste des mystery lobbies mise à jour (avec debounce)
  */
 async function broadcastMysteryLobbiesUpdate(io) {
-  const mysteryLobbies = await db.getAllMysteryLobbies();
-  
-  console.log(`[BROADCAST] mysteryLobbiesUpdate - ${mysteryLobbies.length} lobbies`);
-  io.emit('global:mysteryLobbiesUpdate', { mysteryLobbies });
+  debounce.schedule('mystery', async () => {
+    const mysteryLobbies = await db.getAllMysteryLobbies();
+    io.emit('global:mysteryLobbiesUpdate', { mysteryLobbies });
+    broadcastCount++;
+  });
 }
 
 module.exports = {
   broadcastLobbyState,
+  broadcastLobbyStateImmediate,
   broadcastLobbiesUpdate,
+  broadcastLobbiesUpdateImmediate,
   broadcastTeamsUpdate,
   broadcastParticipantsUpdate,
   broadcastQuizzesUpdate,
