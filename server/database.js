@@ -1161,15 +1161,27 @@ async function joinLobby(lobbyId, participantId, pseudo, teamName) {
 }
 
 async function leaveLobby(lobbyId, participantId) {
-  await supabase
-    .from('lobby_participants')
-    .delete()
-    .eq('lobby_id', lobbyId)
-    .eq('participant_id', participantId);
-  
+  // Récupérer le lobby pour vérifier son statut
   const lobby = await getLobbyById(lobbyId);
-  if (lobby && lobby.status === 'waiting' && lobby.participants.length === 0) {
-    await deleteLobby(lobbyId);
+  
+  if (lobby && lobby.status === 'waiting') {
+    // Si le quiz n'a pas commencé, on peut supprimer le participant
+    await supabase
+      .from('lobby_participants')
+      .delete()
+      .eq('lobby_id', lobbyId)
+      .eq('participant_id', participantId);
+    
+    // Si le lobby est vide, le supprimer
+    const updatedLobby = await getLobbyById(lobbyId);
+    if (updatedLobby && updatedLobby.participants.length === 0) {
+      await deleteLobby(lobbyId);
+    }
+  } else {
+    // Si le quiz est en cours ou terminé, on garde le participant pour l'historique
+    // On pourrait ajouter un flag "left" si besoin, mais pour l'instant on ne fait rien
+    // Le participant reste dans l'historique
+    console.log(`[LOBBY] ${participantId} a quitté ${lobbyId} mais reste dans l'historique (quiz ${lobby?.status})`);
   }
 }
 
@@ -1372,6 +1384,34 @@ async function markQcmTeamScored(lobbyId, participantId, questionId) {
     .eq('lobby_id', lobbyId)
     .eq('participant_id', participantId)
     .eq('question_id', questionId);
+}
+
+/**
+ * Vérifie si une équipe a déjà scoré pour une question donnée
+ * Cherche si un membre de l'équipe a déjà été validé correct pour cette question
+ */
+async function hasTeamScoredForQuestion(lobbyId, teamName, questionId) {
+  // Récupérer tous les participants du lobby qui sont dans cette équipe
+  const { data: teamParticipants } = await supabase
+    .from('lobby_participants')
+    .select('participant_id')
+    .eq('lobby_id', lobbyId)
+    .eq('team_name', teamName);
+  
+  if (!teamParticipants || teamParticipants.length === 0) return false;
+  
+  const participantIds = teamParticipants.map(p => p.participant_id);
+  
+  // Vérifier si l'un d'eux a déjà une validation correcte pour cette question
+  const { data: validations } = await supabase
+    .from('lobby_answers')
+    .select('validation')
+    .eq('lobby_id', lobbyId)
+    .eq('question_id', questionId)
+    .in('participant_id', participantIds)
+    .eq('validation', 1);
+  
+  return validations && validations.length > 0;
 }
 
 async function markAnswerPasted(lobbyId, participantId, questionId) {
@@ -2850,6 +2890,7 @@ module.exports = {
   markQcmTeamScored,
   markAnswerPasted,
   getParticipantValidation,
+  hasTeamScoredForQuestion,
   updateLobbyParticipantTeam,
   
   // Drawing Words (Pictionary)

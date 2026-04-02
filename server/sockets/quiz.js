@@ -416,18 +416,36 @@ function register(socket, io) {
     try {
       const { lobbyId, odId, questionId, isCorrect, points } = data;
       
-      await db.validateAnswer(lobbyId, odId, questionId, isCorrect);
-      
       const lobby = await db.getLobbyById(lobbyId);
+      if (!lobby) {
+        callback({ success: false, message: 'Lobby introuvable' });
+        return;
+      }
       
       // Récupérer la catégorie du quiz
-      const quiz = await db.getQuizById(lobby?.quizId);
+      const quiz = await db.getQuizById(lobby.quizId);
       const quizCategory = quiz?.groupName || 'Sans catégorie';
       
-      // Ajouter les points seulement si correct ET pas en mode entraînement
-      if (isCorrect && !lobby?.trainingMode) {
-        const participant = lobby?.participants.find(p => p.participantId === odId);
-        
+      // Trouver le participant
+      const participant = lobby.participants.find(p => p.participantId === odId);
+      
+      // Vérifier si l'équipe a DÉJÀ scoré pour cette question AVANT de valider
+      let teamAlreadyScored = false;
+      if (isCorrect && participant && participant.teamName) {
+        teamAlreadyScored = await db.hasTeamScoredForQuestion(lobbyId, participant.teamName, questionId);
+        if (teamAlreadyScored) {
+          console.log(`[VALIDATE] Équipe "${participant.teamName}" a déjà scoré pour question ${questionId} - pas de double points`);
+        }
+      }
+      
+      // Valider la réponse
+      await db.validateAnswer(lobbyId, odId, questionId, isCorrect);
+      
+      // Ajouter les points SEULEMENT si :
+      // - La réponse est correcte
+      // - Pas en mode entraînement
+      // - L'équipe n'a PAS DÉJÀ scoré pour cette question
+      if (isCorrect && !lobby.trainingMode && !teamAlreadyScored) {
         if (participant && participant.teamName) {
           const team = await db.getTeamByName(participant.teamName);
           if (team) {
@@ -437,7 +455,7 @@ function register(socket, io) {
         }
       }
       
-      console.log(`[VALIDATE] ${odId}: ${isCorrect ? 'CORRECT' : 'INCORRECT'}${lobby?.trainingMode ? ' (mode entraînement - pas de points)' : ''}`);
+      console.log(`[VALIDATE] ${odId}: ${isCorrect ? 'CORRECT' : 'INCORRECT'}${lobby.trainingMode ? ' (mode entraînement - pas de points)' : ''}${teamAlreadyScored ? ' (équipe déjà scoré)' : ''}`);
       
       io.to(`lobby:${lobbyId}`).emit('answer:validated', {
         odId,
@@ -447,8 +465,8 @@ function register(socket, io) {
       
       broadcastLobbyState(io, lobbyId);
       broadcastLobbiesUpdate(io);
-      // Broadcast équipes si le score a changé (pas en mode entraînement)
-      if (isCorrect && !lobby?.trainingMode) {
+      // Broadcast équipes si le score a changé (pas en mode entraînement et pas déjà scoré)
+      if (isCorrect && !lobby.trainingMode && !teamAlreadyScored) {
         broadcastTeamsUpdate(io);
       }
       
