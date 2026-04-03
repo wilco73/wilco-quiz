@@ -44,8 +44,10 @@ const PORT = process.env.PORT || 3001;
 
 // Configuration CORS - adapter selon l'environnement
 const corsOrigins = process.env.CLIENT_URL 
-  ? [process.env.CLIENT_URL, "http://localhost:3000"]
+  ? [process.env.CLIENT_URL, "http://localhost:3000", "https://wilcoquiz.vercel.app"]
   : ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"];
+
+console.log('[CORS] Origines autorisées:', corsOrigins);
 
 // Configuration Socket.IO
 const io = new Server(httpServer, {
@@ -66,6 +68,12 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Gestionnaire d'erreur global pour les routes
+app.use((err, req, res, next) => {
+  console.error('[EXPRESS ERROR]', err.message);
+  res.status(500).json({ success: false, message: 'Erreur serveur interne' });
+});
 
 // ==================== INITIALISATION ====================
 
@@ -138,6 +146,18 @@ function showStartupMessage() {
 
 async function startServer() {
   try {
+    // Gestionnaire d'erreurs non gérées pour éviter les crashs
+    process.on('uncaughtException', (error) => {
+      console.error('[UNCAUGHT EXCEPTION]', error.message);
+      console.error(error.stack);
+      // Ne pas crasher le serveur
+    });
+    
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('[UNHANDLED REJECTION]', reason);
+      // Ne pas crasher le serveur
+    });
+    
     // Initialiser la base de données
     await db.initDatabase();
     

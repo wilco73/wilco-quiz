@@ -26,13 +26,21 @@ function setup(io) {
   io.on('connection', async (socket) => {
     console.log(`[SOCKET] Connexion: ${socket.id}`);
     
-    // Envoyer l'état initial
-    await emitInitialState(socket);
+    try {
+      // Envoyer l'état initial
+      await emitInitialState(socket);
+    } catch (error) {
+      console.error('[SOCKET] Erreur emitInitialState:', error.message);
+    }
     
     // Handler pour demander l'état global (reconnexion)
     socket.on('global:requestState', async () => {
-      console.log(`[SOCKET] Demande d'état global de ${socket.id}`);
-      await emitInitialState(socket);
+      try {
+        console.log(`[SOCKET] Demande d'état global de ${socket.id}`);
+        await emitInitialState(socket);
+      } catch (error) {
+        console.error('[SOCKET] Erreur requestState:', error.message);
+      }
     });
     
     // Enregistrer tous les handlers

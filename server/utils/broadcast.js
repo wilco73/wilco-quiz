@@ -62,11 +62,15 @@ async function broadcastLobbyStateImmediate(io, lobbyId) {
  */
 async function broadcastLobbiesUpdate(io) {
   debounce.schedule('lobbies', async () => {
-    const allLobbies = await db.getAllLobbies();
-    const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
-    
-    io.emit('global:lobbiesUpdate', { lobbies });
-    broadcastCount++;
+    try {
+      const allLobbies = await db.getAllLobbies();
+      const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
+      
+      io.emit('global:lobbiesUpdate', { lobbies });
+      broadcastCount++;
+    } catch (error) {
+      console.error('[BROADCAST] Erreur lobbies:', error.message);
+    }
   });
 }
 
@@ -74,11 +78,15 @@ async function broadcastLobbiesUpdate(io) {
  * Émet la liste des lobbies immédiatement
  */
 async function broadcastLobbiesUpdateImmediate(io) {
-  const allLobbies = await db.getAllLobbies();
-  const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
-  
-  io.emit('global:lobbiesUpdate', { lobbies });
-  broadcastCount++;
+  try {
+    const allLobbies = await db.getAllLobbies();
+    const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
+    
+    io.emit('global:lobbiesUpdate', { lobbies });
+    broadcastCount++;
+  } catch (error) {
+    console.error('[BROADCAST] Erreur lobbies immediate:', error.message);
+  }
 }
 
 /**
@@ -86,9 +94,13 @@ async function broadcastLobbiesUpdateImmediate(io) {
  */
 async function broadcastTeamsUpdate(io) {
   debounce.schedule('teams', async () => {
-    const teams = await db.getAllTeams();
-    io.emit('global:teamsUpdate', { teams });
-    broadcastCount++;
+    try {
+      const teams = await db.getAllTeams();
+      io.emit('global:teamsUpdate', { teams });
+      broadcastCount++;
+    } catch (error) {
+      console.error('[BROADCAST] Erreur teams:', error.message);
+    }
   });
 }
 
@@ -97,10 +109,14 @@ async function broadcastTeamsUpdate(io) {
  */
 async function broadcastParticipantsUpdate(io) {
   debounce.schedule('participants', async () => {
-    const allParticipants = await db.getAllParticipants();
-    const participants = allParticipants.map(p => ({ ...p, password: '********' }));
-    io.emit('global:participantsUpdate', { participants });
-    broadcastCount++;
+    try {
+      const allParticipants = await db.getAllParticipants();
+      const participants = allParticipants.map(p => ({ ...p, password: '********' }));
+      io.emit('global:participantsUpdate', { participants });
+      broadcastCount++;
+    } catch (error) {
+      console.error('[BROADCAST] Erreur participants:', error.message);
+    }
   });
 }
 
@@ -130,31 +146,41 @@ async function broadcastQuestionsUpdate(io) {
  * Émet l'état global complet - À UTILISER AVEC PARCIMONIE
  */
 async function broadcastGlobalState(io) {
-  const allLobbies = await db.getAllLobbies();
-  const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
-  const teams = await db.getAllTeams();
-  const allParticipants = await db.getAllParticipants();
-  const participants = allParticipants.map(p => ({ ...p, password: '********' }));
-  const quizzes = await db.getAllQuizzes();
-  
-  io.emit('global:state', { lobbies, teams, participants, quizzes });
-  broadcastCount++;
+  try {
+    const allLobbies = await db.getAllLobbies();
+    const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
+    const teams = await db.getAllTeams();
+    const allParticipants = await db.getAllParticipants();
+    const participants = allParticipants.map(p => ({ ...p, password: '********' }));
+    const quizzes = await db.getAllQuizzes();
+    
+    io.emit('global:state', { lobbies, teams, participants, quizzes });
+    broadcastCount++;
+  } catch (error) {
+    console.error('[BROADCAST] Erreur globalState:', error.message);
+  }
 }
 
 /**
  * Émet l'état global initial à un socket spécifique
  */
 async function emitInitialState(socket) {
-  const allLobbies = await db.getAllLobbies();
-  const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
-  const teams = await db.getAllTeams();
-  const allParticipants = await db.getAllParticipants();
-  const participants = allParticipants.map(p => ({ ...p, password: '********' }));
-  const quizzes = await db.getAllQuizzes();
-  const questions = await db.getAllQuestions();
-  
-  socket.emit('global:state', { lobbies, teams, participants, quizzes, questions });
-  broadcastCount++;
+  try {
+    const allLobbies = await db.getAllLobbies();
+    const lobbies = allLobbies.map(l => getLobbyWithTimer(l));
+    const teams = await db.getAllTeams();
+    const allParticipants = await db.getAllParticipants();
+    const participants = allParticipants.map(p => ({ ...p, password: '********' }));
+    const quizzes = await db.getAllQuizzes();
+    const questions = await db.getAllQuestions();
+    
+    socket.emit('global:state', { lobbies, teams, participants, quizzes, questions });
+    broadcastCount++;
+  } catch (error) {
+    console.error('[BROADCAST] Erreur emitInitialState:', error.message);
+    // Envoyer un état vide plutôt que de crasher
+    socket.emit('global:state', { lobbies: [], teams: [], participants: [], quizzes: [], questions: [] });
+  }
 }
 
 /**
