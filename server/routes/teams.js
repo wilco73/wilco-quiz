@@ -20,22 +20,27 @@ router.get('/', async (req, res) => {
 
 // Créer une équipe
 router.post('/create', async (req, res) => {
-  const { name } = req.body;
-  
-  if (!name || !name.trim()) {
-    return res.json({ success: false, message: 'Le nom de l\'équipe est requis' });
+  try {
+    const { name } = req.body;
+    
+    if (!name || !name.trim()) {
+      return res.json({ success: false, message: 'Le nom de l\'équipe est requis' });
+    }
+    
+    const normalizedName = db.normalizeTeamName(name);
+    const existing = await db.getTeamByName(normalizedName);
+    if (existing) {
+      return res.json({ success: false, message: 'Une équipe avec ce nom existe déjà' });
+    }
+    
+    const team = await db.createTeam(normalizedName);
+    
+    if (broadcastFunctions?.teams) await broadcastFunctions.teams();
+    res.json({ success: true, team: await db.getTeamById(team.id) });
+  } catch (error) {
+    console.error('[TEAMS] Erreur POST /create:', error.message);
+    res.status(500).json({ success: false, message: 'Erreur serveur: ' + error.message });
   }
-  
-  const normalizedName = db.normalizeTeamName(name);
-  const existing = await db.getTeamByName(normalizedName);
-  if (existing) {
-    return res.json({ success: false, message: 'Une équipe avec ce nom existe déjà' });
-  }
-  
-  const team = await db.createTeam(normalizedName);
-  
-  if (broadcastFunctions?.teams) await broadcastFunctions.teams();
-  res.json({ success: true, team: await db.getTeamById(team.id) });
 });
 
 // Modifier le score d'une équipe dans une catégorie

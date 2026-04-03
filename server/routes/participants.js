@@ -104,27 +104,38 @@ router.delete('/:id', async (req, res) => {
 
 // Changer l'équipe d'un participant
 router.put('/:id/team', async (req, res) => {
-  const { id } = req.params;
-  const { teamName } = req.body;
-  
-  const participant = await db.getParticipantById(id);
-  if (!participant) {
-    return res.json({ success: false, message: 'Participant introuvable' });
-  }
-  
-  if (teamName === null || teamName === '') {
-    await db.updateParticipantTeam(id, null);
-  } else {
-    const normalizedTeamName = db.normalizeTeamName(teamName);
-    let team = await db.getTeamByName(normalizedTeamName);
-    if (!team) {
-      team = await db.createTeam(normalizedTeamName);
+  try {
+    const { id } = req.params;
+    const { teamName } = req.body;
+    
+    const participant = await db.getParticipantById(id);
+    if (!participant) {
+      return res.json({ success: false, message: 'Participant introuvable' });
     }
-    await db.updateParticipantTeam(id, team.id);
+    
+    let teamCreated = false;
+    if (teamName === null || teamName === '') {
+      await db.updateParticipantTeam(id, null);
+    } else {
+      const normalizedTeamName = db.normalizeTeamName(teamName);
+      let team = await db.getTeamByName(normalizedTeamName);
+      if (!team) {
+        team = await db.createTeam(normalizedTeamName);
+        teamCreated = true;
+      }
+      await db.updateParticipantTeam(id, team.id);
+    }
+    
+    // Broadcaster les équipes si une nouvelle a été créée
+    if (teamCreated && broadcastFunctions?.teams) {
+      await broadcastFunctions.teams();
+    }
+    if (broadcastFunctions?.participants) await broadcastFunctions.participants();
+    res.json({ success: true, participant: await db.getParticipantById(id) });
+  } catch (error) {
+    console.error('[PARTICIPANTS] Erreur PUT /:id/team:', error.message);
+    res.status(500).json({ success: false, message: 'Erreur serveur: ' + error.message });
   }
-  
-  if (broadcastFunctions?.participants) await broadcastFunctions.participants();
-  res.json({ success: true, participant: await db.getParticipantById(id) });
 });
 
 // Changer le mot de passe d'un participant
