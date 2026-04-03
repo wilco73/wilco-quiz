@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Play, Shuffle, ChevronDown, ChevronUp, FolderOpen, Clock, Users, X, 
-  Plus, Edit, Trash2, BookOpen, Palette, Image, FileText
+  Plus, Edit, Trash2, BookOpen, Palette, Image, FileText, Copy
 } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import * as api from '../services/api';
@@ -93,12 +93,14 @@ const AdminContent = ({
 
   const handleSaveQuiz = async (quizData) => {
     try {
-      if (editingQuiz) {
+      // Si on est en mode création (nouveau quiz OU duplication)
+      if (creatingQuiz) {
+        await api.createQuiz(quizData);
+        toast.success(editingQuiz ? 'Quiz dupliqué !' : 'Quiz créé !');
+      } else if (editingQuiz) {
+        // Modification d'un quiz existant
         await api.updateQuiz(editingQuiz.id, quizData);
         toast.success('Quiz mis à jour !');
-      } else {
-        await api.createQuiz(quizData);
-        toast.success('Quiz créé !');
       }
       setEditingQuiz(null);
       setCreatingQuiz(false);
@@ -117,6 +119,21 @@ const AdminContent = ({
     } catch (error) {
       toast.error('Erreur lors de la suppression');
     }
+  };
+
+  const handleDuplicateQuiz = (quiz) => {
+    // Créer une copie du quiz avec un nouveau titre
+    const duplicatedQuiz = {
+      ...quiz,
+      id: undefined, // Pas d'ID pour forcer la création
+      title: `${quiz.title} (copie)`,
+      // Garder les mêmes questions
+      questions: quiz.questions || []
+    };
+    
+    // Ouvrir l'éditeur avec le quiz dupliqué
+    setEditingQuiz(duplicatedQuiz);
+    setCreatingQuiz(true); // Pour que ça crée un nouveau quiz au lieu de modifier
   };
 
   // === HANDLERS MONITORING ===
@@ -215,12 +232,22 @@ const AdminContent = ({
   const renderQuizEditorModal = () => {
     if (!editingQuiz && !creatingQuiz) return null;
     
+    // Déterminer le titre selon le contexte
+    let modalTitle = 'Nouveau Quiz';
+    if (editingQuiz && creatingQuiz) {
+      // Duplication : on a un quiz source mais on crée un nouveau
+      modalTitle = `Dupliquer : ${editingQuiz.title.replace(' (copie)', '')}`;
+    } else if (editingQuiz) {
+      // Modification
+      modalTitle = `Modifier : ${editingQuiz.title}`;
+    }
+    
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
           <div className="bg-gradient-to-r from-green-600 to-teal-600 px-6 py-4 flex justify-between items-center">
             <h2 className="text-xl font-bold text-white">
-              {editingQuiz ? `Modifier : ${editingQuiz.title}` : 'Nouveau Quiz'}
+              {modalTitle}
             </h2>
             <button onClick={() => { setEditingQuiz(null); setCreatingQuiz(false); }} className="text-white/80 hover:text-white">
               <X className="w-6 h-6" />
@@ -331,6 +358,13 @@ const AdminContent = ({
                                       title="Modifier"
                                     >
                                       <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDuplicateQuiz(quiz)}
+                                      className="p-1.5 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded"
+                                      title="Dupliquer"
+                                    >
+                                      <Copy className="w-4 h-4" />
                                     </button>
                                     <button
                                       onClick={() => handleDeleteQuiz(quiz.id)}
