@@ -250,19 +250,33 @@ async function createTeam(name) {
   const existing = await getTeamByName(normalizedName);
   if (existing) return existing;
   
+  // Utiliser upsert pour éviter les conflits de clé primaire
+  // On insère par nom (unique), pas par ID
   const { data, error } = await supabase
     .from('teams')
-    .insert({ name: normalizedName, scores_by_category: {} })
+    .upsert(
+      { name: normalizedName, scores_by_category: {} },
+      { onConflict: 'name', ignoreDuplicates: true }
+    )
     .select()
     .single();
   
-  if (error) throw error;
+  // Si erreur de conflit, réessayer de récupérer l'équipe existante
+  if (error) {
+    // Vérifier si c'est une erreur de duplication
+    if (error.code === '23505' || error.message?.includes('duplicate')) {
+      console.log(`[DB] Conflit création équipe "${normalizedName}", récupération...`);
+      const existingTeam = await getTeamByName(normalizedName);
+      if (existingTeam) return existingTeam;
+    }
+    throw error;
+  }
   
   return {
     id: data.id,
     name: data.name,
     validatedScore: 0,
-    scoresByCategory: {},
+    scoresByCategory: data.scores_by_category || {},
     createdAt: data.created_at
   };
 }
