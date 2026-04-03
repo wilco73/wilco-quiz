@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Save, Plus, Trash2, Image, Video, Music, Eye, EyeOff, ListChecks, Tag } from 'lucide-react';
+import { X, Save, Plus, Trash2, Image, Video, Music, Eye, EyeOff, ListChecks, Tag, RefreshCw } from 'lucide-react';
 import { useToast } from './ToastProvider';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -85,6 +85,29 @@ const QuestionEditor = ({
       silhouetteMode: false,
       silhouetteRotation: false
     });
+  };
+
+  // Fonction pour rafraîchir le cache du média (ajoute ou met à jour le paramètre ?v=)
+  const refreshMediaCache = () => {
+    if (!formData.media) return;
+    
+    let url = formData.media;
+    const timestamp = Date.now();
+    
+    // Supprimer l'ancien paramètre v= s'il existe
+    if (url.includes('?v=')) {
+      url = url.replace(/\?v=\d+/, `?v=${timestamp}`);
+    } else if (url.includes('?')) {
+      // Il y a déjà des paramètres, ajouter &v=
+      url = url.replace(/[&?]v=\d+/, ''); // Supprimer ancien v= si présent
+      url = `${url}&v=${timestamp}`;
+    } else {
+      // Pas de paramètres, ajouter ?v=
+      url = `${url}?v=${timestamp}`;
+    }
+    
+    setFormData({ ...formData, media: url });
+    toast.success('Cache média rafraîchi ! N\'oubliez pas de sauvegarder.');
   };
 
   const handleSave = async () => {
@@ -436,13 +459,30 @@ const QuestionEditor = ({
               
               {(formData.type !== 'qcm' || formData.mediaType) && (
                 <>
-                  <input
-                    type="text"
-                    placeholder="https://..."
-                    value={formData.media}
-                    onChange={(e) => setFormData({ ...formData, media: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={formData.media}
+                      onChange={(e) => setFormData({ ...formData, media: e.target.value })}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    {formData.media && (
+                      <button
+                        type="button"
+                        onClick={refreshMediaCache}
+                        title="Rafraîchir le cache du média (si le fichier a été modifié sur le serveur)"
+                        className="px-3 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                      >
+                        <RefreshCw className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                  {formData.media?.includes('?v=') && (
+                    <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">
+                      ℹ️ Cache-busting actif (v={formData.media.match(/\?v=(\d+)/)?.[1]})
+                    </p>
+                  )}
                   <MediaPreview 
                     type={formData.type === 'qcm' ? formData.mediaType : formData.type} 
                     url={formData.media} 
