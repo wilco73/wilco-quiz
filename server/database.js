@@ -7,6 +7,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
+const cache = require('./utils/cache');
 
 // Configuration Supabase
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -180,26 +181,29 @@ async function verifyAdmin(username, password) {
 // ==================== TEAMS ====================
 
 async function getAllTeams() {
-  const { data, error } = await supabase
-    .from('teams')
-    .select('id, name, validated_score, scores_by_category, created_at')
-    .order('name');
-  
-  if (error) throw error;
-  
-  return data.map(t => {
-    const scoresByCategory = t.scores_by_category || {};
-    // Le score validé est maintenant calculé comme la somme des scores par catégorie
-    const calculatedScore = Object.values(scoresByCategory).reduce((sum, score) => sum + (score || 0), 0);
+  // Cache de 10 secondes - les équipes peuvent changer pendant un quiz
+  return cache.getOrFetch(cache.KEYS.ALL_TEAMS, async () => {
+    const { data, error } = await supabase
+      .from('teams')
+      .select('id, name, validated_score, scores_by_category, created_at')
+      .order('name');
     
-    return {
-      id: t.id,
-      name: t.name,
-      validatedScore: calculatedScore,
-      scoresByCategory: scoresByCategory,
-      createdAt: t.created_at
-    };
-  });
+    if (error) throw error;
+    
+    return data.map(t => {
+      const scoresByCategory = t.scores_by_category || {};
+      // Le score validé est maintenant calculé comme la somme des scores par catégorie
+      const calculatedScore = Object.values(scoresByCategory).reduce((sum, score) => sum + (score || 0), 0);
+      
+      return {
+        id: t.id,
+        name: t.name,
+        validatedScore: calculatedScore,
+        scoresByCategory: scoresByCategory,
+        createdAt: t.created_at
+      };
+    });
+  }, 10000); // TTL 10 secondes
 }
 
 async function getTeamByName(name) {
@@ -272,6 +276,9 @@ async function createTeam(name) {
     throw error;
   }
   
+  // Invalider le cache des équipes
+  cache.invalidate(cache.KEYS.ALL_TEAMS);
+  
   return {
     id: data.id,
     name: data.name,
@@ -306,6 +313,9 @@ async function addTeamScoreByCategory(teamId, category, points) {
     .update({ scores_by_category: updatedScores })
     .eq('id', teamId);
   
+  // Invalider le cache des équipes
+  cache.invalidate(cache.KEYS.ALL_TEAMS);
+  
   console.log(`[SCORE] +${points} point(s) pour équipe id=${teamId} dans catégorie "${categoryKey}"`);
 }
 
@@ -326,6 +336,9 @@ async function setTeamScoreByCategory(teamId, category, score) {
     .from('teams')
     .update({ scores_by_category: updatedScores })
     .eq('id', teamId);
+  
+  // Invalider le cache des équipes
+  cache.invalidate(cache.KEYS.ALL_TEAMS);
 }
 
 // Supprimer une catégorie des scores d'une équipe
@@ -340,6 +353,9 @@ async function deleteTeamScoreCategory(teamId, category) {
     .from('teams')
     .update({ scores_by_category: currentScores })
     .eq('id', teamId);
+  
+  // Invalider le cache des équipes
+  cache.invalidate(cache.KEYS.ALL_TEAMS);
 }
 
 // DEPRECATED - garder pour compatibilité
@@ -354,10 +370,15 @@ async function resetAllTeamScores() {
     .from('teams')
     .update({ scores_by_category: {} })
     .neq('id', 0);
+  
+  // Invalider le cache des équipes
+  cache.invalidate(cache.KEYS.ALL_TEAMS);
 }
 
 async function deleteTeam(teamId) {
   await supabase.from('teams').delete().eq('id', teamId);
+  // Invalider le cache des équipes
+  cache.invalidate(cache.KEYS.ALL_TEAMS);
 }
 
 async function saveAllTeams(teams) {
@@ -385,26 +406,29 @@ async function saveAllTeams(teams) {
 // ==================== PARTICIPANTS ====================
 
 async function getAllParticipants() {
-  const { data, error } = await supabase
-    .from('participants')
-    .select(`
-      id, pseudo, password_hash, team_id, avatar, role, created_at,
-      teams (name)
-    `)
-    .order('pseudo');
-  
-  if (error) throw error;
-  
-  return data.map(p => ({
-    id: p.id,
-    pseudo: p.pseudo,
-    password: p.password_hash,
-    teamId: p.team_id,
-    teamName: p.teams?.name || null,
-    avatar: p.avatar || 'default',
-    role: p.role || 'user',
-    createdAt: p.created_at
-  }));
+  // Cache de 10 secondes - les participants changent pendant les sessions
+  return cache.getOrFetch(cache.KEYS.ALL_PARTICIPANTS, async () => {
+    const { data, error } = await supabase
+      .from('participants')
+      .select(`
+        id, pseudo, password_hash, team_id, avatar, role, created_at,
+        teams (name)
+      `)
+      .order('pseudo');
+    
+    if (error) throw error;
+    
+    return data.map(p => ({
+      id: p.id,
+      pseudo: p.pseudo,
+      password: p.password_hash,
+      teamId: p.team_id,
+      teamName: p.teams?.name || null,
+      avatar: p.avatar || 'default',
+      role: p.role || 'user',
+      createdAt: p.created_at
+    }));
+  }, 10000); // TTL 10 secondes
 }
 
 async function getParticipantByPseudo(pseudo) {
@@ -472,6 +496,9 @@ async function createParticipant(id, pseudo, password, teamId, avatar = 'default
   
   if (error) throw error;
   
+  // Invalider le cache des participants
+  cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
+  
   return getParticipantById(id);
 }
 
@@ -480,6 +507,9 @@ async function updateParticipantTeam(participantId, teamId) {
     .from('participants')
     .update({ team_id: teamId })
     .eq('id', participantId);
+  
+  // Invalider le cache des participants
+  cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
 }
 
 async function updateParticipantAvatar(participantId, avatar) {
@@ -487,6 +517,9 @@ async function updateParticipantAvatar(participantId, avatar) {
     .from('participants')
     .update({ avatar })
     .eq('id', participantId);
+  
+  // Invalider le cache des participants
+  cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
   
   return getParticipantById(participantId);
 }
@@ -515,6 +548,7 @@ async function updateParticipantPassword(participantId, newPassword) {
     .from('participants')
     .update({ password_hash: passwordHash })
     .eq('id', participantId);
+  // Pas besoin d'invalider le cache, le mot de passe n'est pas dans les données publiques
 }
 
 async function updateParticipantPseudo(participantId, newPseudo) {
@@ -522,6 +556,9 @@ async function updateParticipantPseudo(participantId, newPseudo) {
     .from('participants')
     .update({ pseudo: newPseudo })
     .eq('id', participantId);
+  
+  // Invalider le cache des participants
+  cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
 }
 
 async function deleteParticipant(participantId) {
@@ -531,6 +568,9 @@ async function deleteParticipant(participantId) {
   await supabase.from('drawing_lobby_participants').delete().eq('participant_id', participantId);
   // Puis supprimer le participant
   await supabase.from('participants').delete().eq('id', participantId);
+  
+  // Invalider le cache des participants
+  cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
 }
 
 // ==================== GESTION DES ROLES ====================
@@ -616,34 +656,37 @@ async function saveAllParticipants(participants) {
 // ==================== QUESTIONS ====================
 
 async function getAllQuestions() {
-  // Supabase a une limite par défaut de 1000 lignes
-  // On récupère toutes les questions avec une limite plus élevée
-  const { data, error, count } = await supabase
-    .from('questions')
-    .select('*', { count: 'exact' })
-    .order('created_at', { ascending: false })
-    .range(0, 9999); // Récupérer jusqu'à 10000 questions
-  
-  if (error) throw error;
-  
-  console.log(`[DB] getAllQuestions: ${data?.length || 0} questions récupérées (total en base: ${count})`);
-  
-  return (data || []).map(q => ({
-    id: q.id,
-    text: q.text,
-    answer: q.answer,
-    type: q.type,
-    category: q.category,
-    tags: q.tags ? JSON.parse(q.tags) : [],
-    points: q.points,
-    timer: q.timer,
-    media: q.media,
-    mediaType: q.media_type,
-    silhouetteMode: q.silhouette_mode || false,
-    silhouetteRotation: q.silhouette_rotation || false,
-    choices: q.choices ? JSON.parse(q.choices) : null,
-    createdAt: q.created_at
-  }));
+  // Cache de 60 secondes - les questions changent rarement
+  return cache.getOrFetch(cache.KEYS.ALL_QUESTIONS, async () => {
+    // Supabase a une limite par défaut de 1000 lignes
+    // On récupère toutes les questions avec une limite plus élevée
+    const { data, error, count } = await supabase
+      .from('questions')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(0, 9999); // Récupérer jusqu'à 10000 questions
+    
+    if (error) throw error;
+    
+    console.log(`[DB] getAllQuestions: ${data?.length || 0} questions récupérées (total en base: ${count})`);
+    
+    return (data || []).map(q => ({
+      id: q.id,
+      text: q.text,
+      answer: q.answer,
+      type: q.type,
+      category: q.category,
+      tags: q.tags ? JSON.parse(q.tags) : [],
+      points: q.points,
+      timer: q.timer,
+      media: q.media,
+      mediaType: q.media_type,
+      silhouetteMode: q.silhouette_mode || false,
+      silhouetteRotation: q.silhouette_rotation || false,
+      choices: q.choices ? JSON.parse(q.choices) : null,
+      createdAt: q.created_at
+    }));
+  }, 60000); // TTL 60 secondes
 }
 
 async function getQuestionById(id) {
@@ -696,6 +739,9 @@ async function createQuestion(question) {
   
   if (error) throw error;
   
+  // Invalider le cache des questions
+  cache.invalidate(cache.KEYS.ALL_QUESTIONS);
+  
   return getQuestionById(id);
 }
 
@@ -720,11 +766,16 @@ async function updateQuestion(id, question) {
   
   if (error) throw error;
   
+  // Invalider le cache des questions
+  cache.invalidate(cache.KEYS.ALL_QUESTIONS);
+  
   return getQuestionById(id);
 }
 
 async function deleteQuestion(id) {
   await supabase.from('questions').delete().eq('id', id);
+  // Invalider le cache des questions
+  cache.invalidate(cache.KEYS.ALL_QUESTIONS);
 }
 
 async function saveAllQuestions(questions) {
@@ -792,28 +843,69 @@ async function getAllQuizCategories() {
 }
 
 async function getAllQuizzes() {
-  const { data, error } = await supabase
-    .from('quizzes')
-    .select('*')
-    .order('group_name', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: false });
-  
-  if (error) throw error;
-  
-  const quizzes = [];
-  for (const quiz of data) {
-    const questions = await getQuizQuestions(quiz.id);
-    quizzes.push({
+  // Cache de 30 secondes - les quizzes changent moins que les lobbies
+  return cache.getOrFetch(cache.KEYS.ALL_QUIZZES, async () => {
+    // Récupérer tous les quizzes
+    const { data: quizzesData, error: quizzesError } = await supabase
+      .from('quizzes')
+      .select('*')
+      .order('group_name', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false });
+    
+    if (quizzesError) throw quizzesError;
+    if (!quizzesData || quizzesData.length === 0) return [];
+    
+    // Récupérer TOUTES les associations quiz_questions en une seule requête
+    const quizIds = quizzesData.map(q => q.id);
+    const { data: allQuizQuestions, error: qqError } = await supabase
+      .from('quiz_questions')
+      .select(`
+        quiz_id,
+        position,
+        questions (*)
+      `)
+      .in('quiz_id', quizIds)
+      .order('position');
+    
+    if (qqError) throw qqError;
+    
+    // Grouper les questions par quiz_id
+    const questionsByQuiz = {};
+    for (const qq of (allQuizQuestions || [])) {
+      if (!questionsByQuiz[qq.quiz_id]) {
+        questionsByQuiz[qq.quiz_id] = [];
+      }
+      if (qq.questions) {
+        const q = qq.questions;
+        questionsByQuiz[qq.quiz_id].push({
+          id: q.id,
+          text: q.text,
+          answer: q.answer,
+          type: q.type,
+          category: q.category,
+          tags: q.tags ? JSON.parse(q.tags) : [],
+          points: q.points,
+          timer: q.timer,
+          media: q.media,
+          mediaType: q.media_type,
+          silhouetteMode: q.silhouette_mode || false,
+          silhouetteRotation: q.silhouette_rotation || false,
+          choices: q.choices ? JSON.parse(q.choices) : null,
+          createdAt: q.created_at
+        });
+      }
+    }
+    
+    // Construire le résultat final
+    return quizzesData.map(quiz => ({
       id: quiz.id,
       title: quiz.title,
       description: quiz.description,
       groupName: quiz.group_name,
       createdAt: quiz.created_at,
-      questions
-    });
-  }
-  
-  return quizzes;
+      questions: questionsByQuiz[quiz.id] || []
+    }));
+  }, 30000); // TTL 30 secondes
 }
 
 async function getQuizById(id) {
@@ -883,6 +975,9 @@ async function createQuiz(quiz) {
     await setQuizQuestions(id, quiz.questions);
   }
   
+  // Invalider le cache des quizzes
+  cache.invalidate(cache.KEYS.ALL_QUIZZES);
+  
   return getQuizById(id);
 }
 
@@ -902,6 +997,9 @@ async function updateQuiz(id, quiz) {
     await setQuizQuestions(id, quiz.questions);
   }
   
+  // Invalider le cache des quizzes
+  cache.invalidate(cache.KEYS.ALL_QUIZZES);
+  
   return getQuizById(id);
 }
 
@@ -919,10 +1017,15 @@ async function setQuizQuestions(quizId, questions) {
   if (inserts.length > 0) {
     await supabase.from('quiz_questions').insert(inserts);
   }
+  
+  // Invalider le cache des quizzes (les questions ont changé)
+  cache.invalidate(cache.KEYS.ALL_QUIZZES);
 }
 
 async function deleteQuiz(id) {
   await supabase.from('quizzes').delete().eq('id', id);
+  // Invalider le cache des quizzes
+  cache.invalidate(cache.KEYS.ALL_QUIZZES);
 }
 
 async function saveAllQuizzes(quizzes) {

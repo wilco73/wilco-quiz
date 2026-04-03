@@ -608,6 +608,14 @@ export function useSocket() {
     });
   }, []);
   
+  // Demander les questions (chargement à la demande pour les admins)
+  const requestQuestions = useCallback(() => {
+    if (socketRef.current?.connected) {
+      console.log('[SOCKET] Demande des questions...');
+      socketRef.current.emit('global:requestQuestions');
+    }
+  }, []);
+  
   // Emit générique pour le dessin (avec support callback optionnel)
   const emit = useCallback((event, data, callback) => {
     if (socketRef.current?.connected) {
@@ -692,6 +700,8 @@ export function useSocket() {
     mysteryFinishGame,
     mysteryDeleteLobby,
     mysteryToggleMute,
+    // Questions (chargement à la demande)
+    requestQuestions,
     // Generic
     emit,
     // Events

@@ -4,7 +4,7 @@
  */
 
 const { connectedParticipants, participantSockets } = require('../utils/state');
-const { emitInitialState } = require('../utils/broadcast');
+const { emitInitialState, emitQuestionsToSocket } = require('../utils/broadcast');
 const timers = require('../utils/timers');
 const authHandlers = require('./auth');
 const quizHandlers = require('./quiz');
@@ -27,7 +27,7 @@ function setup(io) {
     console.log(`[SOCKET] Connexion: ${socket.id}`);
     
     try {
-      // Envoyer l'état initial
+      // Envoyer l'état initial (sans les questions pour économiser la bande passante)
       await emitInitialState(socket);
     } catch (error) {
       console.error('[SOCKET] Erreur emitInitialState:', error.message);
@@ -40,6 +40,16 @@ function setup(io) {
         await emitInitialState(socket);
       } catch (error) {
         console.error('[SOCKET] Erreur requestState:', error.message);
+      }
+    });
+    
+    // Handler pour demander les questions (à la demande, pour les admins)
+    socket.on('global:requestQuestions', async () => {
+      try {
+        console.log(`[SOCKET] Demande des questions de ${socket.id}`);
+        await emitQuestionsToSocket(socket);
+      } catch (error) {
+        console.error('[SOCKET] Erreur requestQuestions:', error.message);
       }
     });
     

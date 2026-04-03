@@ -49,7 +49,7 @@ const corsOrigins = process.env.CLIENT_URL
 
 console.log('[CORS] Origines autorisées:', corsOrigins);
 
-// Configuration Socket.IO
+// Configuration Socket.IO avec optimisations
 const io = new Server(httpServer, {
   cors: {
     origin: corsOrigins,
@@ -57,7 +57,18 @@ const io = new Server(httpServer, {
     credentials: true
   },
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  // Compression des messages WebSocket
+  perMessageDeflate: {
+    threshold: 1024, // Compresser si > 1KB
+    zlibDeflateOptions: {
+      chunkSize: 16 * 1024
+    }
+  },
+  // Transports optimisés
+  transports: ['websocket', 'polling'],
+  // Upgrade vers WebSocket dès que possible
+  allowUpgrades: true
 });
 
 // ==================== MIDDLEWARE EXPRESS ====================

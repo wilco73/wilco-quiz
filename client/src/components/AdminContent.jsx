@@ -46,7 +46,20 @@ const AdminContent = ({
   // États pour les jeux de dessin
   const [drawingTab, setDrawingTab] = useState('words');
   
+  // État pour savoir si les questions ont été chargées
+  const [questionsLoaded, setQuestionsLoaded] = useState(false);
+  
   const toast = useToast();
+
+  // Charger les questions à la demande quand on accède à l'onglet questions ou au QuizEditor
+  React.useEffect(() => {
+    const needsQuestions = activeTab === 'admin-questions' || editingQuiz || creatingQuiz;
+    if (needsQuestions && !questionsLoaded && socket?.requestQuestions) {
+      console.log('[ADMIN] Chargement des questions à la demande...');
+      socket.requestQuestions();
+      setQuestionsLoaded(true);
+    }
+  }, [activeTab, questionsLoaded, socket, editingQuiz, creatingQuiz]);
 
   // Grouper les quiz par groupe
   const quizGroups = quizzes.reduce((acc, quiz) => {

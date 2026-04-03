@@ -4,18 +4,21 @@
  * Optimisations :
  * - Debounce pour éviter les rafales de broadcasts
  * - Requêtes batch optimisées
+ * - Cache mémoire pour données stables
  * - Logs réduits
  */
 
 const db = require('../database');
 const { getLobbyWithTimer } = require('./helpers');
 const debounce = require('./debounce');
+const cache = require('./cache');
 
 // Compteur de broadcasts pour monitoring
 let broadcastCount = 0;
 setInterval(() => {
-  if (broadcastCount > 0) {
-    console.log(`[BROADCAST] ${broadcastCount} broadcasts dans la dernière minute`);
+  const cacheStats = cache.stats();
+  if (broadcastCount > 0 || cacheStats.valid > 0) {
+    console.log(`[BROADCAST] ${broadcastCount} broadcasts | [CACHE] ${cacheStats.valid} entrées valides`);
     broadcastCount = 0;
   }
 }, 60000);
@@ -163,6 +166,8 @@ async function broadcastGlobalState(io) {
 
 /**
  * Émet l'état global initial à un socket spécifique
+ * OPTIMISATION: On n'envoie pas les questions ici (1353 questions = lourd)
+ * Les questions sont chargées à la demande via global:requestQuestions
  */
 async function emitInitialState(socket) {
   try {
@@ -172,14 +177,30 @@ async function emitInitialState(socket) {
     const allParticipants = await db.getAllParticipants();
     const participants = allParticipants.map(p => ({ ...p, password: '********' }));
     const quizzes = await db.getAllQuizzes();
-    const questions = await db.getAllQuestions();
     
-    socket.emit('global:state', { lobbies, teams, participants, quizzes, questions });
+    // On n'envoie PAS les questions ici pour économiser la bande passante
+    // Les admins les demandent explicitement via global:requestQuestions
+    socket.emit('global:state', { lobbies, teams, participants, quizzes, questions: [] });
     broadcastCount++;
   } catch (error) {
     console.error('[BROADCAST] Erreur emitInitialState:', error.message);
     // Envoyer un état vide plutôt que de crasher
     socket.emit('global:state', { lobbies: [], teams: [], participants: [], quizzes: [], questions: [] });
+  }
+}
+
+/**
+ * Émet les questions à un socket spécifique (sur demande)
+ * Utilisé par les admins quand ils accèdent à la banque de questions
+ */
+async function emitQuestionsToSocket(socket) {
+  try {
+    const questions = await db.getAllQuestions();
+    socket.emit('global:questionsUpdate', { questions });
+    console.log(`[BROADCAST] ${questions.length} questions envoyées au socket ${socket.id}`);
+  } catch (error) {
+    console.error('[BROADCAST] Erreur emitQuestionsToSocket:', error.message);
+    socket.emit('global:questionsUpdate', { questions: [] });
   }
 }
 
@@ -248,6 +269,7 @@ module.exports = {
   broadcastGlobalState,
   broadcastMysteryLobbiesUpdate,
   emitInitialState,
+  emitQuestionsToSocket,
   smartBroadcast,
   BroadcastType
 };
