@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Menu, X, Home, Trophy, User, History, Settings, LogOut, 
   Users, Star, Crown, ChevronDown, ChevronRight,
-  FileQuestion, Palette, Trash, Monitor, Check, Eye, EyeOff, Grid, Image
+  FileQuestion, Palette, Trash, Monitor, Check, Eye, EyeOff, Grid, Image,
+  Gamepad2, Smile
 } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 import Avatar from './Avatar';
@@ -57,6 +58,7 @@ const MainLayout = ({
     { id: 'admin-participants', label: 'Participants', icon: Users },
     { id: 'admin-questions', label: 'Questions', icon: FileQuestion },
     { id: 'admin-drawing', label: 'Jeux de Dessin', icon: Palette },
+    { id: 'admin-meme-templates', label: 'Templates Meme', icon: Smile },
     { id: 'admin-lobbies', label: 'Gérer Lobbies', icon: Trash },
     { id: 'admin-mystery', label: 'Cases Mystères', icon: Grid },
     { id: 'admin-media', label: 'Médiathèque', icon: Image },
@@ -67,6 +69,7 @@ const MainLayout = ({
   // Ajouter gestion utilisateurs pour superadmin
   if (currentUser?.isSuperAdmin) {
     adminMenuItems.push({ id: 'admin-users', label: 'Utilisateurs', icon: Crown });
+    adminMenuItems.push({ id: 'admin-game-settings', label: 'Configuration Jeux', icon: Gamepad2 });
   }
 
   const isAdmin = currentUser?.isAdmin || currentUser?.isSuperAdmin;

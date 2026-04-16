@@ -14,6 +14,8 @@ const relayHandlers = require('./relay');
 const mysteryHandlers = require('./mystery');
 const db = require('../database');
 
+const registerMemeHandlers = require('./meme');
+
 /**
  * Configure Socket.IO et enregistre tous les handlers
  */
@@ -61,6 +63,8 @@ function setup(io) {
     relayHandlers.register(socket, io);
     mysteryHandlers(io, socket, db);
     
+    registerMemeHandlers(io, socket, db);
+
     // Handler de déconnexion
     socket.on('disconnect', async () => {
       const participantInfo = connectedParticipants.get(socket.id);

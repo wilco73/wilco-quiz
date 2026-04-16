@@ -17,6 +17,8 @@ import DrawingLobbyManager from './DrawingLobbyManager';
 import UserManagement from './UserManagement';
 import MysteryGridManager from './MysteryGridManager';
 import MediaLibrary from './MediaLibrary';
+import GameSettingsManager from './GameSettingsManager';
+import MemeTemplateManager from './MemeTemplateManager';
 
 /**
  * AdminContent - Contenu de l'interface admin (sans le layout)
@@ -626,6 +628,16 @@ const AdminContent = ({
     case 'admin-media':
       return (
         <MediaLibrary />
+      );
+
+    case 'admin-game-settings':
+      return (
+        <GameSettingsManager />
+      );
+
+    case 'admin-meme-templates':
+      return (
+        <MemeTemplateManager />
       );
 
     default:

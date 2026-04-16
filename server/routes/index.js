@@ -13,6 +13,10 @@ const drawingRoutes = require('./drawing');
 const mysteryRoutes = require('./mystery');
 const mediaRoutes = require('./media');
 
+const gameSettingsRoutes = require('./game-settings');
+const memeTemplatesRoutes = require('./meme-templates');
+const memeLobbiesRoutes = require('./meme-lobbies');
+
 /**
  * Configure toutes les routes avec les dépendances nécessaires
  */
@@ -26,6 +30,10 @@ function setup(app, dependencies) {
   quizzesRoutes.init(broadcasts || { quizzes: broadcastGlobalState, questions: broadcastGlobalState, lobbies: broadcastGlobalState });
   drawingRoutes.init(broadcasts || { global: broadcastGlobalState }, io);
   mediaRoutes.init(broadcasts || { global: broadcastGlobalState }, io);
+
+  gameSettingsRoutes.init(db);
+  memeTemplatesRoutes.init(db);
+  memeLobbiesRoutes.init(db);
   
   // Monter les routes
   app.use('/api', authRoutes);
@@ -78,6 +86,10 @@ function setup(app, dependencies) {
   
   // Routes Médiathèque et Broadcast
   app.use('/api/media', mediaRoutes);
+
+  app.use('/api/game-settings', gameSettingsRoutes);
+  app.use('/api/meme-templates', memeTemplatesRoutes);
+  app.use('/api/meme-lobbies', memeLobbiesRoutes);
 }
 
 module.exports = { setup };

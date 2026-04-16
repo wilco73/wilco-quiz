@@ -2924,6 +2924,795 @@ async function getBroadcastHistory(lobbyId, limit = 20) {
   return data || [];
 }
 
+async function getAllGameSettings() {
+  const { data, error } = await supabase
+    .from('game_settings')
+    .select('*')
+    .order('sort_order', { ascending: true });
+  
+  if (error) throw error;
+  return data || [];
+}
+
+async function getEnabledGameSettings() {
+  const { data, error } = await supabase
+    .from('game_settings')
+    .select('*')
+    .eq('is_enabled', true)
+    .order('sort_order', { ascending: true });
+  
+  if (error) throw error;
+  return data || [];
+}
+
+async function getGameSettingById(id) {
+  const { data, error } = await supabase
+    .from('game_settings')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
+async function updateGameSetting(id, updates) {
+  const { data, error } = await supabase
+    .from('game_settings')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function updateGameSettingsOrder(orderedIds) {
+  // Met à jour l'ordre de tous les jeux
+  const updates = orderedIds.map((id, index) => ({
+    id,
+    sort_order: index + 1
+  }));
+  
+  for (const update of updates) {
+    const { error } = await supabase
+      .from('game_settings')
+      .update({ sort_order: update.sort_order })
+      .eq('id', update.id);
+    
+    if (error) throw error;
+  }
+  
+  return await getAllGameSettings();
+}
+
+// Vérifie si un utilisateur peut créer un lobby pour un jeu donné
+async function canCreateGameLobby(gameId, userRole) {
+  const game = await getGameSettingById(gameId);
+  
+  if (!game || !game.is_enabled) {
+    return { allowed: false, reason: 'Jeu non disponible' };
+  }
+  
+  const roleHierarchy = { 'user': 1, 'admin': 2, 'superadmin': 3 };
+  const permissionLevel = {
+    'all': 1,
+    'admin': 2,
+    'superadmin': 3
+  };
+  
+  const userLevel = roleHierarchy[userRole] || 1;
+  const requiredLevel = permissionLevel[game.create_permission] || 1;
+  
+  if (userLevel < requiredLevel) {
+    return { allowed: false, reason: 'Permissions insuffisantes' };
+  }
+  
+  return { allowed: true };
+}
+
+// ==================== MEME LOBBIES ====================
+
+function generateMemeLobbyId() {
+  return `meme-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+async function getAllMemeLobbies() {
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data || [];
+}
+
+async function getActiveMemeLobbies() {
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .select('*')
+    .in('status', ['waiting', 'playing', 'voting'])
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data || [];
+}
+
+async function getMemeLobbyById(lobbyId) {
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .select('*')
+    .eq('id', lobbyId)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
+async function createMemeLobby(creatorId, creatorPseudo, settings = {}) {
+  const defaultSettings = {
+    rounds: 3,
+    creationTime: 120,
+    voteTime: 30,
+    maxRotations: 3,
+    maxUndos: 1,
+    tags: []
+  };
+  
+  const lobbyId = generateMemeLobbyId();
+  
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .insert({
+      id: lobbyId,
+      creator_id: creatorId,
+      creator_pseudo: creatorPseudo,
+      settings: { ...defaultSettings, ...settings },
+      status: 'waiting',
+      current_round: 0,
+      phase: 'lobby',
+      participants: [{
+        odId: creatorId,
+        pseudo: creatorPseudo,
+        score: 0,
+        superVoteUsedThisRound: false
+      }]
+    })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function joinMemeLobby(lobbyId, odId, pseudo) {
+  const lobby = await getMemeLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  if (lobby.status !== 'waiting') throw new Error('La partie a déjà commencé');
+  
+  const participants = lobby.participants || [];
+  
+  // Vérifie si déjà présent
+  if (participants.some(p => p.odId === odId)) {
+    return lobby; // Déjà dans le lobby
+  }
+  
+  participants.push({
+    odId,
+    pseudo,
+    score: 0,
+    superVoteUsedThisRound: false
+  });
+  
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update({ participants })
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function leaveMemeLobby(lobbyId, odId) {
+  const lobby = await getMemeLobbyById(lobbyId);
+  if (!lobby) return null;
+  
+  const participants = (lobby.participants || []).filter(p => p.odId !== odId);
+  
+  // Si plus personne, on supprime le lobby
+  if (participants.length === 0) {
+    await deleteMemeLobby(lobbyId);
+    return null;
+  }
+  
+  // Si le créateur part, le premier participant devient créateur
+  let updates = { participants };
+  if (lobby.creator_id === odId && participants.length > 0) {
+    updates.creator_id = participants[0].odId;
+    updates.creator_pseudo = participants[0].pseudo;
+  }
+  
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update(updates)
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function updateMemeLobbySettings(lobbyId, newSettings) {
+  const lobby = await getMemeLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  
+  const settings = { ...lobby.settings, ...newSettings };
+  
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update({ settings })
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function startMemeLobby(lobbyId) {
+  const lobby = await getMemeLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  if (lobby.status !== 'waiting') throw new Error('La partie a déjà commencé');
+  if ((lobby.participants || []).length < 2) throw new Error('Il faut au moins 2 joueurs');
+  
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update({
+      status: 'playing',
+      current_round: 1,
+      phase: 'creation',
+      phase_end_time: new Date(Date.now() + lobby.settings.creationTime * 1000).toISOString()
+    })
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function updateMemeLobbyPhase(lobbyId, phase, phaseEndTime = null) {
+  const updates = { phase };
+  if (phaseEndTime) {
+    updates.phase_end_time = phaseEndTime;
+  }
+  
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update(updates)
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function advanceToNextRound(lobbyId) {
+  const lobby = await getMemeLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  
+  const nextRound = lobby.current_round + 1;
+  const maxRounds = lobby.settings.rounds;
+  
+  // Reset superVoteUsedThisRound pour tous les participants
+  const participants = (lobby.participants || []).map(p => ({
+    ...p,
+    superVoteUsedThisRound: false
+  }));
+  
+  if (nextRound > maxRounds) {
+    // Fin de la partie
+    const { data, error } = await supabase
+      .from('meme_lobbies')
+      .update({
+        status: 'finished',
+        phase: 'final',
+        current_round: maxRounds,
+        participants,
+        finished_at: new Date().toISOString()
+      })
+      .eq('id', lobbyId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
+  
+  // Manche suivante
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update({
+      current_round: nextRound,
+      phase: 'creation',
+      current_vote_index: 0,
+      participants,
+      phase_end_time: new Date(Date.now() + lobby.settings.creationTime * 1000).toISOString()
+    })
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function startVotingPhase(lobbyId) {
+  const lobby = await getMemeLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update({
+      status: 'voting',
+      phase: 'voting',
+      current_vote_index: 0,
+      phase_end_time: new Date(Date.now() + lobby.settings.voteTime * 1000).toISOString()
+    })
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function advanceToNextVote(lobbyId) {
+  const lobby = await getMemeLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  
+  const nextIndex = lobby.current_vote_index + 1;
+  const totalCreations = (lobby.participants || []).length;
+  
+  if (nextIndex >= totalCreations) {
+    // Fin du vote, afficher résultats de la manche
+    const { data, error } = await supabase
+      .from('meme_lobbies')
+      .update({
+        phase: 'results',
+        phase_end_time: new Date(Date.now() + 10000).toISOString() // 10s pour voir les résultats
+      })
+      .eq('id', lobbyId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
+  
+  // Vote suivant
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update({
+      current_vote_index: nextIndex,
+      phase_end_time: new Date(Date.now() + lobby.settings.voteTime * 1000).toISOString()
+    })
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function updateParticipantScore(lobbyId, odId, scoreChange) {
+  const lobby = await getMemeLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  
+  const participants = (lobby.participants || []).map(p => {
+    if (p.odId === odId) {
+      return { ...p, score: (p.score || 0) + scoreChange };
+    }
+    return p;
+  });
+  
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update({ participants })
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function markSuperVoteUsed(lobbyId, odId) {
+  const lobby = await getMemeLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  
+  const participants = (lobby.participants || []).map(p => {
+    if (p.odId === odId) {
+      return { ...p, superVoteUsedThisRound: true };
+    }
+    return p;
+  });
+  
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update({ participants })
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function deleteMemeLobby(lobbyId) {
+  const { error } = await supabase
+    .from('meme_lobbies')
+    .delete()
+    .eq('id', lobbyId);
+  
+  if (error) throw error;
+  return { success: true };
+}
+
+async function cleanupOldMemeLobbies(hoursOld = 24) {
+  const cutoffDate = new Date(Date.now() - hoursOld * 60 * 60 * 1000).toISOString();
+  
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .delete()
+    .not('finished_at', 'is', null)
+    .lt('finished_at', cutoffDate)
+    .select();
+  
+  if (error) throw error;
+  return (data || []).length;
+}
+
+
+// ==================== MEME CREATIONS ====================
+
+async function getMemeCreationsByLobby(lobbyId, roundNumber = null) {
+  let query = supabase
+    .from('meme_creations')
+    .select('*')
+    .eq('lobby_id', lobbyId);
+  
+  if (roundNumber !== null) {
+    query = query.eq('round_number', roundNumber);
+  }
+  
+  const { data, error } = await query.order('created_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+async function getMemeCreationById(id) {
+  const { data, error } = await supabase
+    .from('meme_creations')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
+async function createMemeCreation(lobbyId, roundNumber, playerId, playerPseudo, templateId, textLayers, finalImageBase64) {
+  const { data, error } = await supabase
+    .from('meme_creations')
+    .insert({
+      lobby_id: lobbyId,
+      round_number: roundNumber,
+      player_id: playerId,
+      player_pseudo: playerPseudo,
+      template_id: templateId,
+      text_layers: textLayers || [],
+      final_image_base64: finalImageBase64,
+      votes: [],
+      total_score: 0
+    })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function addVoteToCreation(creationId, odId visé, pseudo, voteType, isSuper = false) {
+  const creation = await getMemeCreationById(creationId);
+  if (!creation) throw new Error('Création non trouvée');
+  
+  // Vérifier si déjà voté
+  const votes = creation.votes || [];
+  if (votes.some(v => v.odId === odId)) {
+    throw new Error('Déjà voté');
+  }
+  
+  // Calculer les points
+  let points = 0;
+  if (voteType === 'up') points = 100;
+  else if (voteType === 'down') points = -50;
+  // neutral = 0
+  
+  if (isSuper) points += 200;
+  
+  votes.push({ odId, pseudo, voteType, isSuper });
+  
+  const { data, error } = await supabase
+    .from('meme_creations')
+    .update({
+      votes,
+      total_score: creation.total_score + points
+    })
+    .eq('id', creationId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  
+  return { creation: data, points };
+}
+
+
+// ==================== MEME ASSIGNMENTS ====================
+
+async function getMemeAssignment(lobbyId, roundNumber, playerId) {
+  const { data, error } = await supabase
+    .from('meme_assignments')
+    .select('*, template:meme_templates(*)')
+    .eq('lobby_id', lobbyId)
+    .eq('round_number', roundNumber)
+    .eq('player_id', playerId)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
+async function createMemeAssignment(lobbyId, roundNumber, playerId, templateId) {
+  const { data, error } = await supabase
+    .from('meme_assignments')
+    .insert({
+      lobby_id: lobbyId,
+      round_number: roundNumber,
+      player_id: playerId,
+      template_id: templateId,
+      templates_history: [templateId],
+      rotations_used: 0,
+      undos_used: 0
+    })
+    .select('*, template:meme_templates(*)')
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function rotateMemeAssignment(lobbyId, roundNumber, playerId, newTemplateId) {
+  const assignment = await getMemeAssignment(lobbyId, roundNumber, playerId);
+  if (!assignment) throw new Error('Assignation non trouvée');
+  
+  const templatesHistory = [...(assignment.templates_history || []), newTemplateId];
+  
+  const { data, error } = await supabase
+    .from('meme_assignments')
+    .update({
+      template_id: newTemplateId,
+      templates_history: templatesHistory,
+      rotations_used: assignment.rotations_used + 1
+    })
+    .eq('id', assignment.id)
+    .select('*, template:meme_templates(*)')
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function undoMemeAssignment(lobbyId, roundNumber, playerId) {
+  const assignment = await getMemeAssignment(lobbyId, roundNumber, playerId);
+  if (!assignment) throw new Error('Assignation non trouvée');
+  
+  const history = assignment.templates_history || [];
+  if (history.length < 2) {
+    throw new Error('Pas d\'image précédente');
+  }
+  
+  // Revenir à l'avant-dernière image
+  const previousTemplateId = history[history.length - 2];
+  
+  const { data, error } = await supabase
+    .from('meme_assignments')
+    .update({
+      template_id: previousTemplateId,
+      undos_used: assignment.undos_used + 1
+    })
+    .eq('id', assignment.id)
+    .select('*, template:meme_templates(*)')
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function getAllAssignmentsForRound(lobbyId, roundNumber) {
+  const { data, error } = await supabase
+    .from('meme_assignments')
+    .select('*')
+    .eq('lobby_id', lobbyId)
+    .eq('round_number', roundNumber);
+  
+  if (error) throw error;
+  return data || [];
+}
+
+// ==================== MEME TEMPLATES ====================
+
+async function getAllMemeTemplates(includeInactive = false) {
+  let query = supabase
+    .from('meme_templates')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (!includeInactive) {
+    query = query.eq('is_active', true);
+  }
+  
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+async function getMemeTemplateById(id) {
+  const { data, error } = await supabase
+    .from('meme_templates')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
+async function getMemeTemplatesByTags(tags) {
+  if (!tags || tags.length === 0) {
+    return await getAllMemeTemplates();
+  }
+  
+  // Utilise l'opérateur && pour vérifier si au moins un tag correspond
+  const { data, error } = await supabase
+    .from('meme_templates')
+    .select('*')
+    .eq('is_active', true)
+    .overlaps('tags', tags)
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data || [];
+}
+
+async function getAllMemeTags() {
+  const { data, error } = await supabase
+    .from('meme_templates')
+    .select('tags')
+    .eq('is_active', true);
+  
+  if (error) throw error;
+  
+  // Extraire tous les tags uniques
+  const allTags = new Set();
+  (data || []).forEach(template => {
+    (template.tags || []).forEach(tag => allTags.add(tag));
+  });
+  
+  return Array.from(allTags).sort();
+}
+
+async function createMemeTemplate(templateData) {
+  const { title, image_url, tags, preset_zones, width, height } = templateData;
+  
+  const { data, error } = await supabase
+    .from('meme_templates')
+    .insert({
+      title,
+      image_url,
+      tags: tags || [],
+      preset_zones: preset_zones || [],
+      width: width || 800,
+      height: height || 800,
+      is_active: true
+    })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function updateMemeTemplate(id, updates) {
+  const allowedFields = ['title', 'image_url', 'tags', 'preset_zones', 'width', 'height', 'is_active'];
+  const filteredUpdates = {};
+  
+  for (const field of allowedFields) {
+    if (updates[field] !== undefined) {
+      filteredUpdates[field] = updates[field];
+    }
+  }
+  
+  const { data, error } = await supabase
+    .from('meme_templates')
+    .update(filteredUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+async function deleteMemeTemplate(id) {
+  // Soft delete - on désactive plutôt que supprimer
+  // pour ne pas casser les références dans les anciennes parties
+  const { error } = await supabase
+    .from('meme_templates')
+    .update({ is_active: false })
+    .eq('id', id);
+  
+  if (error) throw error;
+  return { success: true };
+}
+
+async function hardDeleteMemeTemplate(id) {
+  // Vraie suppression - à utiliser avec précaution
+  const { error } = await supabase
+    .from('meme_templates')
+    .delete()
+    .eq('id', id);
+  
+  if (error) throw error;
+  return { success: true };
+}
+
+// Récupère des templates aléatoires pour une partie
+async function getRandomMemeTemplates(count, excludeIds = [], tags = []) {
+  let query = supabase
+    .from('meme_templates')
+    .select('*')
+    .eq('is_active', true);
+  
+  if (excludeIds.length > 0) {
+    query = query.not('id', 'in', `(${excludeIds.join(',')})`);
+  }
+  
+  if (tags.length > 0) {
+    query = query.overlaps('tags', tags);
+  }
+  
+  const { data, error } = await query;
+  if (error) throw error;
+  
+  // Mélanger et prendre les N premiers
+  const shuffled = (data || []).sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+// Récupère UN template aléatoire pour un joueur (rotation)
+async function getRandomMemeTemplate(excludeIds = [], tags = []) {
+  const templates = await getRandomMemeTemplates(1, excludeIds, tags);
+  return templates[0] || null;
+}
+
+
 // ==================== EXPORTS ====================
 
 module.exports = {
@@ -3100,5 +3889,57 @@ module.exports = {
   addMediaToGrid,
   removeMediaFromGrid,
   saveBroadcast,
-  getBroadcastHistory
+  getBroadcastHistory,
+
+    // Game Settings
+  getAllGameSettings,
+  getEnabledGameSettings,
+  getGameSettingById,
+  updateGameSetting,
+  updateGameSettingsOrder,
+  canCreateGameLobby,
+
+  // Meme Templates
+  getAllMemeTemplates,
+  getMemeTemplateById,
+  getMemeTemplatesByTags,
+  getAllMemeTags,
+  createMemeTemplate,
+  updateMemeTemplate,
+  deleteMemeTemplate,
+  hardDeleteMemeTemplate,
+  getRandomMemeTemplates,
+  getRandomMemeTemplate,
+
+  // Meme Lobbies
+  generateMemeLobbyId,
+  getAllMemeLobbies,
+  getActiveMemeLobbies,
+  getMemeLobbyById,
+  createMemeLobby,
+  joinMemeLobby,
+  leaveMemeLobby,
+  updateMemeLobbySettings,
+  startMemeLobby,
+  updateMemeLobbyPhase,
+  advanceToNextRound,
+  startVotingPhase,
+  advanceToNextVote,
+  updateParticipantScore,
+  markSuperVoteUsed,
+  deleteMemeLobby,
+  cleanupOldMemeLobbies,
+
+  // Meme Creations
+  getMemeCreationsByLobby,
+  getMemeCreationById,
+  createMemeCreation,
+  addVoteToCreation,
+
+  // Meme Assignments
+  getMemeAssignment,
+  createMemeAssignment,
+  rotateMemeAssignment,
+  undoMemeAssignment,
+  getAllAssignmentsForRound
 };
