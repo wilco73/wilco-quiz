@@ -17,7 +17,7 @@ export default function GameSettingsManager() {
   const fetchGames = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/api/game-settings`);
+      const res = await fetch(`${API_URL}/game-settings`);
       const data = await res.json();
       if (data.success) {
         setGames(data.games);
@@ -35,7 +35,7 @@ export default function GameSettingsManager() {
   const updateGame = async (gameId, updates) => {
     try {
       setSaving(true);
-      const res = await fetch(`${API_URL}/api/game-settings/${gameId}`, {
+      const res = await fetch(`${API_URL}/game-settings/${gameId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
@@ -66,7 +66,7 @@ export default function GameSettingsManager() {
     // Sauvegarder le nouvel ordre
     try {
       const orderedIds = newGames.map(g => g.id);
-      await fetch(`${API_URL}/api/game-settings/order/update`, {
+      await fetch(`${API_URL}/game-settings/order/update`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderedIds })
