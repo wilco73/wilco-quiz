@@ -24,7 +24,7 @@ export default function MemeTemplateManager() {
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/api/meme-templates?includeInactive=${showInactive}`);
+      const res = await fetch(`${API_URL}/meme-templates?includeInactive=${showInactive}`);
       const data = await res.json();
       if (data.success) {
         setTemplates(data.templates);
@@ -41,7 +41,7 @@ export default function MemeTemplateManager() {
 
   const fetchTags = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/meme-templates/tags`);
+      const res = await fetch(`${API_URL}/meme-templates/tags`);
       const data = await res.json();
       if (data.success) {
         setAllTags(data.tags);
@@ -53,7 +53,7 @@ export default function MemeTemplateManager() {
 
   const createTemplate = async (templateData) => {
     try {
-      const res = await fetch(`${API_URL}/api/meme-templates`, {
+      const res = await fetch(`${API_URL}/meme-templates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(templateData)
@@ -75,7 +75,7 @@ export default function MemeTemplateManager() {
 
   const updateTemplate = async (id, updates) => {
     try {
-      const res = await fetch(`${API_URL}/api/meme-templates/${id}`, {
+      const res = await fetch(`${API_URL}/meme-templates/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
@@ -104,8 +104,8 @@ export default function MemeTemplateManager() {
 
     try {
       const url = hard 
-        ? `${API_URL}/api/meme-templates/${id}/hard`
-        : `${API_URL}/api/meme-templates/${id}`;
+        ? `${API_URL}/meme-templates/${id}/hard`
+        : `${API_URL}/meme-templates/${id}`;
       
       const res = await fetch(url, { method: 'DELETE' });
       const data = await res.json();
