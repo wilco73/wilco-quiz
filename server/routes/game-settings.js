@@ -6,11 +6,7 @@
 const express = require('express');
 const router = express.Router();
 
-let db;
-
-function init(database) {
-  db = database;
-}
+const db = require('../database');
 
 // GET - Tous les jeux (admin)
 router.get('/', async (req, res) => {
@@ -103,5 +99,4 @@ router.post('/can-create', async (req, res) => {
   }
 });
 
-router.init = init;
 module.exports = router;

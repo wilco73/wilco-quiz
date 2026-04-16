@@ -101,7 +101,7 @@ export default function MemeTemplateManager() {
       ? 'Supprimer définitivement ce template ? Cette action est irréversible.'
       : 'Désactiver ce template ? Il ne sera plus disponible dans les parties.';
     
-    if (!confirm(confirmMsg)) return;
+    if (!window.confirm(confirmMsg)) return;
 
     try {
       const url = hard 
