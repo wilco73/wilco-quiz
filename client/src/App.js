@@ -21,6 +21,7 @@ import PWAInstallPrompt from './components/PWAInstallPrompt';
 import { useToast } from './components/ToastProvider';
 import MemeEditorTest from './components/MemeEditorTest';
 import MemeGameTest from './components/MemeGameTest';
+import MemeGameContainer from './components/MemeGameContainer';
 import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -647,7 +648,7 @@ const App = () => {
     'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
     'admin-monitoring', 'admin-validation', 'admin-users', 
     'admin-game-settings', 'admin-meme-templates',
-    'meme-editor-test', 'meme-game-test'
+    'meme-editor-test', 'meme-game-test', 'meme-game'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -743,6 +744,13 @@ const App = () => {
         );
       case 'meme-game-test': 
         return <MemeGameTest />;
+      case 'meme-game':
+        return (
+          <MemeGameContainer
+            currentUser={currentUser}
+            onBack={() => setView('lobby-list')}
+          />
+        );
       default:
         return null;
     }
