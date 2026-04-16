@@ -236,20 +236,31 @@ export default function MemeEditor({
   }, [isDragging, isResizing, isRotating, handleMouseMove, handleMouseUp]);
 
   // Fonction pour wrapper le texte selon la largeur
-  const wrapText = (ctx, text, maxWidth) => {
+  // On utilise une marge de sécurité car le CSS et le Canvas ne calculent pas exactement pareil
+  const wrapText = (ctx, text, maxWidth, strokeWidth = 0) => {
+    // Le stroke s'étend des 2 côtés + petite marge pour les différences de rendu CSS/Canvas
+    const strokeMargin = strokeWidth * 2;
+    const safetyMargin = 8; // Marge de sécurité pour les différences de calcul
+    const safeMaxWidth = maxWidth - strokeMargin - safetyMargin;
+    
     // D'abord séparer par les retours à la ligne explicites
     const paragraphs = text.split('\n');
     const allLines = [];
 
     paragraphs.forEach(paragraph => {
+      if (paragraph === '') {
+        allLines.push('');
+        return;
+      }
+      
       const words = paragraph.split(' ');
       let currentLine = '';
 
-      words.forEach(word => {
+      words.forEach((word, index) => {
         const testLine = currentLine ? `${currentLine} ${word}` : word;
         const metrics = ctx.measureText(testLine);
 
-        if (metrics.width > maxWidth && currentLine) {
+        if (metrics.width > safeMaxWidth && currentLine) {
           allLines.push(currentLine);
           currentLine = word;
         } else {
@@ -260,13 +271,9 @@ export default function MemeEditor({
       if (currentLine) {
         allLines.push(currentLine);
       }
-      // Si le paragraphe était vide (double retour à la ligne), ajouter une ligne vide
-      if (paragraph === '') {
-        allLines.push('');
-      }
     });
 
-    return allLines;
+    return allLines.length > 0 ? allLines : [''];
   };
 
   // Générer l'image finale
@@ -303,13 +310,17 @@ export default function MemeEditor({
           ctx.textAlign = layer.textAlign || 'center';
           ctx.textBaseline = 'top';
 
-          // Position du texte
-          let textX = layer.x;
-          if (layer.textAlign === 'center') textX = layer.x + layer.width / 2;
-          else if (layer.textAlign === 'right') textX = layer.x + layer.width;
+          // Padding identique à l'affichage CSS (5px)
+          const padding = 5;
+          const contentWidth = layer.width - (padding * 2);
 
-          // Wrapper le texte selon la largeur de la zone
-          const lines = wrapText(ctx, layer.text, layer.width);
+          // Position du texte avec padding
+          let textX = layer.x + padding;
+          if (layer.textAlign === 'center') textX = layer.x + layer.width / 2;
+          else if (layer.textAlign === 'right') textX = layer.x + layer.width - padding;
+
+          // Wrapper le texte selon la largeur de la zone (moins le padding)
+          const lines = wrapText(ctx, layer.text, contentWidth, layer.strokeWidth);
           const lineHeight = layer.fontSize * 1.2;
           const totalTextHeight = lines.length * lineHeight;
           
@@ -652,7 +663,7 @@ export default function MemeEditor({
                 <textarea
                   value={layer.text}
                   onChange={(e) => updateSelectedLayer({ text: e.target.value })}
-                  className="w-full h-full bg-transparent resize-none outline-none text-center flex items-center justify-center p-1"
+                  className="w-full h-full bg-transparent resize-none outline-none"
                   style={{
                     fontFamily: layer.fontFamily,
                     fontSize: layer.fontSize * scale,
@@ -663,12 +674,16 @@ export default function MemeEditor({
                     color: layer.fontColor,
                     WebkitTextStroke: `${layer.strokeWidth}px ${layer.strokeColor}`,
                     paintOrder: 'stroke fill',
+                    padding: '5px',
+                    lineHeight: 1.2,
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
                   }}
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
                 <div
-                  className="w-full h-full flex items-center justify-center p-1 overflow-hidden"
+                  className="w-full h-full flex items-center overflow-hidden whitespace-pre-wrap"
                   style={{
                     fontFamily: layer.fontFamily,
                     fontSize: layer.fontSize * scale,
@@ -676,9 +691,14 @@ export default function MemeEditor({
                     fontStyle: layer.fontStyle,
                     textDecoration: layer.textDecoration,
                     textAlign: layer.textAlign,
+                    justifyContent: layer.textAlign === 'center' ? 'center' : layer.textAlign === 'right' ? 'flex-end' : 'flex-start',
                     color: layer.fontColor,
                     WebkitTextStroke: `${layer.strokeWidth}px ${layer.strokeColor}`,
                     paintOrder: 'stroke fill',
+                    padding: '5px',
+                    lineHeight: 1.2,
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
                   }}
                 >
                   {layer.text}
