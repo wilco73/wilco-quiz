@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_URL } from '../config';
 
 /**
  * MemeTemplateManager - Interface admin pour gérer les images meme
@@ -14,8 +15,6 @@ export default function MemeTemplateManager() {
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
   const [showZoneEditor, setShowZoneEditor] = useState(false);
-
-  const API_URL = import.meta.env.VITE_API_URL || '';
 
   useEffect(() => {
     fetchTemplates();

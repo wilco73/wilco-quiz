@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../config';
 
 /**
  * GameSettingsManager - Interface superadmin pour gérer les jeux visibles
@@ -8,8 +9,6 @@ export default function GameSettingsManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-
-  const API_URL = import.meta.env.VITE_API_URL || '';
 
   useEffect(() => {
     fetchGames();
@@ -94,7 +93,7 @@ export default function GameSettingsManager() {
 
   return (
     <div className="p-4 max-w-4xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+      <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-900 dark:text-white">
         <span>⚙️</span>
         Configuration des jeux
       </h2>
