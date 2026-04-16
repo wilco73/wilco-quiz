@@ -20,6 +20,7 @@ import MysteryGameView from './components/MysteryGameView';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import { useToast } from './components/ToastProvider';
 import MemeEditorTest from './components/MemeEditorTest';
+import MemeGameTest from './components/MemeGameTest';
 import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -646,7 +647,7 @@ const App = () => {
     'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
     'admin-monitoring', 'admin-validation', 'admin-users', 
     'admin-game-settings', 'admin-meme-templates',
-    'meme-editor-test'
+    'meme-editor-test', 'meme-game-test'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -740,6 +741,8 @@ const App = () => {
         return (
           <MemeEditorTest />
         );
+      case 'meme-game-test': 
+        return <MemeGameTest />;
       default:
         return null;
     }
