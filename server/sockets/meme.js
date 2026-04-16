@@ -57,6 +57,40 @@ module.exports = function(io, socket, db) {
     }
   });
   
+  // Rejoindre un lobby par code court (6 caractères)
+  socket.on('meme:joinLobbyByCode', async (data, callback) => {
+    try {
+      const { code, odId, pseudo } = data;
+      
+      // Chercher le lobby par son code
+      const lobby = await db.getMemeLobbyByCode(code);
+      
+      if (!lobby) {
+        return callback({ success: false, message: 'Code invalide ou lobby introuvable' });
+      }
+      
+      if (lobby.status !== 'waiting') {
+        return callback({ success: false, message: 'Cette partie a déjà commencé' });
+      }
+      
+      // Rejoindre le lobby
+      const updatedLobby = await db.joinMemeLobby(lobby.id, odId, pseudo);
+      
+      // Rejoindre la room socket
+      socket.join(`meme:${lobby.id}`);
+      socket.memeLobbyId = lobby.id;
+      socket.odId = odId;
+      
+      // Notifier les participants
+      io.to(`meme:${lobby.id}`).emit('meme:lobbyUpdated', updatedLobby);
+      
+      callback({ success: true, lobby: updatedLobby });
+    } catch (error) {
+      console.error('[MEME] Erreur join lobby by code:', error);
+      callback({ success: false, message: error.message });
+    }
+  });
+  
   // Quitter un lobby
   socket.on('meme:leaveLobby', async (data, callback) => {
     try {

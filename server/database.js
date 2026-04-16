@@ -3029,14 +3029,13 @@ async function getAllMemeLobbies() {
 }
 
 async function getActiveMemeLobbies() {
-  const { data, error } = await supabase
-    .from('meme_lobbies')
-    .select('*')
-    .in('status', ['waiting', 'playing', 'voting'])
-    .order('created_at', { ascending: false });
-  
-  if (error) throw error;
-  return data || [];
+  const result = await pool.query(`
+    SELECT * FROM meme_lobbies 
+    WHERE status IN ('waiting', 'playing')
+      AND (is_private = false OR is_private IS NULL)
+    ORDER BY created_at DESC
+  `);
+  return result.rows;
 }
 
 async function getMemeLobbyById(lobbyId) {
@@ -3051,39 +3050,40 @@ async function getMemeLobbyById(lobbyId) {
 }
 
 async function createMemeLobby(creatorId, creatorPseudo, settings = {}) {
-  const defaultSettings = {
-    rounds: 3,
-    creationTime: 120,
-    voteTime: 30,
-    maxRotations: 3,
-    maxUndos: 1,
-    tags: []
-  };
+  const code = await generateUniqueCode();
+  const isPrivate = settings.isPrivate || false;
   
-  const lobbyId = generateMemeLobbyId();
+  // Séparer isPrivate des autres settings
+  const { isPrivate: _, ...otherSettings } = settings;
   
-  const { data, error } = await supabase
-    .from('meme_lobbies')
-    .insert({
-      id: lobbyId,
-      creator_id: creatorId,
-      creator_pseudo: creatorPseudo,
-      settings: { ...defaultSettings, ...settings },
-      status: 'waiting',
-      current_round: 0,
-      phase: 'lobby',
-      participants: [{
-        odId: creatorId,
-        pseudo: creatorPseudo,
-        score: 0,
-        superVoteUsedThisRound: false
-      }]
-    })
-    .select()
-    .single();
+  const result = await pool.query(`
+    INSERT INTO meme_lobbies (
+      creator_id, 
+      code,
+      is_private,
+      status, 
+      settings, 
+      participants,
+      created_at
+    ) VALUES ($1, $2, $3, 'waiting', $4, $5, NOW())
+    RETURNING *
+  `, [
+    creatorId,
+    code,
+    isPrivate,
+    JSON.stringify(otherSettings),
+    JSON.stringify([{ odId: creatorId, pseudo: creatorPseudo, score: 0 }])
+  ]);
   
-  if (error) throw error;
-  return data;
+  return result.rows[0];
+}
+
+async function getMemeLobbyByCode(code) {
+  const result = await pool.query(
+    'SELECT * FROM meme_lobbies WHERE code = $1',
+    [code.toUpperCase()]
+  );
+  return result.rows[0] || null;
 }
 
 async function joinMemeLobby(lobbyId, odId, pseudo) {
@@ -3146,21 +3146,33 @@ async function leaveMemeLobby(lobbyId, odId) {
   return data;
 }
 
-async function updateMemeLobbySettings(lobbyId, newSettings) {
-  const lobby = await getMemeLobbyById(lobbyId);
-  if (!lobby) throw new Error('Lobby non trouvé');
+async function updateMemeLobbySettings(lobbyId, settings) {
+  // Extraire isPrivate des settings
+  const { isPrivate, ...otherSettings } = settings;
   
-  const settings = { ...lobby.settings, ...newSettings };
+  let query, params;
   
-  const { data, error } = await supabase
-    .from('meme_lobbies')
-    .update({ settings })
-    .eq('id', lobbyId)
-    .select()
-    .single();
+  if (isPrivate !== undefined) {
+    query = `
+      UPDATE meme_lobbies 
+      SET settings = $1,
+          is_private = $2
+      WHERE id = $3
+      RETURNING *
+    `;
+    params = [JSON.stringify(otherSettings), isPrivate, lobbyId];
+  } else {
+    query = `
+      UPDATE meme_lobbies 
+      SET settings = $1
+      WHERE id = $2
+      RETURNING *
+    `;
+    params = [JSON.stringify(otherSettings), lobbyId];
+  }
   
-  if (error) throw error;
-  return data;
+  const result = await pool.query(query, params);
+  return result.rows[0];
 }
 
 async function startMemeLobby(lobbyId) {
@@ -3712,6 +3724,44 @@ async function getRandomMemeTemplate(excludeIds = [], tags = []) {
   return templates[0] || null;
 }
 
+// ============================================================
+// GÉNÉRATION DE CODE COURT
+// ============================================================
+
+// Générer un code court unique (6 caractères)
+// Utilise uniquement des caractères non-ambigus (pas de I, O, 0, 1)
+function generateShortCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+// Générer un code unique (avec vérification en BDD)
+async function generateUniqueCode() {
+  let code;
+  let exists = true;
+  let attempts = 0;
+  
+  while (exists && attempts < 10) {
+    code = generateShortCode();
+    const result = await pool.query(
+      'SELECT 1 FROM meme_lobbies WHERE code = $1 LIMIT 1',
+      [code]
+    );
+    exists = result.rows.length > 0;
+    attempts++;
+  }
+  
+  if (exists) {
+    throw new Error('Impossible de générer un code unique après 10 tentatives');
+  }
+  
+  return code;
+}
+
 
 // ==================== EXPORTS ====================
 
@@ -3916,6 +3966,8 @@ module.exports = {
   getAllMemeLobbies,
   getActiveMemeLobbies,
   getMemeLobbyById,
+  generateUniqueCode,
+  getMemeLobbyByCode,
   createMemeLobby,
   joinMemeLobby,
   leaveMemeLobby,
