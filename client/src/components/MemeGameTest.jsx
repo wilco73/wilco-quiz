@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import MemeLobbyView from './MemeLobbyView';
 import MemeGameView from './MemeGameView';
 
@@ -79,6 +79,73 @@ export default function MemeGameTest() {
 
   const currentUser = { odId: 'player1', pseudo: 'Alice', role: 'user' };
 
+  // État des votes pour le meme actuel
+  const [votesReceived, setVotesReceived] = useState({});
+  const [hasCurrentUserVoted, setHasCurrentUserVoted] = useState(false);
+
+  // Calculer combien de joueurs doivent voter (tous sauf le créateur du meme)
+  const getCurrentMemeCreatorId = () => {
+    if (submittedMemes.length === 0) return null;
+    return submittedMemes[currentVoteIndex]?.player_id;
+  };
+
+  const getVotersCount = () => {
+    const creatorId = getCurrentMemeCreatorId();
+    return TEST_PLAYERS.filter(p => p.odId !== creatorId).length;
+  };
+
+  const getVotesCount = () => {
+    return Object.keys(votesReceived).length;
+  };
+
+  const allVotesReceived = () => {
+    return getVotesCount() >= getVotersCount();
+  };
+
+  // Fonction pour passer au meme/round suivant
+  const advanceVoting = useCallback(() => {
+    // Reset des votes pour le prochain meme
+    setVotesReceived({});
+    setHasCurrentUserVoted(false);
+
+    if (currentVoteIndex < submittedMemes.length - 1) {
+      // Meme suivant
+      setCurrentVoteIndex(prev => prev + 1);
+      setTimeRemaining(lobbySettings.voteTime);
+    } else {
+      // Fin du vote pour ce round
+      if (currentRound < lobbySettings.rounds) {
+        setCurrentPhase(PHASES.ROUND_RESULTS);
+        // Simuler scores
+        setPlayers(prev => prev.map(p => ({
+          ...p,
+          totalScore: p.totalScore + Math.floor(Math.random() * 200),
+          memes: [...(p.memes || []), submittedMemes.find(m => m.player_id === p.odId)].filter(Boolean),
+        })));
+        
+        // Prochaine manche après délai
+        setTimeout(() => {
+          setCurrentRound(prev => prev + 1);
+          setHasSuperVote(true);
+          setRotationsUsed(0);
+          setUndosUsed(0);
+          setCurrentVoteIndex(0);
+          setCurrentTemplate(TEST_TEMPLATES[(currentRound) % TEST_TEMPLATES.length]);
+          setTimeRemaining(lobbySettings.creationTime);
+          setCurrentPhase(PHASES.CREATING);
+        }, 3000);
+      } else {
+        // Fin de partie
+        setPlayers(prev => prev.map(p => ({
+          ...p,
+          totalScore: p.totalScore + Math.floor(Math.random() * 200),
+          memes: submittedMemes.filter(m => m.player_id === p.odId),
+        })));
+        setCurrentPhase(PHASES.FINAL_RESULTS);
+      }
+    }
+  }, [currentVoteIndex, submittedMemes, currentRound, lobbySettings]);
+
   // Timer simulation
   useEffect(() => {
     if (currentPhase === PHASES.CREATING || currentPhase === PHASES.VOTING) {
@@ -87,6 +154,9 @@ export default function MemeGameTest() {
           if (t <= 1) {
             if (currentPhase === PHASES.CREATING) {
               setCurrentPhase(PHASES.SUBMITTING);
+            } else if (currentPhase === PHASES.VOTING) {
+              // Timer expiré en vote = passer au suivant
+              advanceVoting();
             }
             return 0;
           }
@@ -94,6 +164,38 @@ export default function MemeGameTest() {
         });
       }, 1000);
       return () => clearInterval(timer);
+    }
+  }, [currentPhase, advanceVoting]);
+
+  // Vérifier si tous ont voté (simuler les autres joueurs)
+  useEffect(() => {
+    if (currentPhase === PHASES.VOTING && hasCurrentUserVoted) {
+      // Simuler que les autres joueurs votent après un délai aléatoire
+      const creatorId = getCurrentMemeCreatorId();
+      const otherVoters = TEST_PLAYERS.filter(p => 
+        p.odId !== currentUser.odId && p.odId !== creatorId
+      );
+      
+      otherVoters.forEach((voter, index) => {
+        setTimeout(() => {
+          setVotesReceived(prev => {
+            const newVotes = { ...prev, [voter.odId]: true };
+            return newVotes;
+          });
+        }, (index + 1) * 500 + Math.random() * 1000);
+      });
+    }
+  }, [hasCurrentUserVoted, currentPhase, currentVoteIndex]);
+
+  // Passer au suivant quand tous ont voté
+  useEffect(() => {
+    if (currentPhase === PHASES.VOTING && allVotesReceived() && hasCurrentUserVoted) {
+      // Petit délai pour montrer que tout le monde a voté
+      setTimeout(() => {
+        advanceVoting();
+      }, 500);
+    }
+  }, [votesReceived, currentPhase, hasCurrentUserVoted]);
     }
   }, [currentPhase]);
 
@@ -151,43 +253,12 @@ export default function MemeGameTest() {
       setHasSuperVote(false);
     }
 
-    // Passer au meme suivant ou aux résultats
-    setTimeout(() => {
-      if (currentVoteIndex < submittedMemes.length - 1) {
-        setCurrentVoteIndex(currentVoteIndex + 1);
-        setTimeRemaining(lobbySettings.voteTime);
-      } else {
-        // Fin du vote
-        if (currentRound < lobbySettings.rounds) {
-          setCurrentPhase(PHASES.ROUND_RESULTS);
-          // Simuler scores
-          setPlayers(players.map(p => ({
-            ...p,
-            totalScore: p.totalScore + Math.floor(Math.random() * 200),
-            memes: [...(p.memes || []), submittedMemes.find(m => m.player_id === p.odId)].filter(Boolean),
-          })));
-          
-          // Prochaine manche
-          setTimeout(() => {
-            setCurrentRound(currentRound + 1);
-            setHasSuperVote(true);
-            setRotationsUsed(0);
-            setUndosUsed(0);
-            setCurrentTemplate(TEST_TEMPLATES[currentRound % TEST_TEMPLATES.length]);
-            setTimeRemaining(lobbySettings.creationTime);
-            setCurrentPhase(PHASES.CREATING);
-          }, 3000);
-        } else {
-          // Fin de partie
-          setPlayers(players.map(p => ({
-            ...p,
-            totalScore: p.totalScore + Math.floor(Math.random() * 200),
-            memes: submittedMemes.filter(m => m.player_id === p.odId),
-          })));
-          setCurrentPhase(PHASES.FINAL_RESULTS);
-        }
-      }
-    }, 500);
+    // Marquer que l'utilisateur a voté
+    setHasCurrentUserVoted(true);
+    setVotesReceived(prev => ({ ...prev, [currentUser.odId]: true }));
+    
+    // Le passage au meme suivant se fait automatiquement via useEffect
+    // quand tous ont voté ou quand le timer expire
   };
 
   const handleRotateTemplate = () => {
@@ -290,6 +361,9 @@ export default function MemeGameTest() {
         undosUsed={undosUsed}
         canUndo={templateHistory.length > 1}
         templatesHistory={templateHistory}
+        votesCount={getVotesCount()}
+        totalVoters={getVotersCount()}
+        hasVoted={hasCurrentUserVoted}
         onSubmitCreation={handleSubmitCreation}
         onVote={handleVote}
         onRotateTemplate={handleRotateTemplate}

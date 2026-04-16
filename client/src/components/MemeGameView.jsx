@@ -54,6 +54,9 @@ export default function MemeGameView({
   undosUsed = 0,
   canUndo = false,
   templatesHistory = [],
+  votesCount = 0,
+  totalVoters = 0,
+  hasVoted = false,
   onSubmitCreation,
   onVote,
   onRotateTemplate,
@@ -218,6 +221,9 @@ export default function MemeGameView({
             onVote={onVote}
             roundNumber={currentRound}
             totalRounds={totalRounds}
+            votesCount={votesCount}
+            totalVoters={totalVoters}
+            hasVoted={hasVoted}
           />
         );
 

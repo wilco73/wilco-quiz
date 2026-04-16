@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ThumbsUp, Minus, ThumbsDown, Star, Clock, Users, Hash } from 'lucide-react';
+import { ThumbsUp, Minus, ThumbsDown, Star, Clock, Users, Hash, Loader2 } from 'lucide-react';
 
 /**
  * MemeVoteView - Interface de vote pour un meme
@@ -15,6 +15,9 @@ import { ThumbsUp, Minus, ThumbsDown, Star, Clock, Users, Hash } from 'lucide-re
  * - onVote: (voteType: 'up' | 'neutral' | 'down', isSuper: boolean) => void
  * - roundNumber: number
  * - totalRounds: number
+ * - votesCount: number (nombre de votes reçus)
+ * - totalVoters: number (nombre total de votants)
+ * - hasVoted: boolean (si le joueur actuel a déjà voté - géré par le parent)
  */
 export default function MemeVoteView({
   meme,
@@ -27,16 +30,22 @@ export default function MemeVoteView({
   onVote,
   roundNumber = 1,
   totalRounds = 3,
+  votesCount = 0,
+  totalVoters = 0,
+  hasVoted: hasVotedProp = false,
 }) {
   const [selectedVote, setSelectedVote] = useState(null);
   const [isSuper, setIsSuper] = useState(false);
-  const [hasVoted, setHasVoted] = useState(false);
+  const [hasVotedLocal, setHasVotedLocal] = useState(false);
+
+  // Le vote est considéré fait si le parent dit qu'on a voté OU si on a voté localement
+  const hasVoted = hasVotedProp || hasVotedLocal;
 
   // Reset quand on change de meme
   useEffect(() => {
     setSelectedVote(null);
     setIsSuper(false);
-    setHasVoted(false);
+    setHasVotedLocal(false);
   }, [meme?.id]);
 
   const isOwnMeme = meme?.player_id === currentUser?.odId;
@@ -54,7 +63,7 @@ export default function MemeVoteView({
   const submitVote = () => {
     if (!selectedVote || hasVoted) return;
     onVote(selectedVote, isSuper);
-    setHasVoted(true);
+    setHasVotedLocal(true);
   };
 
   // Timer critique
@@ -81,9 +90,19 @@ export default function MemeVoteView({
           <div className="bg-gray-800/70 rounded-lg px-3 py-1 flex items-center gap-2">
             <Users className="w-4 h-4 text-blue-400" />
             <span className="text-white text-sm">
-              {currentIndex + 1}/{totalMemes}
+              Meme {currentIndex + 1}/{totalMemes}
             </span>
           </div>
+          {/* Indicateur de votes */}
+          {totalVoters > 0 && (
+            <div className={`rounded-lg px-3 py-1 flex items-center gap-2 ${
+              votesCount >= totalVoters ? 'bg-green-600/70' : 'bg-gray-800/70'
+            }`}>
+              <span className="text-white text-sm">
+                ✓ {votesCount}/{totalVoters} votes
+              </span>
+            </div>
+          )}
         </div>
         
         {/* Timer */}
@@ -214,6 +233,14 @@ export default function MemeVoteView({
           >
             {hasVoted ? '✓ Vote enregistré' : 'Valider mon vote'}
           </button>
+
+          {/* Message d'attente après avoir voté */}
+          {hasVoted && (
+            <div className="mt-4 flex items-center justify-center gap-2 text-gray-400">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>En attente des autres joueurs... ({votesCount}/{totalVoters})</span>
+            </div>
+          )}
         </div>
       ) : isOwnMeme ? (
         /* Message pour son propre meme */
@@ -224,9 +251,11 @@ export default function MemeVoteView({
             </p>
             <p className="text-gray-400 text-sm mt-2">
               Vous ne pouvez pas voter pour votre propre création.
-              <br />
-              En attente du prochain meme...
             </p>
+            <div className="mt-4 flex items-center justify-center gap-2 text-gray-400">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>En attente des votes... ({votesCount}/{totalVoters})</span>
+            </div>
           </div>
         </div>
       ) : (
@@ -236,9 +265,10 @@ export default function MemeVoteView({
             <p className="text-green-300 text-lg">
               ✓ Vote enregistré !
             </p>
-            <p className="text-gray-400 text-sm mt-2">
-              En attente des autres joueurs...
-            </p>
+            <div className="mt-3 flex items-center justify-center gap-2 text-gray-400">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>En attente des autres joueurs... ({votesCount}/{totalVoters})</span>
+            </div>
           </div>
         </div>
       )}

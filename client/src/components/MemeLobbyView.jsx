@@ -251,6 +251,24 @@ export default function MemeLobbyView({
                         {n}
                       </button>
                     ))}
+                    <input
+                      type="number"
+                      min="0"
+                      max="99"
+                      value={![0, 1, 2, 3, 5].includes(localSettings.maxRotations) ? localSettings.maxRotations : ''}
+                      placeholder="+"
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val) && val >= 0) {
+                          updateSetting('maxRotations', val);
+                        }
+                      }}
+                      className={`w-14 py-2 rounded-lg font-semibold text-center transition-colors ${
+                        ![0, 1, 2, 3, 5].includes(localSettings.maxRotations)
+                          ? 'bg-purple-600 text-white border-2 border-purple-400'
+                          : 'bg-gray-700 text-gray-300 border border-gray-600'
+                      }`}
+                    />
                   </div>
                 </div>
 
