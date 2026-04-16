@@ -235,6 +235,40 @@ export default function MemeEditor({
     }
   }, [isDragging, isResizing, isRotating, handleMouseMove, handleMouseUp]);
 
+  // Fonction pour wrapper le texte selon la largeur
+  const wrapText = (ctx, text, maxWidth) => {
+    // D'abord séparer par les retours à la ligne explicites
+    const paragraphs = text.split('\n');
+    const allLines = [];
+
+    paragraphs.forEach(paragraph => {
+      const words = paragraph.split(' ');
+      let currentLine = '';
+
+      words.forEach(word => {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        const metrics = ctx.measureText(testLine);
+
+        if (metrics.width > maxWidth && currentLine) {
+          allLines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      });
+
+      if (currentLine) {
+        allLines.push(currentLine);
+      }
+      // Si le paragraphe était vide (double retour à la ligne), ajouter une ligne vide
+      if (paragraph === '') {
+        allLines.push('');
+      }
+    });
+
+    return allLines;
+  };
+
   // Générer l'image finale
   const generateFinalImage = async () => {
     const canvas = document.createElement('canvas');
@@ -274,8 +308,8 @@ export default function MemeEditor({
           if (layer.textAlign === 'center') textX = layer.x + layer.width / 2;
           else if (layer.textAlign === 'right') textX = layer.x + layer.width;
 
-          // Séparer le texte en lignes
-          const lines = layer.text.split('\n');
+          // Wrapper le texte selon la largeur de la zone
+          const lines = wrapText(ctx, layer.text, layer.width);
           const lineHeight = layer.fontSize * 1.2;
           const totalTextHeight = lines.length * lineHeight;
           
