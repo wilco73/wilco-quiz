@@ -3428,7 +3428,7 @@ async function createMemeCreation(lobbyId, roundNumber, playerId, playerPseudo, 
   return data;
 }
 
-async function addVoteToCreation(creationId, odId visé, pseudo, voteType, isSuper = false) {
+async function addVoteToCreation(creationId, odId, pseudo, voteType, isSuper = false) {
   const creation = await getMemeCreationById(creationId);
   if (!creation) throw new Error('Création non trouvée');
   

@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useSocket } from '../../contexts/SocketContext';
 
 /**
  * GameSettingsManager - Interface superadmin pour gérer les jeux visibles
  */
 export default function GameSettingsManager() {
-  const { socket } = useSocket();
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
