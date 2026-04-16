@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
  * useMemeGame - Hook pour gérer le jeu Make It Meme via WebSocket
  * 
  * @param {Object} socket - Instance socket.io
- * @param {Object} currentUser - { odId, pseudo, role }
+ * @param {Object} currentUser - { id, pseudo, role }
  * @returns {Object} État et actions du jeu
  */
 export default function useMemeGame(socket, currentUser) {
@@ -98,7 +98,7 @@ export default function useMemeGame(socket, currentUser) {
 
     // Template assigned
     socket.on('meme:templateAssigned', ({ odId, assignment: newAssignment }) => {
-      if (odId === currentUser?.odId) {
+      if (odId === currentUser?.id) {
         setAssignment(newAssignment);
         setTemplate(newAssignment.template);
       }
@@ -189,7 +189,7 @@ export default function useMemeGame(socket, currentUser) {
       socket.off('meme:newRoundStarted');
       socket.off('meme:gameFinished');
     };
-  }, [socket, currentUser?.odId, lobby?.id]);
+  }, [socket, currentUser?.id, lobby?.id]);
 
   // Helper pour mettre à jour les joueurs depuis le lobby
   const updatePlayersFromLobby = (lobbyData) => {
@@ -214,7 +214,7 @@ export default function useMemeGame(socket, currentUser) {
     
     return new Promise((resolve) => {
       socket.emit('meme:createLobby', {
-        odId: currentUser.odId,
+        odId: currentUser.id,
         pseudo: currentUser.pseudo,
         userRole: currentUser.role,
         settings,
@@ -242,7 +242,7 @@ export default function useMemeGame(socket, currentUser) {
     return new Promise((resolve) => {
       socket.emit('meme:joinLobby', {
         lobbyId,
-        odId: currentUser.odId,
+        odId: currentUser.id,
         pseudo: currentUser.pseudo,
       }, (response) => {
         setLoading(false);
@@ -265,7 +265,7 @@ export default function useMemeGame(socket, currentUser) {
     return new Promise((resolve) => {
       socket.emit('meme:leaveLobby', {
         lobbyId: lobby.id,
-        odId: currentUser.odId,
+        odId: currentUser.id,
       }, (response) => {
         if (response.success) {
           setLobby(null);
@@ -319,7 +319,7 @@ export default function useMemeGame(socket, currentUser) {
       socket.emit('meme:rotateTemplate', {
         lobbyId: lobby.id,
         roundNumber: currentRound,
-        odId: currentUser.odId,
+        odId: currentUser.id,
       }, (response) => {
         if (response.success) {
           setAssignment(response.assignment);
@@ -340,7 +340,7 @@ export default function useMemeGame(socket, currentUser) {
       socket.emit('meme:undoRotation', {
         lobbyId: lobby.id,
         roundNumber: currentRound,
-        odId: currentUser.odId,
+        odId: currentUser.id,
       }, (response) => {
         if (response.success) {
           setAssignment(response.assignment);
@@ -363,7 +363,7 @@ export default function useMemeGame(socket, currentUser) {
       socket.emit('meme:submitCreation', {
         lobbyId: lobby.id,
         roundNumber: currentRound,
-        odId: currentUser.odId,
+        odId: currentUser.id,
         pseudo: currentUser.pseudo,
         templateId: template.id,
         textLayers,
@@ -392,7 +392,7 @@ export default function useMemeGame(socket, currentUser) {
       socket.emit('meme:vote', {
         lobbyId: lobby.id,
         creationId: currentMeme.id,
-        odId: currentUser.odId,
+        odId: currentUser.id,
         pseudo: currentUser.pseudo,
         voteType,
         isSuper,
@@ -438,8 +438,8 @@ export default function useMemeGame(socket, currentUser) {
   // ==================== COMPUTED VALUES ====================
   
   const currentMeme = allMemes[currentVoteIndex] || null;
-  const isOwnMeme = currentMeme?.player_id === currentUser?.odId;
-  const isCreator = lobby?.creator_id === currentUser?.odId;
+  const isOwnMeme = currentMeme?.player_id === currentUser?.id;
+  const isCreator = lobby?.creator_id === currentUser?.id;
   
   // Calcul des votants (tous sauf le créateur du meme actuel)
   const totalVoters = currentMeme 

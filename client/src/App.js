@@ -43,6 +43,7 @@ const App = () => {
   const [currentDrawingLobby, setCurrentDrawingLobby] = useState(null);
   const [showMonitoringWidget, setShowMonitoringWidget] = useState(false);
   const [currentMysteryLobby, setCurrentMysteryLobby] = useState(null);
+  const [currentMemeLobby, setCurrentMemeLobby] = useState(null);
   
   const hasReconnected = useRef(false);
   const draftTimeoutRef = useRef(null);
@@ -643,12 +644,12 @@ const App = () => {
 
   // Vues qui utilisent le MainLayout (navigation latérale)
   const layoutViews = [
-    'lobby-list', 'history', 'profile', 'scoreboard',
+    'lobby-list', 'history', 'profile', 'scoreboard', 'meme-game',
     'admin-dashboard', 'admin-participants', 'admin-questions', 
     'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
     'admin-monitoring', 'admin-validation', 'admin-users', 
     'admin-game-settings', 'admin-meme-templates',
-    'meme-editor-test', 'meme-game-test', 'meme-game'
+    'meme-editor-test', 'meme-game-test'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -666,6 +667,14 @@ const App = () => {
             onJoinMysteryLobby={(lobby) => {
               setCurrentMysteryLobby(lobby);
               setView('mystery-game');
+            }}
+            onJoinMemeLobby={(lobby) => {
+              setCurrentMemeLobby(lobby);
+              setView('meme-game');
+            }}
+            onCreateMemeLobby={() => {
+              setCurrentMemeLobby(null); // null = créer un nouveau lobby
+              setView('meme-game');
             }}
           />
         );
@@ -697,6 +706,18 @@ const App = () => {
             }}
             onClose={() => setView('lobby-list')}
             embedded={true}
+          />
+        );
+      
+      case 'meme-game':
+        return (
+          <MemeGameContainer
+            currentUser={currentUser}
+            lobbyId={currentMemeLobby?.id}
+            onBack={() => {
+              setCurrentMemeLobby(null);
+              setView('lobby-list');
+            }}
           />
         );
       
