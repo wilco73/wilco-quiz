@@ -59,6 +59,7 @@ const MainLayout = ({
     { id: 'admin-questions', label: 'Questions', icon: FileQuestion },
     { id: 'admin-drawing', label: 'Jeux de Dessin', icon: Palette },
     { id: 'admin-meme-templates', label: 'Templates Meme', icon: Smile },
+    { id: 'meme-editor-test', label: '🧪 Test Éditeur Meme', icon: Smile },
     { id: 'admin-lobbies', label: 'Gérer Lobbies', icon: Trash },
     { id: 'admin-mystery', label: 'Cases Mystères', icon: Grid },
     { id: 'admin-media', label: 'Médiathèque', icon: Image },

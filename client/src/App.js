@@ -19,6 +19,7 @@ import MonitoringWidget from './components/MonitoringWidget';
 import MysteryGameView from './components/MysteryGameView';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import { useToast } from './components/ToastProvider';
+import MemeEditorTest from './components/MemeEditorTest';
 import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -644,7 +645,8 @@ const App = () => {
     'admin-dashboard', 'admin-participants', 'admin-questions', 
     'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
     'admin-monitoring', 'admin-validation', 'admin-users', 
-    'admin-game-settings', 'admin-meme-templates'
+    'admin-game-settings', 'admin-meme-templates',
+    'meme-editor-test'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -734,7 +736,10 @@ const App = () => {
             onDeleteTeam={handleDeleteTeam}
           />
         );
-      
+      case 'meme-editor-test':
+        return (
+          <MemeEditorTest />
+        );
       default:
         return null;
     }
