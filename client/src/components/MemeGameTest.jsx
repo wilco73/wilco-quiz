@@ -196,8 +196,6 @@ export default function MemeGameTest() {
       }, 500);
     }
   }, [votesReceived, currentPhase, hasCurrentUserVoted]);
-    }
-  }, [currentPhase]);
 
   // Handlers
   const handleStartGame = () => {
