@@ -643,7 +643,8 @@ const App = () => {
     'lobby-list', 'history', 'profile', 'scoreboard',
     'admin-dashboard', 'admin-participants', 'admin-questions', 
     'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
-    'admin-monitoring', 'admin-validation', 'admin-users'
+    'admin-monitoring', 'admin-validation', 'admin-users', 
+    'admin-game-settings', 'admin-meme-templates'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -716,6 +717,8 @@ const App = () => {
       case 'admin-monitoring':
       case 'admin-validation':
       case 'admin-users':
+      case 'admin-game-settings':
+      case 'admin-meme-templates':
         return (
           <AdminContent
             activeTab={view}
