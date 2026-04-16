@@ -152,7 +152,7 @@ export default function MemeTemplateManager() {
     <div className="p-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold flex items-center gap-2">
+        <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-900 dark:text-white">
           <span>😂</span>
           Templates Meme
           <span className="text-sm font-normal text-gray-400">
