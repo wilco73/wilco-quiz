@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSocket } from '../contexts/SocketContext';
+import { useSocketContext } from '../contexts/SocketContext';
 import useMemeGame from '../hooks/useMemeGame';
 import MemeLobbyView from './MemeLobbyView';
 import MemeGameView from './MemeGameView';
@@ -16,7 +16,8 @@ import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
  * - onBack: () => void (retour à la liste des lobbies)
  */
 export default function MemeGameContainer({ currentUser, lobbyId: initialLobbyId, onBack }) {
-  const { socket } = useSocket();
+  const socketContext = useSocketContext();
+  const socket = socketContext.socket;
   const [availableTags, setAvailableTags] = useState([]);
   const [joinLobbyId, setJoinLobbyId] = useState('');
   const [showJoinInput, setShowJoinInput] = useState(false);
