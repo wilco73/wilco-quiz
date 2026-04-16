@@ -267,40 +267,57 @@ export default function MemeEditor({
           if (layer.fontStyle === 'italic') fontStyle += 'italic ';
           ctx.font = `${fontStyle}${layer.fontSize}px ${layer.fontFamily}`;
           ctx.textAlign = layer.textAlign || 'center';
-          ctx.textBaseline = 'middle';
+          ctx.textBaseline = 'top';
 
           // Position du texte
           let textX = layer.x;
           if (layer.textAlign === 'center') textX = layer.x + layer.width / 2;
           else if (layer.textAlign === 'right') textX = layer.x + layer.width;
-          const textY = layer.y + layer.height / 2;
 
-          // Dessiner le contour
-          if (layer.strokeWidth > 0) {
-            ctx.strokeStyle = layer.strokeColor;
-            ctx.lineWidth = layer.strokeWidth * 2;
-            ctx.lineJoin = 'round';
-            ctx.strokeText(layer.text, textX, textY);
-          }
+          // Séparer le texte en lignes
+          const lines = layer.text.split('\n');
+          const lineHeight = layer.fontSize * 1.2;
+          const totalTextHeight = lines.length * lineHeight;
+          
+          // Centrer verticalement dans la zone
+          let startY = layer.y + (layer.height - totalTextHeight) / 2;
 
-          // Dessiner le texte
-          ctx.fillStyle = layer.fontColor;
-          ctx.fillText(layer.text, textX, textY);
+          // Dessiner chaque ligne
+          lines.forEach((line, lineIndex) => {
+            const lineY = startY + lineIndex * lineHeight;
 
-          // Appliquer les décorations
-          if (layer.textDecoration === 'underline' || layer.textDecoration === 'line-through') {
-            const metrics = ctx.measureText(layer.text);
-            const lineY = layer.textDecoration === 'underline' 
-              ? textY + layer.fontSize / 4 
-              : textY;
-            
-            ctx.beginPath();
-            ctx.strokeStyle = layer.fontColor;
-            ctx.lineWidth = Math.max(2, layer.fontSize / 15);
-            ctx.moveTo(textX - metrics.width / 2, lineY);
-            ctx.lineTo(textX + metrics.width / 2, lineY);
-            ctx.stroke();
-          }
+            // Dessiner le contour
+            if (layer.strokeWidth > 0) {
+              ctx.strokeStyle = layer.strokeColor;
+              ctx.lineWidth = layer.strokeWidth * 2;
+              ctx.lineJoin = 'round';
+              ctx.strokeText(line, textX, lineY);
+            }
+
+            // Dessiner le texte
+            ctx.fillStyle = layer.fontColor;
+            ctx.fillText(line, textX, lineY);
+
+            // Appliquer les décorations
+            if (layer.textDecoration === 'underline' || layer.textDecoration === 'line-through') {
+              const metrics = ctx.measureText(line);
+              let decoY = lineY + layer.fontSize * 0.85;
+              if (layer.textDecoration === 'line-through') {
+                decoY = lineY + layer.fontSize * 0.5;
+              }
+              
+              let decoStartX = textX;
+              if (layer.textAlign === 'center') decoStartX = textX - metrics.width / 2;
+              else if (layer.textAlign === 'right') decoStartX = textX - metrics.width;
+              
+              ctx.beginPath();
+              ctx.strokeStyle = layer.fontColor;
+              ctx.lineWidth = Math.max(2, layer.fontSize / 15);
+              ctx.moveTo(decoStartX, decoY);
+              ctx.lineTo(decoStartX + metrics.width, decoY);
+              ctx.stroke();
+            }
+          });
 
           ctx.restore();
         });
