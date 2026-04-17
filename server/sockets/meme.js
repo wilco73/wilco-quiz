@@ -1,7 +1,23 @@
 /**
  * Meme Game Socket Handlers
  * Gestion en temps réel des parties Make It Meme
+ * 
+ * v2 - Correction: traduire les phases BDD -> Frontend
  */
+
+// Mapping des phases BDD vers Frontend
+const PHASE_MAPPING = {
+  'creation': 'creating',
+  'voting': 'voting',
+  'results': 'round_results',
+  'final': 'final_results',
+  'submitting': 'submitting',
+  'waiting': 'waiting'
+};
+
+function translatePhase(dbPhase) {
+  return PHASE_MAPPING[dbPhase] || dbPhase;
+}
 
 module.exports = function(io, socket, db) {
   
@@ -44,7 +60,6 @@ module.exports = function(io, socket, db) {
       const lobby = await db.joinMemeLobby(lobbyId, odId, pseudo);
       
       // TOUJOURS rejoindre la room socket (même si déjà participant dans la BDD)
-      // C'est crucial car la création via API ne rejoint pas la room socket
       socket.join(`meme:${lobbyId}`);
       socket.memeLobbyId = lobbyId;
       socket.odId = odId;
@@ -56,10 +71,13 @@ module.exports = function(io, socket, db) {
       
       // Si le jeu est déjà en cours, envoyer l'état actuel au joueur qui rejoint
       if (lobby.status === 'playing' && lobby.phase) {
+        // Traduire la phase BDD -> Frontend
+        const frontendPhase = translatePhase(lobby.phase);
+        
         // Envoyer la phase actuelle
         socket.emit('meme:gameStarted', {
           lobby,
-          phase: lobby.phase,
+          phase: frontendPhase,
           roundNumber: lobby.current_round,
           endTime: lobby.phase_end_time
         });
@@ -182,10 +200,10 @@ module.exports = function(io, socket, db) {
         }
       }
       
-      // Notifier tout le monde
+      // Notifier tout le monde avec la phase traduite
       io.to(`meme:${lobbyId}`).emit('meme:gameStarted', {
         lobby,
-        phase: 'creation',
+        phase: 'creating', // Frontend attend 'creating', pas 'creation'
         roundNumber: 1,
         endTime: lobby.phase_end_time
       });
@@ -243,7 +261,7 @@ module.exports = function(io, socket, db) {
   });
   
   // Utiliser un undo (revenir au meme précédent)
-  socket.on('meme:undoRotation', async (data, callback) => {
+  socket.on('meme:undoTemplate', async (data, callback) => {
     try {
       const { lobbyId, roundNumber, odId } = data;
       
@@ -256,6 +274,11 @@ module.exports = function(io, socket, db) {
       // Vérifier limite undos
       if (currentAssignment.undos_used >= lobby.settings.maxUndos) {
         return callback({ success: false, message: 'Nombre maximum de retours atteint' });
+      }
+      
+      // Vérifier qu'on peut undo (historique > 1)
+      if (!currentAssignment.templates_history || currentAssignment.templates_history.length <= 1) {
+        return callback({ success: false, message: 'Pas de meme précédent' });
       }
       
       const assignment = await db.undoMemeAssignment(lobbyId, roundNumber, odId);
@@ -271,6 +294,12 @@ module.exports = function(io, socket, db) {
   socket.on('meme:submitCreation', async (data, callback) => {
     try {
       const { lobbyId, roundNumber, odId, pseudo, templateId, textLayers, finalImageBase64 } = data;
+      
+      // Vérifier que la phase est bien création
+      const lobby = await db.getMemeLobbyById(lobbyId);
+      if (lobby.phase !== 'creation') {
+        return callback({ success: false, message: 'La phase de création est terminée' });
+      }
       
       const creation = await db.createMemeCreation(
         lobbyId,
