@@ -447,25 +447,30 @@ const LobbyList = ({
             Make It Meme
           </h2>
           
-          {/* Boutons de création */}
-          {currentUser?.teamName && canCreateLobby('meme') && (
+          {/* Boutons d'action - Créer (si permission) + Rejoindre avec code (tout le monde) */}
+          {currentUser?.teamName && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
-              {/* Créer une partie */}
-              <button
-                onClick={handleCreateMeme}
-                disabled={loadingCreate}
-                className={`bg-gradient-to-r from-pink-500 to-purple-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
-              >
-                <div className="flex items-center gap-3 text-white">
-                  <div className="text-3xl">😂</div>
-                  <div>
-                    <h4 className="text-lg font-bold">{loadingCreate ? 'Création...' : 'Créer une partie'}</h4>
-                    <p className="text-white/80 text-sm">Créez les memes les plus drôles</p>
+              {/* Créer une partie - uniquement si permission */}
+              {canCreateLobby('meme') ? (
+                <button
+                  onClick={handleCreateMeme}
+                  disabled={loadingCreate}
+                  className={`bg-gradient-to-r from-pink-500 to-purple-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
+                >
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="text-3xl">😂</div>
+                    <div>
+                      <h4 className="text-lg font-bold">{loadingCreate ? 'Création...' : 'Créer une partie'}</h4>
+                      <p className="text-white/80 text-sm">Créez les memes les plus drôles</p>
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+              ) : (
+                /* Placeholder vide pour garder la grille alignée si pas de bouton créer */
+                <div></div>
+              )}
               
-              {/* Rejoindre avec code */}
+              {/* Rejoindre avec code - TOUJOURS VISIBLE si le jeu est activé */}
               {showJoinInput ? (
                 <div className="bg-gray-100 dark:bg-gray-700 rounded-xl p-4 flex items-center gap-2">
                   <input
