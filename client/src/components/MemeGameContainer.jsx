@@ -52,31 +52,33 @@ export default function MemeGameContainer({
     fetchTags();
   }, []);
 
-  // Si on a un lobby initial (créé depuis l'accueil), l'utiliser directement
+  // Si on a un lobby initial (créé depuis l'accueil), rejoindre via socket
   useEffect(() => {
-    if (initialLobby && !game.lobby) {
-      console.log('[MemeGameContainer] Using initial lobby:', initialLobby.id);
-      // Rejoindre le lobby via socket pour synchroniser
-      game.joinLobby(initialLobby.id);
-    }
-  }, [initialLobby]);
+    const joinInitialLobby = async () => {
+      if (!initialLobby || game.lobby || !socket || !currentUser) return;
+      
+      console.log('[MemeGameContainer] Joining initial lobby via socket:', initialLobby.id);
+      const result = await game.joinLobby(initialLobby.id);
+      console.log('[MemeGameContainer] Join result:', result);
+    };
+    
+    joinInitialLobby();
+  }, [initialLobby, socket, currentUser]); // Ne pas mettre game.lobby pour éviter boucle
 
   // Si on a un code, rejoindre par code
   useEffect(() => {
-    if (initialJoinAttempted) return;
-    if (game.lobby) return;
-    if (initialLobby) return; // Ne pas rejoindre par code si on a déjà un lobby
-    
     const joinByCode = async () => {
-      if (initialLobbyCode && socket && currentUser) {
-        setInitialJoinAttempted(true);
-        console.log('[MemeGameContainer] Joining by code:', initialLobbyCode);
-        await game.joinLobbyByCode(initialLobbyCode);
-      }
+      if (!initialLobbyCode || initialLobby || game.lobby || initialJoinAttempted) return;
+      if (!socket || !currentUser) return;
+      
+      setInitialJoinAttempted(true);
+      console.log('[MemeGameContainer] Joining by code:', initialLobbyCode);
+      const result = await game.joinLobbyByCode(initialLobbyCode);
+      console.log('[MemeGameContainer] Join by code result:', result);
     };
     
     joinByCode();
-  }, [initialLobbyCode, socket, currentUser, game.lobby, initialLobby, initialJoinAttempted]);
+  }, [initialLobbyCode, socket, currentUser, initialLobby, initialJoinAttempted]);
 
   // Handlers
   const handleCreateLobby = async () => {

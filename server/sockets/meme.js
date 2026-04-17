@@ -40,15 +40,39 @@ module.exports = function(io, socket, db) {
     try {
       const { lobbyId, odId, pseudo } = data;
       
+      // Rejoindre le lobby dans la BDD (ou récupérer si déjà dedans)
       const lobby = await db.joinMemeLobby(lobbyId, odId, pseudo);
       
-      // Rejoindre la room socket
+      // TOUJOURS rejoindre la room socket (même si déjà participant dans la BDD)
+      // C'est crucial car la création via API ne rejoint pas la room socket
       socket.join(`meme:${lobbyId}`);
       socket.memeLobbyId = lobbyId;
       socket.odId = odId;
       
+      console.log(`[MEME] ${pseudo} (${odId}) joined room meme:${lobbyId}`);
+      
       // Notifier les participants
       io.to(`meme:${lobbyId}`).emit('meme:lobbyUpdated', lobby);
+      
+      // Si le jeu est déjà en cours, envoyer l'état actuel au joueur qui rejoint
+      if (lobby.status === 'playing' && lobby.phase) {
+        // Envoyer la phase actuelle
+        socket.emit('meme:gameStarted', {
+          lobby,
+          phase: lobby.phase,
+          roundNumber: lobby.current_round,
+          endTime: lobby.phase_end_time
+        });
+        
+        // Envoyer son assignment s'il existe
+        const assignment = await db.getMemeAssignment(lobbyId, lobby.current_round, odId);
+        if (assignment) {
+          socket.emit('meme:templateAssigned', {
+            odId,
+            assignment
+          });
+        }
+      }
       
       callback({ success: true, lobby });
     } catch (error) {
@@ -76,14 +100,17 @@ module.exports = function(io, socket, db) {
       // Ajouter le joueur au lobby
       const updatedLobby = await db.joinMemeLobby(lobby.id, odId, pseudo);
       
+      // Rejoindre la room socket
       socket.join(`meme:${lobby.id}`);
       socket.memeLobbyId = lobby.id;
       socket.odId = odId;
       
-      callback({ success: true, lobby: updatedLobby });
+      console.log(`[MEME] ${pseudo} joined room meme:${lobby.id} via code ${code}`);
       
       // Notifier les autres joueurs
       io.to(`meme:${lobby.id}`).emit('meme:lobbyUpdated', updatedLobby);
+      
+      callback({ success: true, lobby: updatedLobby });
       
     } catch (error) {
       console.error('[Meme] joinLobbyByCode error:', error);
