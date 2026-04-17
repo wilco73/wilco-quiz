@@ -3,10 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 /**
  * useMemeGame - Hook pour gérer le jeu Make It Meme via WebSocket
  * 
- * v3 - Corrections:
- * - Logging détaillé pour debug timer
- * - Gestion erreur rotation sans éjection
- * - Fix undo
+ * v4 - Fix timer: utilise timeRemaining du serveur (pas endTime)
  * 
  * @param {Object} socket - Instance socket.io
  * @param {Object} currentUser - { id, pseudo, role }
@@ -18,7 +15,6 @@ export default function useMemeGame(socket, currentUser) {
   const [phase, setPhase] = useState('lobby');
   const [currentRound, setCurrentRound] = useState(1);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [phaseEndTime, setPhaseEndTime] = useState(null);
   
   // Template et création
   const [template, setTemplate] = useState(null);
@@ -42,40 +38,32 @@ export default function useMemeGame(socket, currentUser) {
   // Ref pour le timer
   const timerRef = useRef(null);
 
-  // ==================== TIMER ====================
+  // ==================== TIMER LOCAL ====================
+  // Le serveur envoie timeRemaining, on le décrémente localement
   
   useEffect(() => {
-    if (!phaseEndTime) {
-      console.log('[useMemeGame] No phaseEndTime, setting timer to 0');
-      setTimeRemaining(0);
+    // Nettoyer le timer précédent
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Si pas de temps ou phase lobby, pas de timer
+    if (timeRemaining <= 0 || phase === 'lobby') {
       return;
     }
-
-    const updateTimer = () => {
-      const now = Date.now();
-      const endTime = new Date(phaseEndTime).getTime();
-      const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
-      
-      // Log uniquement au premier calcul
-      if (timerRef.current === null) {
-        console.log('[useMemeGame] Timer started:', {
-          phaseEndTime,
-          endTimeMs: endTime,
-          nowMs: now,
-          remaining
-        });
-      }
-      
-      setTimeRemaining(remaining);
-      
-      if (remaining <= 0) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-
-    updateTimer();
-    timerRef.current = setInterval(updateTimer, 1000);
+    
+    // Décrémenter chaque seconde
+    timerRef.current = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
     return () => {
       if (timerRef.current) {
@@ -83,7 +71,7 @@ export default function useMemeGame(socket, currentUser) {
         timerRef.current = null;
       }
     };
-  }, [phaseEndTime]);
+  }, [phase]); // Redémarrer quand la phase change
 
   // ==================== SOCKET LISTENERS ====================
   
@@ -104,20 +92,19 @@ export default function useMemeGame(socket, currentUser) {
       }
     });
 
-    // Game started
-    socket.on('meme:gameStarted', ({ lobby: updatedLobby, phase: newPhase, roundNumber, endTime }) => {
+    // Game started - utilise timeRemaining (pas endTime)
+    socket.on('meme:gameStarted', ({ lobby: updatedLobby, phase: newPhase, roundNumber, timeRemaining: serverTime }) => {
       console.log('[useMemeGame] gameStarted:', { 
         lobbyId: updatedLobby?.id, 
         phase: newPhase, 
         roundNumber, 
-        endTime,
-        settings: updatedLobby?.settings
+        timeRemaining: serverTime
       });
       
       setLobby(updatedLobby);
       setPhase('creating');
       setCurrentRound(roundNumber);
-      setPhaseEndTime(endTime);
+      setTimeRemaining(serverTime || updatedLobby?.settings?.creationTime || 120);
       setHasSubmitted(false);
       setHasSuperVote(true);
       updatePlayersFromLobby(updatedLobby);
@@ -150,13 +137,13 @@ export default function useMemeGame(socket, currentUser) {
     });
 
     // Voting started
-    socket.on('meme:votingStarted', ({ lobby: updatedLobby, creations, currentIndex, endTime }) => {
-      console.log('[useMemeGame] votingStarted:', { endTime, creationsCount: creations?.length });
+    socket.on('meme:votingStarted', ({ lobby: updatedLobby, creations, currentIndex, timeRemaining: serverTime }) => {
+      console.log('[useMemeGame] votingStarted:', { timeRemaining: serverTime, creationsCount: creations?.length });
       setLobby(updatedLobby);
       setAllMemes(creations);
       setCurrentVoteIndex(currentIndex);
       setPhase('voting');
-      setPhaseEndTime(endTime);
+      setTimeRemaining(serverTime || updatedLobby?.settings?.voteTime || 30);
       setVotesReceived({});
       setHasVoted(false);
     });
@@ -175,10 +162,10 @@ export default function useMemeGame(socket, currentUser) {
     });
 
     // Next vote
-    socket.on('meme:nextVoteStarted', ({ lobby: updatedLobby, currentIndex, endTime }) => {
+    socket.on('meme:nextVoteStarted', ({ lobby: updatedLobby, currentIndex, timeRemaining: serverTime }) => {
       setLobby(updatedLobby);
       setCurrentVoteIndex(currentIndex);
-      setPhaseEndTime(endTime);
+      setTimeRemaining(serverTime || updatedLobby?.settings?.voteTime || 30);
       setHasVoted(false);
     });
 
@@ -191,12 +178,12 @@ export default function useMemeGame(socket, currentUser) {
     });
 
     // New round started
-    socket.on('meme:newRoundStarted', ({ lobby: updatedLobby, roundNumber, endTime }) => {
-      console.log('[useMemeGame] newRoundStarted:', { roundNumber, endTime });
+    socket.on('meme:newRoundStarted', ({ lobby: updatedLobby, roundNumber, timeRemaining: serverTime }) => {
+      console.log('[useMemeGame] newRoundStarted:', { roundNumber, timeRemaining: serverTime });
       setLobby(updatedLobby);
       setCurrentRound(roundNumber);
       setPhase('creating');
-      setPhaseEndTime(endTime);
+      setTimeRemaining(serverTime || updatedLobby?.settings?.creationTime || 120);
       setHasSubmitted(false);
       setHasSuperVote(true);
       setTemplate(null);

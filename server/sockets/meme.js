@@ -71,15 +71,23 @@ module.exports = function(io, socket, db) {
       
       // Si le jeu est déjà en cours, envoyer l'état actuel au joueur qui rejoint
       if (lobby.status === 'playing' && lobby.phase) {
+        // Calculer le temps restant
+        let timeRemaining = 0;
+        if (lobby.phase_end_time) {
+          const endTime = new Date(lobby.phase_end_time).getTime();
+          const now = Date.now();
+          timeRemaining = Math.max(0, Math.floor((endTime - now) / 1000));
+        }
+        
         // Traduire la phase BDD -> Frontend
         const frontendPhase = translatePhase(lobby.phase);
         
-        // Envoyer la phase actuelle
+        // Envoyer la phase actuelle avec timeRemaining
         socket.emit('meme:gameStarted', {
           lobby,
           phase: frontendPhase,
           roundNumber: lobby.current_round,
-          endTime: lobby.phase_end_time
+          timeRemaining
         });
         
         // Envoyer son assignment s'il existe
@@ -200,12 +208,15 @@ module.exports = function(io, socket, db) {
         }
       }
       
-      // Notifier tout le monde avec la phase traduite
+      // Calculer timeRemaining côté serveur (comme les jeux de dessin)
+      const creationTime = lobby.settings?.creationTime || 120;
+      
+      // Notifier tout le monde avec timeRemaining (pas endTime)
       io.to(`meme:${lobbyId}`).emit('meme:gameStarted', {
         lobby,
-        phase: 'creating', // Frontend attend 'creating', pas 'creation'
+        phase: 'creating',
         roundNumber: 1,
-        endTime: lobby.phase_end_time
+        timeRemaining: creationTime
       });
       
       // Envoyer à chaque joueur son meme
@@ -335,11 +346,14 @@ module.exports = function(io, socket, db) {
       const lobby = await db.startVotingPhase(lobbyId);
       const creations = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
       
+      // Calculer timeRemaining
+      const voteTime = lobby.settings?.voteTime || 30;
+      
       io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
         lobby,
         creations,
         currentIndex: 0,
-        endTime: lobby.phase_end_time
+        timeRemaining: voteTime
       });
       
       callback({ success: true, lobby });
@@ -406,11 +420,12 @@ module.exports = function(io, socket, db) {
           creations
         });
       } else {
-        // Vote suivant
+        // Vote suivant - envoyer timeRemaining
+        const voteTime = lobby.settings?.voteTime || 30;
         io.to(`meme:${lobbyId}`).emit('meme:nextVoteStarted', {
           lobby,
           currentIndex: lobby.current_vote_index,
-          endTime: lobby.phase_end_time
+          timeRemaining: voteTime
         });
       }
       
@@ -449,10 +464,12 @@ module.exports = function(io, socket, db) {
           }
         }
         
+        // Envoyer avec timeRemaining
+        const creationTime = lobby.settings?.creationTime || 120;
         io.to(`meme:${lobbyId}`).emit('meme:newRoundStarted', {
           lobby,
           roundNumber: lobby.current_round,
-          endTime: lobby.phase_end_time
+          timeRemaining: creationTime
         });
         
         // Envoyer à chaque joueur son meme
