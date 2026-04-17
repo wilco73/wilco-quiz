@@ -3054,7 +3054,6 @@ async function getMemeLobbyById(lobbyId) {
 async function createMemeLobby(creatorId, creatorPseudo, settings = {}) {
   const code = await generateUniqueCode();
   const isPrivate = settings.isPrivate || false;
-  const lobbyId = generateUUID();
   
   // Séparer isPrivate des autres settings
   const { isPrivate: _, ...otherSettings } = settings;
@@ -3062,7 +3061,6 @@ async function createMemeLobby(creatorId, creatorPseudo, settings = {}) {
   const { data, error } = await supabase
     .from('meme_lobbies')
     .insert({
-      id: lobbyId,
       creator_id: creatorId,
       creator_pseudo: creatorPseudo,  // <-- AJOUTÉ !
       code: code,
