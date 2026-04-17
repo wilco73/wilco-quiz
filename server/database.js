@@ -3029,13 +3029,15 @@ async function getAllMemeLobbies() {
 }
 
 async function getActiveMemeLobbies() {
-  const result = await pool.query(`
-    SELECT * FROM meme_lobbies 
-    WHERE status IN ('waiting', 'playing')
-      AND (is_private = false OR is_private IS NULL)
-    ORDER BY created_at DESC
-  `);
-  return result.rows;
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .select('*')
+    .in('status', ['waiting', 'playing'])
+    .or('is_private.eq.false,is_private.is.null')
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data || [];
 }
 
 async function getMemeLobbyById(lobbyId) {
@@ -3056,34 +3058,32 @@ async function createMemeLobby(creatorId, creatorPseudo, settings = {}) {
   // Séparer isPrivate des autres settings
   const { isPrivate: _, ...otherSettings } = settings;
   
-  const result = await pool.query(`
-    INSERT INTO meme_lobbies (
-      creator_id, 
-      code,
-      is_private,
-      status, 
-      settings, 
-      participants,
-      created_at
-    ) VALUES ($1, $2, $3, 'waiting', $4, $5, NOW())
-    RETURNING *
-  `, [
-    creatorId,
-    code,
-    isPrivate,
-    JSON.stringify(otherSettings),
-    JSON.stringify([{ odId: creatorId, pseudo: creatorPseudo, score: 0 }])
-  ]);
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .insert({
+      creator_id: creatorId,
+      code: code,
+      is_private: isPrivate,
+      status: 'waiting',
+      settings: otherSettings,
+      participants: [{ odId: creatorId, pseudo: creatorPseudo, score: 0 }]
+    })
+    .select()
+    .single();
   
-  return result.rows[0];
+  if (error) throw error;
+  return data;
 }
 
 async function getMemeLobbyByCode(code) {
-  const result = await pool.query(
-    'SELECT * FROM meme_lobbies WHERE code = $1',
-    [code.toUpperCase()]
-  );
-  return result.rows[0] || null;
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .select('*')
+    .eq('code', code.toUpperCase())
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data || null;
 }
 
 async function joinMemeLobby(lobbyId, odId, pseudo) {
@@ -3147,32 +3147,38 @@ async function leaveMemeLobby(lobbyId, odId) {
 }
 
 async function updateMemeLobbySettings(lobbyId, settings) {
-  // Extraire isPrivate des settings
-  const { isPrivate, ...otherSettings } = settings;
+  const lobby = await getMemeLobbyById(lobbyId);
+  if (!lobby) throw new Error('Lobby non trouvé');
+  if (lobby.status !== 'waiting') throw new Error('Impossible de modifier les settings en cours de partie');
   
-  let query, params;
+  const isPrivate = settings.isPrivate;
+  const { isPrivate: _, ...otherSettings } = settings;
+  
+  // Construire l'objet de mise à jour
+  const updateData = {};
   
   if (isPrivate !== undefined) {
-    query = `
-      UPDATE meme_lobbies 
-      SET settings = $1,
-          is_private = $2
-      WHERE id = $3
-      RETURNING *
-    `;
-    params = [JSON.stringify(otherSettings), isPrivate, lobbyId];
-  } else {
-    query = `
-      UPDATE meme_lobbies 
-      SET settings = $1
-      WHERE id = $2
-      RETURNING *
-    `;
-    params = [JSON.stringify(otherSettings), lobbyId];
+    updateData.is_private = isPrivate;
   }
   
-  const result = await pool.query(query, params);
-  return result.rows[0];
+  if (Object.keys(otherSettings).length > 0) {
+    // Fusionner avec les settings existants
+    updateData.settings = { ...(lobby.settings || {}), ...otherSettings };
+  }
+  
+  if (Object.keys(updateData).length === 0) {
+    return lobby; // Rien à mettre à jour
+  }
+  
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update(updateData)
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
 }
 
 async function startMemeLobby(lobbyId) {
@@ -3747,18 +3753,16 @@ async function generateUniqueCode() {
   
   while (exists && attempts < 10) {
     code = generateShortCode();
-    const result = await pool.query(
-      'SELECT 1 FROM meme_lobbies WHERE code = $1 LIMIT 1',
-      [code]
-    );
-    exists = result.rows.length > 0;
+    const { data, error } = await supabase
+      .from('meme_lobbies')
+      .select('id')
+      .eq('code', code)
+      .limit(1);
+    if (error) throw error;
+    exists = data && data.length > 0;
     attempts++;
   }
-  
-  if (exists) {
-    throw new Error('Impossible de générer un code unique après 10 tentatives');
-  }
-  
+  if (exists) throw new Error('Impossible de générer un code unique');
   return code;
 }
 
