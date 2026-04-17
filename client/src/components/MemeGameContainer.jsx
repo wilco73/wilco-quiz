@@ -146,13 +146,13 @@ export default function MemeGameContainer({
     );
   }
 
-  // Vue du jeu en cours
-  if (game.lobby && game.gamePhase !== 'lobby') {
+  // Vue du jeu en cours (pas en phase lobby)
+  if (game.lobby && game.phase && game.phase !== 'lobby') {
     return (
       <MemeGameView
         lobby={game.lobby}
         currentUser={currentUser}
-        gamePhase={game.gamePhase}
+        gamePhase={game.phase}
         currentRound={game.currentRound}
         totalRounds={game.totalRounds}
         timeRemaining={game.timeRemaining}
