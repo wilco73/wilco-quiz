@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Settings, Play, LogOut, Crown, Clock, Hash, 
-  RotateCcw, Undo2, Tag, ChevronDown, ChevronUp, Copy, Check
+  RotateCcw, Undo2, Tag, ChevronDown, ChevronUp, Copy, Check,
+  Lock, Globe
 } from 'lucide-react';
 
 /**
  * MemeLobbyView - Salle d'attente Make It Meme
  * 
- * Props:
- * - lobby: { id, creator_id, settings, participants, status }
- * - currentUser: { odId, pseudo, role }
- * - availableTags: string[]
- * - onStart: () => void
- * - onLeave: () => void
- * - onUpdateSettings: (settings) => void
+ * CORRECTIONS v10:
+ * - currentUser.id au lieu de currentUser.odId
+ * - Affiche lobby.code (6 chars) au lieu de lobby.id (UUID)
+ * - Toggle public/privé pour le créateur
  */
 export default function MemeLobbyView({
   lobby,
@@ -32,22 +30,32 @@ export default function MemeLobbyView({
     maxRotations: 3,
     maxUndos: 1,
     tags: [],
+    isPrivate: false,
   });
 
   // Sync settings from lobby
   useEffect(() => {
     if (lobby?.settings) {
-      setLocalSettings(lobby.settings);
+      setLocalSettings(prev => ({
+        ...prev,
+        ...lobby.settings,
+        isPrivate: lobby.is_private || false,
+      }));
     }
-  }, [lobby?.settings]);
+  }, [lobby?.settings, lobby?.is_private]);
 
-  const isCreator = currentUser?.odId === lobby?.creator_id;
+  // CORRIGÉ: Utiliser currentUser.id (pas odId)
+  const isCreator = currentUser?.id === lobby?.creator_id;
   const participants = lobby?.participants || [];
   const canStart = participants.length >= 2 && isCreator;
 
+  // Code court à afficher (6 caractères, pas l'UUID)
+  const displayCode = lobby?.code || lobby?.id?.substring(0, 6).toUpperCase() || '------';
+
   // Copier le code du lobby
   const copyLobbyCode = () => {
-    navigator.clipboard.writeText(lobby?.id || '');
+    const codeToCopy = lobby?.code || lobby?.id || '';
+    navigator.clipboard.writeText(codeToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -57,6 +65,13 @@ export default function MemeLobbyView({
     const newSettings = { ...localSettings, [key]: value };
     setLocalSettings(newSettings);
     onUpdateSettings?.(newSettings);
+  };
+
+  // Toggle public/privé
+  const togglePrivacy = () => {
+    const newIsPrivate = !localSettings.isPrivate;
+    setLocalSettings(prev => ({ ...prev, isPrivate: newIsPrivate }));
+    onUpdateSettings?.({ ...localSettings, isPrivate: newIsPrivate });
   };
 
   // Toggle un tag
@@ -80,25 +95,80 @@ export default function MemeLobbyView({
           </p>
         </div>
 
-        {/* Code du lobby */}
-        <div className="bg-gray-800/50 rounded-xl p-4 mb-4 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wider">Code du lobby</p>
-            <p className="text-2xl font-mono font-bold text-yellow-400">{lobby?.id}</p>
+        {/* Code du lobby - CORRIGÉ: affiche le code court */}
+        <div className="bg-gray-800/50 rounded-xl p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Code du lobby</p>
+              <div className="flex items-center gap-3">
+                <p className="text-3xl font-mono font-bold text-yellow-400 tracking-wider">
+                  #{displayCode}
+                </p>
+                {/* Badge public/privé */}
+                {localSettings.isPrivate ? (
+                  <span className="flex items-center gap-1 px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-full">
+                    <Lock className="w-3 h-3" /> Privé
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 px-2 py-1 bg-green-600/30 text-green-400 text-xs rounded-full">
+                    <Globe className="w-3 h-3" /> Public
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={copyLobbyCode}
+              className="p-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+              title="Copier le code"
+            >
+              {copied ? (
+                <Check className="w-5 h-5 text-green-400" />
+              ) : (
+                <Copy className="w-5 h-5 text-gray-300" />
+              )}
+            </button>
           </div>
-          <button
-            onClick={copyLobbyCode}
-            className="p-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-          >
-            {copied ? (
-              <Check className="w-5 h-5 text-green-400" />
-            ) : (
-              <Copy className="w-5 h-5 text-gray-300" />
-            )}
-          </button>
+          
+          {/* Toggle privé (créateur uniquement) */}
+          {isCreator && (
+            <div className="mt-3 pt-3 border-t border-gray-700">
+              <button
+                onClick={togglePrivacy}
+                className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
+                  localSettings.isPrivate 
+                    ? 'bg-gray-700 hover:bg-gray-600' 
+                    : 'bg-green-600/20 hover:bg-green-600/30'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {localSettings.isPrivate ? (
+                    <Lock className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <Globe className="w-4 h-4 text-green-400" />
+                  )}
+                  <span className="text-sm text-white">
+                    {localSettings.isPrivate ? 'Lobby privé' : 'Lobby public'}
+                  </span>
+                </div>
+                <div className={`w-12 h-6 rounded-full p-1 transition-colors ${
+                  localSettings.isPrivate ? 'bg-gray-600' : 'bg-green-500'
+                }`}>
+                  <div className={`w-4 h-4 bg-white rounded-full transition-transform ${
+                    localSettings.isPrivate ? 'translate-x-0' : 'translate-x-6'
+                  }`} />
+                </div>
+              </button>
+              <p className="text-xs text-gray-500 mt-1 px-1">
+                {localSettings.isPrivate 
+                  ? 'Seuls ceux avec le code peuvent rejoindre'
+                  : 'Visible dans la liste des lobbies'
+                }
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Participants */}
+        {/* Participants - CORRIGÉ: utilise currentUser.id */}
         <div className="bg-gray-800/50 rounded-xl p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -113,26 +183,32 @@ export default function MemeLobbyView({
           </div>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {participants.map((p, index) => (
-              <div
-                key={p.odId || index}
-                className={`flex items-center gap-2 p-2 rounded-lg ${
-                  p.odId === currentUser?.odId 
-                    ? 'bg-purple-600/30 border border-purple-500' 
-                    : 'bg-gray-700/50'
-                }`}
-              >
-                {p.odId === lobby?.creator_id && (
-                  <Crown className="w-4 h-4 text-yellow-400 flex-shrink-0" />
-                )}
-                <span className="text-white truncate text-sm">
-                  {p.pseudo}
-                </span>
-                {p.odId === currentUser?.odId && (
-                  <span className="text-xs text-purple-300">(vous)</span>
-                )}
-              </div>
-            ))}
+            {participants.map((p, index) => {
+              // CORRIGÉ: comparer avec currentUser.id
+              const isMe = p.odId === currentUser?.id;
+              const isHost = p.odId === lobby?.creator_id;
+              
+              return (
+                <div
+                  key={p.odId || index}
+                  className={`flex items-center gap-2 p-2 rounded-lg ${
+                    isMe
+                      ? 'bg-purple-600/30 border border-purple-500' 
+                      : 'bg-gray-700/50'
+                  }`}
+                >
+                  {isHost && (
+                    <Crown className="w-4 h-4 text-yellow-400 flex-shrink-0" />
+                  )}
+                  <span className="text-white truncate text-sm">
+                    {p.pseudo}
+                  </span>
+                  {isMe && (
+                    <span className="text-xs text-purple-300">(vous)</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {participants.length === 0 && (
@@ -251,24 +327,6 @@ export default function MemeLobbyView({
                         {n}
                       </button>
                     ))}
-                    <input
-                      type="number"
-                      min="0"
-                      max="99"
-                      value={![0, 1, 2, 3, 5].includes(localSettings.maxRotations) ? localSettings.maxRotations : ''}
-                      placeholder="+"
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        if (!isNaN(val) && val >= 0) {
-                          updateSetting('maxRotations', val);
-                        }
-                      }}
-                      className={`w-14 py-2 rounded-lg font-semibold text-center transition-colors ${
-                        ![0, 1, 2, 3, 5].includes(localSettings.maxRotations)
-                          ? 'bg-purple-600 text-white border-2 border-purple-400'
-                          : 'bg-gray-700 text-gray-300 border border-gray-600'
-                      }`}
-                    />
                   </div>
                 </div>
 
