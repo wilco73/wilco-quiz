@@ -44,6 +44,7 @@ const App = () => {
   const [showMonitoringWidget, setShowMonitoringWidget] = useState(false);
   const [currentMysteryLobby, setCurrentMysteryLobby] = useState(null);
   const [currentMemeLobby, setCurrentMemeLobby] = useState(null);
+  const [currentMemeLobbyCode, setCurrentMemeLobbyCode] = useState(null);
   
   const hasReconnected = useRef(false);
   const draftTimeoutRef = useRef(null);
@@ -668,8 +669,16 @@ const App = () => {
               setCurrentMysteryLobby(lobby);
               setView('mystery-game');
             }}
-            onJoinMemeLobby={(lobby) => {
-              setCurrentMemeLobby(lobby);
+            onJoinMemeLobby={(lobbyOrCode) => {
+              // Si c'est un objet avec un code (rejoint par code depuis l'accueil)
+              if (lobbyOrCode.code && !lobbyOrCode.id) {
+                setCurrentMemeLobby(null);
+                setCurrentMemeLobbyCode(lobbyOrCode.code);
+              } else {
+                // C'est un lobby complet
+                setCurrentMemeLobby(lobbyOrCode);
+                setCurrentMemeLobbyCode(null);
+              }
               setView('meme-game');
             }}
             onCreateMemeLobby={() => {
@@ -714,8 +723,10 @@ const App = () => {
           <MemeGameContainer
             currentUser={currentUser}
             lobbyId={currentMemeLobby?.id}
+            lobbyCode={currentMemeLobbyCode}
             onBack={() => {
               setCurrentMemeLobby(null);
+              setCurrentMemeLobbyCode(null);
               setView('lobby-list');
             }}
           />

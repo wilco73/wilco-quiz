@@ -258,6 +258,32 @@ export default function useMemeGame(socket, currentUser) {
     });
   }, [socket, currentUser]);
 
+  // Rejoindre un lobby par son code court (6 caractères)
+  const joinLobbyByCode = useCallback(async (code) => {
+    if (!socket || !currentUser) return null;
+    
+    setLoading(true);
+    setError(null);
+    
+    return new Promise((resolve) => {
+      socket.emit('meme:joinLobbyByCode', {
+        code: code.toUpperCase(),
+        odId: currentUser.id,
+        pseudo: currentUser.pseudo,
+      }, (response) => {
+        setLoading(false);
+        if (response.success) {
+          setLobby(response.lobby);
+          updatePlayersFromLobby(response.lobby);
+          resolve(response.lobby);
+        } else {
+          setError(response.message || 'Lobby non trouvé');
+          resolve(null);
+        }
+      });
+    });
+  }, [socket, currentUser]);
+
   // Quitter le lobby
   const leaveLobby = useCallback(async () => {
     if (!socket || !lobby || !currentUser) return;
@@ -485,6 +511,7 @@ export default function useMemeGame(socket, currentUser) {
     // Actions
     createLobby,
     joinLobby,
+    joinLobbyByCode,
     leaveLobby,
     updateSettings,
     startGame,

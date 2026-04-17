@@ -8,19 +8,30 @@ import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 
 /**
  * MemeGameContainer - Conteneur principal pour le jeu Make It Meme
- * Gère la connexion socket et orchestre les différentes vues
+ * 
+ * CORRIGÉ v11:
+ * - Gère lobbyId ET lobbyCode
+ * - Si on passe un code, rejoint directement par code
+ * - Plus d'écran intermédiaire quand on vient de l'accueil
  * 
  * Props:
- * - currentUser: { odId, pseudo, role }
- * - lobbyId: string (optionnel, si on rejoint un lobby existant)
- * - onBack: () => void (retour à la liste des lobbies)
+ * - currentUser: { id, pseudo, role }
+ * - lobbyId: string (optionnel, rejoindre par ID)
+ * - lobbyCode: string (optionnel, rejoindre par code court)
+ * - onBack: () => void
  */
-export default function MemeGameContainer({ currentUser, lobbyId: initialLobbyId, onBack }) {
+export default function MemeGameContainer({ 
+  currentUser, 
+  lobbyId: initialLobbyId, 
+  lobbyCode: initialLobbyCode,
+  onBack 
+}) {
   const socketContext = useSocketContext();
   const socket = socketContext.socket;
   const [availableTags, setAvailableTags] = useState([]);
   const [joinLobbyId, setJoinLobbyId] = useState('');
   const [showJoinInput, setShowJoinInput] = useState(false);
+  const [initialJoinAttempted, setInitialJoinAttempted] = useState(false);
 
   // Hook pour gérer tout le jeu
   const game = useMemeGame(socket, currentUser);
@@ -41,12 +52,29 @@ export default function MemeGameContainer({ currentUser, lobbyId: initialLobbyId
     fetchTags();
   }, []);
 
-  // Rejoindre automatiquement un lobby si un ID est passé
+  // Rejoindre automatiquement si on a un ID ou un CODE
   useEffect(() => {
-    if (initialLobbyId && !game.lobby) {
-      game.joinLobby(initialLobbyId);
+    if (initialJoinAttempted) return;
+    if (game.lobby) return; // Déjà dans un lobby
+    
+    const joinInitial = async () => {
+      setInitialJoinAttempted(true);
+      
+      if (initialLobbyCode) {
+        // Rejoindre par code court
+        console.log('[MemeGameContainer] Joining by code:', initialLobbyCode);
+        await game.joinLobbyByCode(initialLobbyCode);
+      } else if (initialLobbyId) {
+        // Rejoindre par ID
+        console.log('[MemeGameContainer] Joining by ID:', initialLobbyId);
+        await game.joinLobby(initialLobbyId);
+      }
+    };
+    
+    if (socket && currentUser && (initialLobbyId || initialLobbyCode)) {
+      joinInitial();
     }
-  }, [initialLobbyId]);
+  }, [initialLobbyId, initialLobbyCode, socket, currentUser, game.lobby, initialJoinAttempted]);
 
   // Handlers
   const handleCreateLobby = async () => {
@@ -63,7 +91,18 @@ export default function MemeGameContainer({ currentUser, lobbyId: initialLobbyId
 
   const handleJoinLobby = async () => {
     if (!joinLobbyId.trim()) return;
-    const success = await game.joinLobby(joinLobbyId.trim().toUpperCase());
+    // Essayer d'abord par code (6 chars), sinon par ID
+    const input = joinLobbyId.trim().toUpperCase();
+    let success;
+    
+    if (input.length === 6 && !input.includes('-')) {
+      // C'est probablement un code court
+      success = await game.joinLobbyByCode(input);
+    } else {
+      // C'est un UUID
+      success = await game.joinLobby(input);
+    }
+    
     if (success) {
       setJoinLobbyId('');
       setShowJoinInput(false);
@@ -78,171 +117,174 @@ export default function MemeGameContainer({ currentUser, lobbyId: initialLobbyId
   };
 
   // Affichage du chargement
-  if (game.loading && !game.lobby) {
+  if (game.loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-gray-900 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
-          <p className="text-white">Chargement...</p>
+          <p className="text-gray-400">Chargement...</p>
         </div>
       </div>
     );
   }
 
-  // Affichage des erreurs
-  if (game.error && !game.lobby) {
+  // Affichage de l'erreur
+  if (game.error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-red-900/30 border border-red-500/50 rounded-xl p-6 max-w-md text-center">
+        <div className="bg-red-900/50 border border-red-500 rounded-xl p-6 max-w-md text-center">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">Erreur</h2>
           <p className="text-red-300 mb-4">{game.error}</p>
           <button
-            onClick={() => {
-              game.setError(null);
-              handleBack();
-            }}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
-          >
-            Retour
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Pas encore dans un lobby - écran de création/join
-  if (!game.lobby) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-gray-900 p-4">
-        <div className="max-w-md mx-auto pt-8">
-          {/* Header */}
-          <button
             onClick={handleBack}
-            className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
+            className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" />
             Retour
           </button>
-
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-white mb-2">😂 Make It Meme</h1>
-            <p className="text-gray-400">Créez les memes les plus drôles !</p>
-          </div>
-
-          {/* Actions */}
-          <div className="space-y-4">
-            <button
-              onClick={handleCreateLobby}
-              disabled={game.loading}
-              className="w-full py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-lg transition-colors disabled:opacity-50"
-            >
-              {game.loading ? (
-                <Loader2 className="w-6 h-6 animate-spin mx-auto" />
-              ) : (
-                'Créer une partie'
-              )}
-            </button>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900 text-gray-400">ou</span>
-              </div>
-            </div>
-
-            {showJoinInput ? (
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  value={joinLobbyId}
-                  onChange={(e) => setJoinLobbyId(e.target.value.toUpperCase())}
-                  placeholder="Code du lobby (ex: ABC123)"
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-center font-mono text-xl uppercase focus:outline-none focus:border-purple-500"
-                  maxLength={10}
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowJoinInput(false)}
-                    className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl transition-colors"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    onClick={handleJoinLobby}
-                    disabled={!joinLobbyId.trim() || game.loading}
-                    className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50"
-                  >
-                    Rejoindre
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowJoinInput(true)}
-                className="w-full py-4 bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-semibold transition-colors border border-gray-700"
-              >
-                Rejoindre une partie
-              </button>
-            )}
-          </div>
-
-          {/* Erreur */}
-          {game.error && (
-            <div className="mt-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg text-red-300 text-center">
-              {game.error}
-            </div>
-          )}
         </div>
       </div>
     );
   }
 
-  // Dans le lobby, en attente
-  if (game.phase === 'lobby') {
+  // Vue du jeu en cours
+  if (game.lobby && game.gamePhase !== 'lobby') {
+    return (
+      <MemeGameView
+        lobby={game.lobby}
+        currentUser={currentUser}
+        gamePhase={game.gamePhase}
+        currentRound={game.currentRound}
+        totalRounds={game.totalRounds}
+        timeRemaining={game.timeRemaining}
+        currentTemplate={game.currentTemplate}
+        creations={game.creations}
+        currentVoteIndex={game.currentVoteIndex}
+        votes={game.votes}
+        roundResults={game.roundResults}
+        finalResults={game.finalResults}
+        players={game.players}
+        rotationsUsed={game.rotationsUsed}
+        undosUsed={game.undosUsed}
+        maxRotations={game.lobby?.settings?.maxRotations || 3}
+        maxUndos={game.lobby?.settings?.maxUndos || 1}
+        onRotate={() => game.rotateTemplate()}
+        onUndo={() => game.undoTemplate()}
+        onSubmit={(creation) => game.submitCreation(creation)}
+        onVote={(creationId, superVote) => game.vote(creationId, superVote)}
+        onPlayAgain={() => game.playAgain()}
+        onBack={handleBack}
+      />
+    );
+  }
+
+  // Vue du lobby (salle d'attente)
+  if (game.lobby) {
     return (
       <MemeLobbyView
         lobby={game.lobby}
         currentUser={currentUser}
         availableTags={availableTags}
-        onStart={game.startGame}
+        onStart={() => game.startGame()}
         onLeave={handleBack}
-        onUpdateSettings={game.updateSettings}
+        onUpdateSettings={(settings) => game.updateSettings(settings)}
       />
     );
   }
 
-  // En jeu
+  // Vue initiale - SEULEMENT si on n'a pas été appelé avec un ID ou code
+  // (sinon on attend le chargement ou on affiche l'erreur)
+  if (initialLobbyId || initialLobbyCode) {
+    // On attend le résultat du join
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Connexion au lobby...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Vue pour créer/rejoindre (accessible uniquement depuis l'admin ou si aucun lobby spécifié)
   return (
-    <MemeGameView
-      lobby={{
-        ...game.lobby,
-        current_round: game.currentRound,
-        phase: game.phase,
-      }}
-      currentUser={currentUser}
-      template={game.template}
-      currentMeme={game.currentMeme}
-      allMemes={game.allMemes}
-      players={game.players}
-      timeRemaining={game.timeRemaining}
-      currentVoteIndex={game.currentVoteIndex}
-      hasSuperVote={game.hasSuperVote}
-      rotationsUsed={game.rotationsUsed}
-      undosUsed={game.undosUsed}
-      canUndo={game.canUndo}
-      templatesHistory={game.assignment?.templates_history || []}
-      votesCount={game.votesCount}
-      totalVoters={game.totalVoters}
-      hasVoted={game.hasVoted}
-      onSubmitCreation={game.submitCreation}
-      onVote={game.vote}
-      onRotateTemplate={game.rotateTemplate}
-      onUndoTemplate={game.undoTemplate}
-      onPlayAgain={game.playAgain}
-      onBackToLobby={handleBack}
-    />
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-gray-900 p-4">
+      <div className="max-w-md mx-auto pt-8">
+        {/* Bouton retour */}
+        <button
+          onClick={handleBack}
+          className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Retour
+        </button>
+
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">
+            😂 Make It Meme
+          </h1>
+          <p className="text-gray-400">
+            Créez les memes les plus drôles !
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="space-y-4">
+          <button
+            onClick={handleCreateLobby}
+            className="w-full py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-lg transition-colors"
+          >
+            Créer une partie
+          </button>
+
+          <div className="flex items-center gap-4">
+            <div className="flex-1 h-px bg-gray-700"></div>
+            <span className="text-gray-500">ou</span>
+            <div className="flex-1 h-px bg-gray-700"></div>
+          </div>
+
+          {showJoinInput ? (
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={joinLobbyId}
+                onChange={(e) => setJoinLobbyId(e.target.value.toUpperCase())}
+                placeholder="Entrez le code du lobby"
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-center font-mono text-xl uppercase focus:outline-none focus:ring-2 focus:ring-purple-500"
+                maxLength={36}
+                autoFocus
+                onKeyPress={(e) => e.key === 'Enter' && handleJoinLobby()}
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowJoinInput(false);
+                    setJoinLobbyId('');
+                  }}
+                  className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-semibold transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleJoinLobby}
+                  disabled={!joinLobbyId.trim()}
+                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Rejoindre
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowJoinInput(true)}
+              className="w-full py-4 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold text-lg transition-colors"
+            >
+              Rejoindre une partie
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
