@@ -139,6 +139,15 @@ function areTeamNamesEqual(name1, name2) {
 
 // ==================== ADMIN ====================
 
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+
 async function seedDefaultAdmin() {
   const { data: existing } = await supabase
     .from('admins')
@@ -3054,19 +3063,21 @@ async function getMemeLobbyById(lobbyId) {
 async function createMemeLobby(creatorId, creatorPseudo, settings = {}) {
   const code = await generateUniqueCode();
   const isPrivate = settings.isPrivate || false;
+  const lobbyId = generateUUID(); // <-- AJOUTER
   
-  // Séparer isPrivate des autres settings
   const { isPrivate: _, ...otherSettings } = settings;
   
   const { data, error } = await supabase
     .from('meme_lobbies')
     .insert({
+      id: lobbyId,  // <-- AJOUTER CETTE LIGNE
       creator_id: creatorId,
       code: code,
       is_private: isPrivate,
       status: 'waiting',
       settings: otherSettings,
-      participants: [{ odId: creatorId, pseudo: creatorPseudo, score: 0 }]
+      participants: [{ odId: creatorId, pseudo: creatorPseudo, score: 0 }],
+      created_at: new Date().toISOString()
     })
     .select()
     .single();
