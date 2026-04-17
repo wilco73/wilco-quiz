@@ -3,10 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 /**
  * useMemeGame - Hook pour gérer le jeu Make It Meme via WebSocket
  * 
- * v5 - Simplifié:
- * - Socket pour tout (pas d'API REST)
- * - Timer local décrémenté après réception du temps serveur
- * - Gestion propre des listeners
+ * v6 - Avec gestion de reconnexion socket
  */
 export default function useMemeGame(socket, currentUser) {
   // États du jeu
@@ -37,12 +34,11 @@ export default function useMemeGame(socket, currentUser) {
   // Refs
   const timerRef = useRef(null);
   const lobbyIdRef = useRef(null);
+  const isReconnectingRef = useRef(false);
 
   // ==================== TIMER ====================
   
-  // Fonction pour démarrer le timer avec une valeur
   const startTimer = useCallback((seconds) => {
-    // Nettoyer le timer précédent
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
@@ -63,7 +59,6 @@ export default function useMemeGame(socket, currentUser) {
     }, 1000);
   }, []);
 
-  // Cleanup timer on unmount
   useEffect(() => {
     return () => {
       if (timerRef.current) {
@@ -82,6 +77,52 @@ export default function useMemeGame(socket, currentUser) {
       totalScore: p.score || 0,
     })));
   }, []);
+
+  // ==================== RECONNEXION SOCKET ====================
+  
+  // Quand le socket se reconnecte, rejoindre à nouveau le lobby
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleConnect = () => {
+      console.log('[useMemeGame] Socket connected');
+      
+      // Si on était dans un lobby, rejoindre à nouveau
+      if (lobbyIdRef.current && currentUser && !isReconnectingRef.current) {
+        isReconnectingRef.current = true;
+        console.log('[useMemeGame] Reconnecting to lobby:', lobbyIdRef.current);
+        
+        socket.emit('meme:joinLobby', {
+          lobbyId: lobbyIdRef.current,
+          odId: currentUser.id,
+          pseudo: currentUser.pseudo,
+        }, (response) => {
+          isReconnectingRef.current = false;
+          
+          if (response?.success) {
+            console.log('[useMemeGame] Reconnection successful');
+            setLobby(response.lobby);
+            updatePlayersFromLobby(response.lobby);
+            // La phase sera mise à jour par les événements gameStarted/votingStarted
+          } else {
+            console.log('[useMemeGame] Reconnection failed:', response?.message);
+            // Si le lobby n'existe plus, reset
+            if (response?.message?.includes('non trouvé')) {
+              setLobby(null);
+              setPhase('lobby');
+              lobbyIdRef.current = null;
+            }
+          }
+        });
+      }
+    };
+    
+    socket.on('connect', handleConnect);
+    
+    return () => {
+      socket.off('connect', handleConnect);
+    };
+  }, [socket, currentUser, updatePlayersFromLobby]);
 
   // ==================== SOCKET LISTENERS ====================
   
@@ -110,6 +151,7 @@ export default function useMemeGame(socket, currentUser) {
       console.log('[useMemeGame] gameStarted:', { phase: newPhase, roundNumber, timeRemaining: serverTime });
       
       setLobby(updatedLobby);
+      lobbyIdRef.current = updatedLobby?.id; // S'assurer que lobbyIdRef est à jour
       setPhase('creating');
       setCurrentRound(roundNumber);
       setHasSubmitted(false);
