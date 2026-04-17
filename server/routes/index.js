@@ -31,6 +31,7 @@ function setup(app, dependencies) {
   quizzesRoutes.init(broadcasts || { quizzes: broadcastGlobalState, questions: broadcastGlobalState, lobbies: broadcastGlobalState });
   drawingRoutes.init(broadcasts || { global: broadcastGlobalState }, io);
   mediaRoutes.init(broadcasts || { global: broadcastGlobalState }, io);
+  memeCreationsRoutes.init(io);
   
   // Monter les routes
   app.use('/api', authRoutes);

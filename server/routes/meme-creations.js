@@ -1,11 +1,22 @@
 /**
  * Routes API pour Meme Creations
  * Upload des créations via API REST (plus fiable que socket pour les gros fichiers)
+ * 
+ * v3 - Avec injection de io via init()
  */
 
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
+
+// Référence à io (sera injectée via init)
+let io = null;
+
+// Fonction d'initialisation pour injecter io
+function init(socketIO) {
+  io = socketIO;
+  console.log('[MEME API] io injecté dans meme-creations');
+}
 
 // POST - Soumettre une création (upload de l'image)
 router.post('/', async (req, res) => {
@@ -31,7 +42,7 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // Vérifier que le lobby existe et est en phase création
+    // Vérifier que le lobby existe
     const lobby = await db.getMemeLobbyById(lobbyId);
     if (!lobby) {
       return res.status(404).json({ success: false, message: 'Lobby non trouvé' });
@@ -54,7 +65,8 @@ router.post('/', async (req, res) => {
     }
     
     // Vérifier qu'il n'a pas déjà soumis
-    const existingCreations = await db.getMemeCreationsByLobby(lobbyId, roundNumber || lobby.current_round);
+    const currentRound = roundNumber || lobby.current_round;
+    const existingCreations = await db.getMemeCreationsByLobby(lobbyId, currentRound);
     const alreadySubmitted = existingCreations.some(c => c.player_id === odId);
     if (alreadySubmitted) {
       return res.status(400).json({ 
@@ -66,7 +78,7 @@ router.post('/', async (req, res) => {
     // Créer la création
     const creation = await db.createMemeCreation(
       lobbyId,
-      roundNumber || lobby.current_round,
+      currentRound,
       odId,
       pseudo,
       templateId,
@@ -76,12 +88,45 @@ router.post('/', async (req, res) => {
     
     console.log(`[MEME API] Creation saved: ${creation.id}`);
     
+    // Notifier les autres joueurs via socket
+    if (io) {
+      io.to(`meme:${lobbyId}`).emit('meme:creationSubmitted', {
+        odId,
+        pseudo,
+        creationId: creation.id
+      });
+    }
+    
     // Vérifier si tous ont soumis
-    const allCreations = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
+    const allCreations = await db.getMemeCreationsByLobby(lobbyId, currentRound);
     const participants = lobby.participants || [];
     const allSubmitted = allCreations.length >= participants.length;
     
     console.log(`[MEME API] Submissions: ${allCreations.length}/${participants.length}, allSubmitted: ${allSubmitted}`);
+    
+    // SI TOUS ONT SOUMIS -> PASSER AU VOTE DIRECTEMENT
+    if (allSubmitted && io) {
+      console.log(`[MEME API] ========== ALL SUBMITTED - STARTING VOTE ==========`);
+      
+      try {
+        const updatedLobby = await db.startVotingPhase(lobbyId);
+        const voteTime = updatedLobby.settings?.voteTime || 30;
+        
+        console.log(`[MEME API] Emitting votingStarted to room meme:${lobbyId}`);
+        console.log(`[MEME API] Creations count: ${allCreations.length}, voteTime: ${voteTime}`);
+        
+        io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
+          lobby: updatedLobby,
+          creations: allCreations,
+          currentIndex: 0,
+          timeRemaining: voteTime
+        });
+        
+        console.log(`[MEME API] ========== votingStarted EMITTED ==========`);
+      } catch (voteError) {
+        console.error(`[MEME API] Error starting voting phase:`, voteError);
+      }
+    }
     
     res.json({ 
       success: true, 
@@ -129,4 +174,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Exporter le router ET la fonction init
+router.init = init;
 module.exports = router;
