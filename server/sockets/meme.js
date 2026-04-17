@@ -301,62 +301,43 @@ module.exports = function(io, socket, db) {
     }
   });
   
-  // Soumettre une création
-  socket.on('meme:submitCreation', async (data, callback) => {
+  // Notification qu'une création a été soumise (appelé après l'upload API REST)
+  // C'est léger car on n'envoie pas l'image, juste une notification
+  socket.on('meme:creationSubmittedNotify', async (data) => {
     try {
-      const { lobbyId, roundNumber, odId, pseudo, templateId, textLayers, finalImageBase64 } = data;
+      const { lobbyId, odId, pseudo, creationId, allSubmitted } = data;
       
-      // Vérifier que la phase est bien création
-      const lobby = await db.getMemeLobbyById(lobbyId);
-      if (lobby.phase !== 'creation') {
-        return callback({ success: false, message: 'La phase de création est terminée' });
-      }
+      console.log(`[MEME] Creation notification: ${pseudo} submitted ${creationId}`);
       
-      const creation = await db.createMemeCreation(
-        lobbyId,
-        roundNumber,
-        odId,
-        pseudo,
-        templateId,
-        textLayers,
-        finalImageBase64
-      );
-      
-      // Notifier les autres
+      // Notifier les autres joueurs
       io.to(`meme:${lobbyId}`).emit('meme:creationSubmitted', {
         odId,
         pseudo,
-        creationId: creation.id
+        creationId
       });
       
-      callback({ success: true, creation });
-      
-      // Vérifier si tous les joueurs ont soumis
-      const allCreations = await db.getMemeCreationsByLobby(lobbyId, roundNumber);
-      const participants = lobby.participants || [];
-      
-      console.log(`[MEME] Submissions: ${allCreations.length}/${participants.length}`);
-      
-      if (allCreations.length >= participants.length) {
-        // Tous ont soumis ! Passer automatiquement au vote
+      // Si tous ont soumis, passer automatiquement au vote
+      if (allSubmitted) {
         console.log(`[MEME] All players submitted, starting voting phase`);
         
-        const updatedLobby = await db.startVotingPhase(lobbyId);
-        const creations = await db.getMemeCreationsByLobby(lobbyId, updatedLobby.current_round);
-        
-        const voteTime = updatedLobby.settings?.voteTime || 30;
-        
-        io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
-          lobby: updatedLobby,
-          creations,
-          currentIndex: 0,
-          timeRemaining: voteTime
-        });
+        const lobby = await db.getMemeLobbyById(lobbyId);
+        if (lobby && lobby.phase === 'creation') {
+          const updatedLobby = await db.startVotingPhase(lobbyId);
+          const creations = await db.getMemeCreationsByLobby(lobbyId, updatedLobby.current_round);
+          
+          const voteTime = updatedLobby.settings?.voteTime || 30;
+          
+          io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
+            lobby: updatedLobby,
+            creations,
+            currentIndex: 0,
+            timeRemaining: voteTime
+          });
+        }
       }
       
     } catch (error) {
-      console.error('[MEME] Erreur submit creation:', error);
-      callback({ success: false, message: error.message });
+      console.error('[MEME] Erreur creation notification:', error);
     }
   });
   
