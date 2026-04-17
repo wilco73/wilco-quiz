@@ -1,22 +1,32 @@
 /**
- * Meme Game Socket Handlers - VERSION DEBUG
- * Avec logging détaillé pour identifier le problème
+ * Meme Game Socket Handlers
+ * Gestion en temps réel des parties Make It Meme
+ * 
+ * Architecture simplifiée suivant le pattern Mystery :
+ * - Socket pour tout (pas d'API REST pour les créations)
+ * - Pas de hook dédié, utiliser socketContext directement
+ * - Passage automatique entre phases
  */
 
 module.exports = function(io, socket, db) {
   
   // ==================== LOBBY MANAGEMENT ====================
   
+  // Créer un lobby meme
   socket.on('meme:createLobby', async (data, callback) => {
     try {
       const { odId, pseudo, settings } = data;
+      
       const lobby = await db.createMemeLobby(odId, pseudo, settings);
       
+      // Rejoindre la room socket
       socket.join(`meme:${lobby.id}`);
       socket.memeLobbyId = lobby.id;
       socket.memeOdId = odId;
       
       console.log(`[MEME] ${pseudo} created and joined room meme:${lobby.id}`);
+      
+      // Notifier tout le monde qu'un nouveau lobby existe
       io.emit('meme:lobbyCreated', lobby);
       
       if (callback) callback({ success: true, lobby });
@@ -26,12 +36,14 @@ module.exports = function(io, socket, db) {
     }
   });
   
+  // Rejoindre un lobby
   socket.on('meme:joinLobby', async (data, callback) => {
     try {
       const { lobbyId, odId, pseudo } = data;
       
       console.log(`[MEME] joinLobby request: ${pseudo} (${odId}) -> ${lobbyId}`);
       
+      // Récupérer le lobby d'abord pour vérifier son état
       let lobby = await db.getMemeLobbyById(lobbyId);
       if (!lobby) {
         return callback?.({ success: false, message: 'Lobby non trouvé' });
@@ -40,35 +52,43 @@ module.exports = function(io, socket, db) {
       const participants = lobby.participants || [];
       const isAlreadyParticipant = participants.some(p => p.odId === odId);
       
+      // Si pas encore participant et jeu en cours, refuser
       if (!isAlreadyParticipant && lobby.status !== 'waiting') {
         return callback?.({ success: false, message: 'La partie a déjà commencé' });
       }
       
+      // Rejoindre le lobby dans la BDD (ajoute si nouveau, retourne tel quel si déjà dedans)
       if (!isAlreadyParticipant) {
         lobby = await db.joinMemeLobby(lobbyId, odId, pseudo);
       }
       
+      // TOUJOURS rejoindre la room socket
       socket.join(`meme:${lobbyId}`);
       socket.memeLobbyId = lobbyId;
       socket.memeOdId = odId;
       
       console.log(`[MEME] ${pseudo} joined room meme:${lobbyId}, status: ${lobby.status}`);
       
+      // Notifier les participants
       io.to(`meme:${lobbyId}`).emit('meme:lobbyUpdated', lobby);
       
+      // Si le jeu est déjà en cours, envoyer l'état actuel au joueur qui rejoint
       if (lobby.status === 'playing' && lobby.phase) {
         console.log(`[MEME] Game in progress, sending state to ${pseudo}`);
         
+        // Calculer le temps restant
         let timeRemaining = 0;
         if (lobby.phase_end_time) {
           const endTime = new Date(lobby.phase_end_time).getTime();
           timeRemaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
         } else {
+          // Fallback sur les settings
           timeRemaining = lobby.phase === 'creation' 
             ? (lobby.settings?.creationTime || 120)
             : (lobby.settings?.voteTime || 30);
         }
         
+        // Envoyer gameStarted pour mettre à jour la phase
         socket.emit('meme:gameStarted', {
           lobby,
           phase: lobby.phase === 'creation' ? 'creating' : lobby.phase,
@@ -76,6 +96,7 @@ module.exports = function(io, socket, db) {
           timeRemaining
         });
         
+        // Envoyer son assignment s'il existe (phase création)
         if (lobby.phase === 'creation') {
           const assignment = await db.getMemeAssignment(lobbyId, lobby.current_round, odId);
           if (assignment) {
@@ -83,6 +104,7 @@ module.exports = function(io, socket, db) {
           }
         }
         
+        // Envoyer les créations si phase vote
         if (lobby.phase === 'voting') {
           const creations = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
           socket.emit('meme:votingStarted', {
@@ -101,15 +123,19 @@ module.exports = function(io, socket, db) {
     }
   });
   
+  // Rejoindre un lobby par code court
   socket.on('meme:joinLobbyByCode', async (data, callback) => {
     try {
       const { code, odId, pseudo } = data;
+      
+      console.log(`[MEME] joinLobbyByCode: ${code} by ${pseudo}`);
       
       const lobby = await db.getMemeLobbyByCode(code);
       if (!lobby) {
         return callback?.({ success: false, message: 'Lobby non trouvé' });
       }
       
+      // Réutiliser la logique de joinLobby
       socket.emit('meme:joinLobby', { lobbyId: lobby.id, odId, pseudo }, callback);
       
     } catch (error) {
@@ -118,6 +144,7 @@ module.exports = function(io, socket, db) {
     }
   });
   
+  // Quitter un lobby
   socket.on('meme:leaveLobby', async (data, callback) => {
     try {
       const { lobbyId, odId } = data;
@@ -141,6 +168,7 @@ module.exports = function(io, socket, db) {
     }
   });
   
+  // Mettre à jour les settings
   socket.on('meme:updateSettings', async (data, callback) => {
     try {
       const { lobbyId, settings } = data;
@@ -157,12 +185,14 @@ module.exports = function(io, socket, db) {
   
   // ==================== GAME FLOW ====================
   
+  // Démarrer la partie
   socket.on('meme:startGame', async (data, callback) => {
     try {
       const { lobbyId } = data;
       
       console.log(`[MEME] Starting game for lobby ${lobbyId}`);
       
+      // Vérifier le lobby
       let lobby = await db.getMemeLobbyById(lobbyId);
       if (!lobby) {
         return callback?.({ success: false, message: 'Lobby non trouvé' });
@@ -174,8 +204,10 @@ module.exports = function(io, socket, db) {
         return callback?.({ success: false, message: 'Il faut au moins 2 joueurs' });
       }
       
+      // Démarrer le lobby
       lobby = await db.startMemeLobby(lobbyId);
       
+      // Assigner un meme à chaque joueur
       const tags = lobby.settings?.tags || [];
       const participants = lobby.participants || [];
       const assignedTemplateIds = [];
@@ -192,6 +224,7 @@ module.exports = function(io, socket, db) {
       
       console.log(`[MEME] Game started, notifying ${participants.length} players`);
       
+      // Notifier TOUT LE MONDE dans la room
       io.to(`meme:${lobbyId}`).emit('meme:gameStarted', {
         lobby,
         phase: 'creating',
@@ -199,6 +232,7 @@ module.exports = function(io, socket, db) {
         timeRemaining: creationTime
       });
       
+      // Envoyer à chaque joueur son meme
       for (const participant of participants) {
         const assignment = await db.getMemeAssignment(lobbyId, 1, participant.odId);
         if (assignment) {
@@ -217,6 +251,7 @@ module.exports = function(io, socket, db) {
     }
   });
   
+  // Rotation de template
   socket.on('meme:rotateTemplate', async (data, callback) => {
     try {
       const { lobbyId, roundNumber, odId } = data;
@@ -233,6 +268,7 @@ module.exports = function(io, socket, db) {
         return callback?.({ success: false, message: 'Plus de rotations disponibles' });
       }
       
+      // Récupérer les IDs déjà utilisés
       const usedIds = currentAssignment.templates_history || [currentAssignment.template_id];
       const tags = lobby.settings?.tags || [];
       
@@ -250,6 +286,7 @@ module.exports = function(io, socket, db) {
     }
   });
   
+  // Undo de template
   socket.on('meme:undoTemplate', async (data, callback) => {
     try {
       const { lobbyId, roundNumber, odId } = data;
@@ -272,43 +309,23 @@ module.exports = function(io, socket, db) {
     }
   });
   
-  // ==================== SUBMIT CREATION - VERSION DEBUG ====================
-  
+  // Soumettre une création (via socket, pas API REST)
   socket.on('meme:submitCreation', async (data, callback) => {
-    const startTime = Date.now();
-    
     try {
       const { lobbyId, roundNumber, odId, pseudo, templateId, textLayers, finalImageBase64 } = data;
       
-      // Log la taille de l'image
-      const imageSize = finalImageBase64 ? finalImageBase64.length : 0;
-      console.log(`[MEME] ========== SUBMIT CREATION ==========`);
-      console.log(`[MEME] From: ${pseudo} (${odId})`);
-      console.log(`[MEME] Lobby: ${lobbyId}`);
-      console.log(`[MEME] Round: ${roundNumber}`);
-      console.log(`[MEME] Template: ${templateId}`);
-      console.log(`[MEME] Image size: ${(imageSize / 1024).toFixed(2)} KB`);
-      console.log(`[MEME] Text layers: ${textLayers?.length || 0}`);
+      console.log(`[MEME] submitCreation from ${pseudo}`);
       
       // Vérifier le lobby
-      console.log(`[MEME] Step 1: Getting lobby...`);
       const lobby = await db.getMemeLobbyById(lobbyId);
-      console.log(`[MEME] Step 1 done in ${Date.now() - startTime}ms`);
-      
       if (!lobby) {
-        console.log(`[MEME] ERROR: Lobby not found`);
         return callback?.({ success: false, message: 'Lobby non trouvé' });
       }
-      
-      console.log(`[MEME] Lobby phase: ${lobby.phase}`);
-      
       if (lobby.phase !== 'creation') {
-        console.log(`[MEME] ERROR: Wrong phase`);
         return callback?.({ success: false, message: 'La phase de création est terminée' });
       }
       
       // Créer la création
-      console.log(`[MEME] Step 2: Creating meme creation...`);
       const creation = await db.createMemeCreation(
         lobbyId,
         roundNumber || lobby.current_round,
@@ -318,66 +335,92 @@ module.exports = function(io, socket, db) {
         textLayers || [],
         finalImageBase64
       );
-      console.log(`[MEME] Step 2 done in ${Date.now() - startTime}ms`);
+      
       console.log(`[MEME] Creation saved: ${creation.id}`);
       
       // Répondre au client IMMÉDIATEMENT
-      console.log(`[MEME] Step 3: Sending callback...`);
-      if (callback) {
-        callback({ success: true, creation });
-        console.log(`[MEME] Callback sent in ${Date.now() - startTime}ms`);
-      }
+      if (callback) callback({ success: true, creation });
       
       // Notifier les autres joueurs
-      console.log(`[MEME] Step 4: Notifying room...`);
       io.to(`meme:${lobbyId}`).emit('meme:creationSubmitted', {
         odId,
         pseudo,
         creationId: creation.id
       });
-      console.log(`[MEME] Notification sent in ${Date.now() - startTime}ms`);
       
       // Vérifier si tous ont soumis
-      console.log(`[MEME] Step 5: Checking all submissions...`);
       const allCreations = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
       const participants = lobby.participants || [];
       
       console.log(`[MEME] Submissions: ${allCreations.length}/${participants.length}`);
       
       if (allCreations.length >= participants.length) {
-        console.log(`[MEME] Step 6: All submitted, starting voting phase...`);
+        // Tous ont soumis, passer au vote !
+        console.log(`[MEME] All submitted, starting voting phase`);
         
         const updatedLobby = await db.startVotingPhase(lobbyId);
-        console.log(`[MEME] Voting phase started in ${Date.now() - startTime}ms`);
-        
         const voteTime = updatedLobby.settings?.voteTime || 30;
         
-        console.log(`[MEME] Step 7: Emitting votingStarted to room meme:${lobbyId}...`);
         io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
           lobby: updatedLobby,
           creations: allCreations,
           currentIndex: 0,
           timeRemaining: voteTime
         });
-        console.log(`[MEME] votingStarted emitted in ${Date.now() - startTime}ms`);
       }
       
-      console.log(`[MEME] ========== SUBMIT COMPLETE in ${Date.now() - startTime}ms ==========`);
+    } catch (error) {
+      console.error('[MEME] Erreur submit creation:', error);
+      if (callback) callback({ success: false, message: error.message });
+    }
+  });
+  
+  // Notification qu'une création a été soumise via API REST
+  socket.on('meme:creationSubmittedNotify', async (data) => {
+    try {
+      const { lobbyId, odId, pseudo, creationId, allSubmitted } = data;
+      
+      console.log(`[MEME] creationSubmittedNotify from ${pseudo}, allSubmitted: ${allSubmitted}`);
+      
+      // Notifier les autres joueurs
+      io.to(`meme:${lobbyId}`).emit('meme:creationSubmitted', {
+        odId,
+        pseudo,
+        creationId
+      });
+      
+      // Si tous ont soumis, passer au vote
+      if (allSubmitted) {
+        console.log(`[MEME] All submitted, starting voting phase`);
+        
+        const lobby = await db.getMemeLobbyById(lobbyId);
+        if (lobby && lobby.phase === 'creation') {
+          const updatedLobby = await db.startVotingPhase(lobbyId);
+          const creations = await db.getMemeCreationsByLobby(lobbyId, updatedLobby.current_round);
+          const voteTime = updatedLobby.settings?.voteTime || 30;
+          
+          io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
+            lobby: updatedLobby,
+            creations,
+            currentIndex: 0,
+            timeRemaining: voteTime
+          });
+        }
+      }
       
     } catch (error) {
-      console.error(`[MEME] ========== SUBMIT ERROR after ${Date.now() - startTime}ms ==========`);
-      console.error('[MEME] Error:', error);
-      console.error('[MEME] Stack:', error.stack);
-      if (callback) callback({ success: false, message: error.message });
+      console.error('[MEME] Erreur creationSubmittedNotify:', error);
     }
   });
   
   // ==================== VOTING ====================
   
+  // Voter
   socket.on('meme:vote', async (data, callback) => {
     try {
       const { lobbyId, creationId, odId, pseudo, voteType, isSuper } = data;
       
+      // Vérifier qu'on ne vote pas pour soi-même
       const creation = await db.getMemeCreationById(creationId);
       if (!creation) {
         return callback?.({ success: false, message: 'Création non trouvée' });
@@ -386,6 +429,7 @@ module.exports = function(io, socket, db) {
         return callback?.({ success: false, message: 'Impossible de voter pour soi-même' });
       }
       
+      // Vérifier super vote
       if (isSuper) {
         const lobby = await db.getMemeLobbyById(lobbyId);
         const participant = (lobby?.participants || []).find(p => p.odId === odId);
@@ -397,6 +441,7 @@ module.exports = function(io, socket, db) {
       
       const result = await db.addVoteToCreation(creationId, odId, pseudo, voteType, isSuper);
       
+      // Notifier
       io.to(`meme:${lobbyId}`).emit('meme:voteReceived', {
         creationId,
         odId,
@@ -412,6 +457,7 @@ module.exports = function(io, socket, db) {
     }
   });
   
+  // Passer au vote suivant
   socket.on('meme:nextVote', async (data, callback) => {
     try {
       const { lobbyId } = data;
@@ -437,6 +483,7 @@ module.exports = function(io, socket, db) {
     }
   });
   
+  // Passer à la manche suivante
   socket.on('meme:nextRound', async (data, callback) => {
     try {
       const { lobbyId } = data;
@@ -447,6 +494,7 @@ module.exports = function(io, socket, db) {
         const allCreations = await db.getMemeCreationsByLobby(lobbyId);
         io.to(`meme:${lobbyId}`).emit('meme:gameFinished', { lobby, allCreations });
       } else {
+        // Nouvelle manche - assigner les memes
         const tags = lobby.settings?.tags || [];
         const participants = lobby.participants || [];
         const assignedTemplateIds = [];
@@ -467,6 +515,7 @@ module.exports = function(io, socket, db) {
           timeRemaining: creationTime
         });
         
+        // Envoyer à chaque joueur son meme
         for (const participant of participants) {
           const assignment = await db.getMemeAssignment(lobbyId, lobby.current_round, participant.odId);
           if (assignment) {
@@ -536,12 +585,14 @@ module.exports = function(io, socket, db) {
         const lobby = await db.getMemeLobbyById(socket.memeLobbyId);
         
         if (lobby && lobby.status === 'playing') {
+          // Jeu en cours - garder le joueur, il peut revenir
           console.log(`[MEME] ${socket.memeOdId} disconnected during game, keeping in lobby`);
           io.to(`meme:${socket.memeLobbyId}`).emit('meme:playerDisconnected', {
             odId: socket.memeOdId,
             temporary: true
           });
         } else if (lobby && lobby.status === 'waiting') {
+          // En attente - retirer le joueur
           console.log(`[MEME] ${socket.memeOdId} disconnected from waiting lobby`);
           const updatedLobby = await db.leaveMemeLobby(socket.memeLobbyId, socket.memeOdId);
           if (updatedLobby) {
