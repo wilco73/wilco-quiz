@@ -139,15 +139,6 @@ function areTeamNamesEqual(name1, name2) {
 
 // ==================== ADMIN ====================
 
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
-
 async function seedDefaultAdmin() {
   const { data: existing } = await supabase
     .from('admins')
@@ -3063,15 +3054,17 @@ async function getMemeLobbyById(lobbyId) {
 async function createMemeLobby(creatorId, creatorPseudo, settings = {}) {
   const code = await generateUniqueCode();
   const isPrivate = settings.isPrivate || false;
-  const lobbyId = generateUUID(); // <-- AJOUTER
+  const lobbyId = generateUUID();
   
+  // Séparer isPrivate des autres settings
   const { isPrivate: _, ...otherSettings } = settings;
   
   const { data, error } = await supabase
     .from('meme_lobbies')
     .insert({
-      id: lobbyId,  // <-- AJOUTER CETTE LIGNE
+      id: lobbyId,
       creator_id: creatorId,
+      creator_pseudo: creatorPseudo,  // <-- AJOUTÉ !
       code: code,
       is_private: isPrivate,
       status: 'waiting',
@@ -3096,6 +3089,7 @@ async function getMemeLobbyByCode(code) {
   if (error && error.code !== 'PGRST116') throw error;
   return data || null;
 }
+
 
 async function joinMemeLobby(lobbyId, odId, pseudo) {
   const lobby = await getMemeLobbyById(lobbyId);
@@ -3165,7 +3159,6 @@ async function updateMemeLobbySettings(lobbyId, settings) {
   const isPrivate = settings.isPrivate;
   const { isPrivate: _, ...otherSettings } = settings;
   
-  // Construire l'objet de mise à jour
   const updateData = {};
   
   if (isPrivate !== undefined) {
@@ -3173,12 +3166,11 @@ async function updateMemeLobbySettings(lobbyId, settings) {
   }
   
   if (Object.keys(otherSettings).length > 0) {
-    // Fusionner avec les settings existants
     updateData.settings = { ...(lobby.settings || {}), ...otherSettings };
   }
   
   if (Object.keys(updateData).length === 0) {
-    return lobby; // Rien à mettre à jour
+    return lobby;
   }
   
   const { data, error } = await supabase
@@ -3764,16 +3756,22 @@ async function generateUniqueCode() {
   
   while (exists && attempts < 10) {
     code = generateShortCode();
+    
     const { data, error } = await supabase
       .from('meme_lobbies')
       .select('id')
       .eq('code', code)
       .limit(1);
+    
     if (error) throw error;
     exists = data && data.length > 0;
     attempts++;
   }
-  if (exists) throw new Error('Impossible de générer un code unique');
+  
+  if (exists) {
+    throw new Error('Impossible de générer un code unique après 10 tentatives');
+  }
+  
   return code;
 }
 
@@ -3996,6 +3994,7 @@ module.exports = {
   markSuperVoteUsed,
   deleteMemeLobby,
   cleanupOldMemeLobbies,
+  generateShortCode,
 
   // Meme Creations
   getMemeCreationsByLobby,
