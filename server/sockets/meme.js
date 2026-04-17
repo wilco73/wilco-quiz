@@ -2,22 +2,11 @@
  * Meme Game Socket Handlers
  * Gestion en temps réel des parties Make It Meme
  * 
- * v2 - Correction: traduire les phases BDD -> Frontend
+ * Architecture simplifiée suivant le pattern Mystery :
+ * - Socket pour tout (pas d'API REST pour les créations)
+ * - Pas de hook dédié, utiliser socketContext directement
+ * - Passage automatique entre phases
  */
-
-// Mapping des phases BDD vers Frontend
-const PHASE_MAPPING = {
-  'creation': 'creating',
-  'voting': 'voting',
-  'results': 'round_results',
-  'final': 'final_results',
-  'submitting': 'submitting',
-  'waiting': 'waiting'
-};
-
-function translatePhase(dbPhase) {
-  return PHASE_MAPPING[dbPhase] || dbPhase;
-}
 
 module.exports = function(io, socket, db) {
   
@@ -28,26 +17,22 @@ module.exports = function(io, socket, db) {
     try {
       const { odId, pseudo, settings } = data;
       
-      // Vérifier les permissions
-      const canCreate = await db.canCreateGameLobby('meme', data.userRole || 'user');
-      if (!canCreate.allowed) {
-        return callback({ success: false, message: canCreate.reason });
-      }
-      
       const lobby = await db.createMemeLobby(odId, pseudo, settings);
       
       // Rejoindre la room socket
       socket.join(`meme:${lobby.id}`);
       socket.memeLobbyId = lobby.id;
-      socket.odId = odId;
+      socket.memeOdId = odId;
+      
+      console.log(`[MEME] ${pseudo} created and joined room meme:${lobby.id}`);
       
       // Notifier tout le monde qu'un nouveau lobby existe
       io.emit('meme:lobbyCreated', lobby);
       
-      callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MEME] Erreur création lobby:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -56,91 +41,106 @@ module.exports = function(io, socket, db) {
     try {
       const { lobbyId, odId, pseudo } = data;
       
-      // Rejoindre le lobby dans la BDD (ou récupérer si déjà dedans)
-      const lobby = await db.joinMemeLobby(lobbyId, odId, pseudo);
+      console.log(`[MEME] joinLobby request: ${pseudo} (${odId}) -> ${lobbyId}`);
       
-      // TOUJOURS rejoindre la room socket (même si déjà participant dans la BDD)
+      // Récupérer le lobby d'abord pour vérifier son état
+      let lobby = await db.getMemeLobbyById(lobbyId);
+      if (!lobby) {
+        return callback?.({ success: false, message: 'Lobby non trouvé' });
+      }
+      
+      const participants = lobby.participants || [];
+      const isAlreadyParticipant = participants.some(p => p.odId === odId);
+      
+      // Si pas encore participant et jeu en cours, refuser
+      if (!isAlreadyParticipant && lobby.status !== 'waiting') {
+        return callback?.({ success: false, message: 'La partie a déjà commencé' });
+      }
+      
+      // Rejoindre le lobby dans la BDD (ajoute si nouveau, retourne tel quel si déjà dedans)
+      if (!isAlreadyParticipant) {
+        lobby = await db.joinMemeLobby(lobbyId, odId, pseudo);
+      }
+      
+      // TOUJOURS rejoindre la room socket
       socket.join(`meme:${lobbyId}`);
       socket.memeLobbyId = lobbyId;
-      socket.odId = odId;
+      socket.memeOdId = odId;
       
-      console.log(`[MEME] ${pseudo} (${odId}) joined room meme:${lobbyId}`);
+      console.log(`[MEME] ${pseudo} joined room meme:${lobbyId}, status: ${lobby.status}`);
       
       // Notifier les participants
       io.to(`meme:${lobbyId}`).emit('meme:lobbyUpdated', lobby);
       
       // Si le jeu est déjà en cours, envoyer l'état actuel au joueur qui rejoint
       if (lobby.status === 'playing' && lobby.phase) {
+        console.log(`[MEME] Game in progress, sending state to ${pseudo}`);
+        
         // Calculer le temps restant
         let timeRemaining = 0;
         if (lobby.phase_end_time) {
           const endTime = new Date(lobby.phase_end_time).getTime();
-          const now = Date.now();
-          timeRemaining = Math.max(0, Math.floor((endTime - now) / 1000));
+          timeRemaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+        } else {
+          // Fallback sur les settings
+          timeRemaining = lobby.phase === 'creation' 
+            ? (lobby.settings?.creationTime || 120)
+            : (lobby.settings?.voteTime || 30);
         }
         
-        // Traduire la phase BDD -> Frontend
-        const frontendPhase = translatePhase(lobby.phase);
-        
-        // Envoyer la phase actuelle avec timeRemaining
+        // Envoyer gameStarted pour mettre à jour la phase
         socket.emit('meme:gameStarted', {
           lobby,
-          phase: frontendPhase,
+          phase: lobby.phase === 'creation' ? 'creating' : lobby.phase,
           roundNumber: lobby.current_round,
           timeRemaining
         });
         
-        // Envoyer son assignment s'il existe
-        const assignment = await db.getMemeAssignment(lobbyId, lobby.current_round, odId);
-        if (assignment) {
-          socket.emit('meme:templateAssigned', {
-            odId,
-            assignment
+        // Envoyer son assignment s'il existe (phase création)
+        if (lobby.phase === 'creation') {
+          const assignment = await db.getMemeAssignment(lobbyId, lobby.current_round, odId);
+          if (assignment) {
+            socket.emit('meme:templateAssigned', { odId, assignment });
+          }
+        }
+        
+        // Envoyer les créations si phase vote
+        if (lobby.phase === 'voting') {
+          const creations = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
+          socket.emit('meme:votingStarted', {
+            lobby,
+            creations,
+            currentIndex: lobby.current_vote_index || 0,
+            timeRemaining
           });
         }
       }
       
-      callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MEME] Erreur join lobby:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
-  // Rejoindre un lobby par code court (6 caractères)
-  socket.on('meme:joinLobbyByCode', async ({ code, odId, pseudo }, callback) => {
+  // Rejoindre un lobby par code court
+  socket.on('meme:joinLobbyByCode', async (data, callback) => {
     try {
-      console.log(`[Meme] joinLobbyByCode: ${code} by ${pseudo}`);
+      const { code, odId, pseudo } = data;
       
-      // Trouver le lobby par son code
+      console.log(`[MEME] joinLobbyByCode: ${code} by ${pseudo}`);
+      
       const lobby = await db.getMemeLobbyByCode(code);
-      
       if (!lobby) {
-        return callback({ success: false, message: 'Lobby non trouvé' });
+        return callback?.({ success: false, message: 'Lobby non trouvé' });
       }
       
-      if (lobby.status !== 'waiting') {
-        return callback({ success: false, message: 'La partie a déjà commencé' });
-      }
-      
-      // Ajouter le joueur au lobby
-      const updatedLobby = await db.joinMemeLobby(lobby.id, odId, pseudo);
-      
-      // Rejoindre la room socket
-      socket.join(`meme:${lobby.id}`);
-      socket.memeLobbyId = lobby.id;
-      socket.odId = odId;
-      
-      console.log(`[MEME] ${pseudo} joined room meme:${lobby.id} via code ${code}`);
-      
-      // Notifier les autres joueurs
-      io.to(`meme:${lobby.id}`).emit('meme:lobbyUpdated', updatedLobby);
-      
-      callback({ success: true, lobby: updatedLobby });
+      // Réutiliser la logique de joinLobby
+      socket.emit('meme:joinLobby', { lobbyId: lobby.id, odId, pseudo }, callback);
       
     } catch (error) {
-      console.error('[Meme] joinLobbyByCode error:', error);
-      callback({ success: false, message: error.message });
+      console.error('[MEME] joinLobbyByCode error:', error);
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -151,37 +151,35 @@ module.exports = function(io, socket, db) {
       
       const lobby = await db.leaveMemeLobby(lobbyId, odId);
       
-      // Quitter la room socket
       socket.leave(`meme:${lobbyId}`);
       delete socket.memeLobbyId;
+      delete socket.memeOdId;
       
       if (lobby) {
         io.to(`meme:${lobbyId}`).emit('meme:lobbyUpdated', lobby);
       } else {
-        // Lobby supprimé car vide
         io.emit('meme:lobbyDeleted', { lobbyId });
       }
       
-      callback({ success: true });
+      if (callback) callback({ success: true });
     } catch (error) {
       console.error('[MEME] Erreur leave lobby:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
-  // Mettre à jour les settings du lobby
+  // Mettre à jour les settings
   socket.on('meme:updateSettings', async (data, callback) => {
     try {
       const { lobbyId, settings } = data;
-      
       const lobby = await db.updateMemeLobbySettings(lobbyId, settings);
       
       io.to(`meme:${lobbyId}`).emit('meme:lobbyUpdated', lobby);
       
-      callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MEME] Erreur update settings:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -192,11 +190,25 @@ module.exports = function(io, socket, db) {
     try {
       const { lobbyId } = data;
       
+      console.log(`[MEME] Starting game for lobby ${lobbyId}`);
+      
+      // Vérifier le lobby
+      let lobby = await db.getMemeLobbyById(lobbyId);
+      if (!lobby) {
+        return callback?.({ success: false, message: 'Lobby non trouvé' });
+      }
+      if (lobby.status !== 'waiting') {
+        return callback?.({ success: false, message: 'La partie a déjà commencé' });
+      }
+      if ((lobby.participants || []).length < 2) {
+        return callback?.({ success: false, message: 'Il faut au moins 2 joueurs' });
+      }
+      
       // Démarrer le lobby
-      const lobby = await db.startMemeLobby(lobbyId);
+      lobby = await db.startMemeLobby(lobbyId);
       
       // Assigner un meme à chaque joueur
-      const tags = lobby.settings.tags || [];
+      const tags = lobby.settings?.tags || [];
       const participants = lobby.participants || [];
       const assignedTemplateIds = [];
       
@@ -208,10 +220,11 @@ module.exports = function(io, socket, db) {
         }
       }
       
-      // Calculer timeRemaining côté serveur (comme les jeux de dessin)
       const creationTime = lobby.settings?.creationTime || 120;
       
-      // Notifier tout le monde avec timeRemaining (pas endTime)
+      console.log(`[MEME] Game started, notifying ${participants.length} players`);
+      
+      // Notifier TOUT LE MONDE dans la room
       io.to(`meme:${lobbyId}`).emit('meme:gameStarted', {
         lobby,
         phase: 'creating',
@@ -223,6 +236,7 @@ module.exports = function(io, socket, db) {
       for (const participant of participants) {
         const assignment = await db.getMemeAssignment(lobbyId, 1, participant.odId);
         if (assignment) {
+          console.log(`[MEME] Sending template to ${participant.pseudo}`);
           io.to(`meme:${lobbyId}`).emit('meme:templateAssigned', {
             odId: participant.odId,
             assignment
@@ -230,171 +244,166 @@ module.exports = function(io, socket, db) {
         }
       }
       
-      callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MEME] Erreur start game:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
-  // Demander une rotation (nouveau meme)
+  // Rotation de template
   socket.on('meme:rotateTemplate', async (data, callback) => {
     try {
       const { lobbyId, roundNumber, odId } = data;
       
       const lobby = await db.getMemeLobbyById(lobbyId);
-      if (!lobby) throw new Error('Lobby non trouvé');
-      
       const currentAssignment = await db.getMemeAssignment(lobbyId, roundNumber, odId);
-      if (!currentAssignment) throw new Error('Assignation non trouvée');
       
-      // Vérifier limite rotations
-      if (currentAssignment.rotations_used >= lobby.settings.maxRotations) {
-        return callback({ success: false, message: 'Nombre maximum de rotations atteint' });
+      if (!currentAssignment) {
+        return callback?.({ success: false, message: 'Assignment non trouvé' });
       }
       
-      // Obtenir un nouveau template
-      const excludeIds = currentAssignment.templates_history || [];
-      const tags = lobby.settings.tags || [];
-      const newTemplate = await db.getRandomMemeTemplate(excludeIds, tags);
+      const maxRotations = lobby.settings?.maxRotations || 3;
+      if (currentAssignment.rotations_used >= maxRotations) {
+        return callback?.({ success: false, message: 'Plus de rotations disponibles' });
+      }
       
+      // Récupérer les IDs déjà utilisés
+      const usedIds = currentAssignment.templates_history || [currentAssignment.template_id];
+      const tags = lobby.settings?.tags || [];
+      
+      const newTemplate = await db.getRandomMemeTemplate(usedIds, tags);
       if (!newTemplate) {
-        return callback({ success: false, message: 'Plus de memes disponibles' });
+        return callback?.({ success: false, message: 'Plus de templates disponibles' });
       }
       
       const assignment = await db.rotateMemeAssignment(lobbyId, roundNumber, odId, newTemplate.id);
       
-      callback({ success: true, assignment });
+      if (callback) callback({ success: true, assignment });
     } catch (error) {
-      console.error('[MEME] Erreur rotation:', error);
-      callback({ success: false, message: error.message });
+      console.error('[MEME] Erreur rotate:', error);
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
-  // Utiliser un undo (revenir au meme précédent)
+  // Undo de template
   socket.on('meme:undoTemplate', async (data, callback) => {
     try {
       const { lobbyId, roundNumber, odId } = data;
       
-      const lobby = await db.getMemeLobbyById(lobbyId);
-      if (!lobby) throw new Error('Lobby non trouvé');
-      
       const currentAssignment = await db.getMemeAssignment(lobbyId, roundNumber, odId);
-      if (!currentAssignment) throw new Error('Assignation non trouvée');
-      
-      // Vérifier limite undos
-      if (currentAssignment.undos_used >= lobby.settings.maxUndos) {
-        return callback({ success: false, message: 'Nombre maximum de retours atteint' });
+      if (!currentAssignment) {
+        return callback?.({ success: false, message: 'Assignment non trouvé' });
       }
       
-      // Vérifier qu'on peut undo (historique > 1)
       if (!currentAssignment.templates_history || currentAssignment.templates_history.length <= 1) {
-        return callback({ success: false, message: 'Pas de meme précédent' });
+        return callback?.({ success: false, message: 'Pas de template précédent' });
       }
       
       const assignment = await db.undoMemeAssignment(lobbyId, roundNumber, odId);
       
-      callback({ success: true, assignment });
+      if (callback) callback({ success: true, assignment });
     } catch (error) {
       console.error('[MEME] Erreur undo:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
-  // Notification qu'une création a été soumise (appelé après l'upload API REST)
-  // C'est léger car on n'envoie pas l'image, juste une notification
-  socket.on('meme:creationSubmittedNotify', async (data) => {
+  // Soumettre une création (via socket, pas API REST)
+  socket.on('meme:submitCreation', async (data, callback) => {
     try {
-      const { lobbyId, odId, pseudo, creationId, allSubmitted } = data;
+      const { lobbyId, roundNumber, odId, pseudo, templateId, textLayers, finalImageBase64 } = data;
       
-      console.log(`[MEME] Creation notification: ${pseudo} submitted ${creationId}`);
+      console.log(`[MEME] submitCreation from ${pseudo}`);
+      
+      // Vérifier le lobby
+      const lobby = await db.getMemeLobbyById(lobbyId);
+      if (!lobby) {
+        return callback?.({ success: false, message: 'Lobby non trouvé' });
+      }
+      if (lobby.phase !== 'creation') {
+        return callback?.({ success: false, message: 'La phase de création est terminée' });
+      }
+      
+      // Créer la création
+      const creation = await db.createMemeCreation(
+        lobbyId,
+        roundNumber || lobby.current_round,
+        odId,
+        pseudo,
+        templateId,
+        textLayers || [],
+        finalImageBase64
+      );
+      
+      console.log(`[MEME] Creation saved: ${creation.id}`);
+      
+      // Répondre au client IMMÉDIATEMENT
+      if (callback) callback({ success: true, creation });
       
       // Notifier les autres joueurs
       io.to(`meme:${lobbyId}`).emit('meme:creationSubmitted', {
         odId,
         pseudo,
-        creationId
+        creationId: creation.id
       });
       
-      // Si tous ont soumis, passer automatiquement au vote
-      if (allSubmitted) {
-        console.log(`[MEME] All players submitted, starting voting phase`);
+      // Vérifier si tous ont soumis
+      const allCreations = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
+      const participants = lobby.participants || [];
+      
+      console.log(`[MEME] Submissions: ${allCreations.length}/${participants.length}`);
+      
+      if (allCreations.length >= participants.length) {
+        // Tous ont soumis, passer au vote !
+        console.log(`[MEME] All submitted, starting voting phase`);
         
-        const lobby = await db.getMemeLobbyById(lobbyId);
-        if (lobby && lobby.phase === 'creation') {
-          const updatedLobby = await db.startVotingPhase(lobbyId);
-          const creations = await db.getMemeCreationsByLobby(lobbyId, updatedLobby.current_round);
-          
-          const voteTime = updatedLobby.settings?.voteTime || 30;
-          
-          io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
-            lobby: updatedLobby,
-            creations,
-            currentIndex: 0,
-            timeRemaining: voteTime
-          });
-        }
+        const updatedLobby = await db.startVotingPhase(lobbyId);
+        const voteTime = updatedLobby.settings?.voteTime || 30;
+        
+        io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
+          lobby: updatedLobby,
+          creations: allCreations,
+          currentIndex: 0,
+          timeRemaining: voteTime
+        });
       }
       
     } catch (error) {
-      console.error('[MEME] Erreur creation notification:', error);
+      console.error('[MEME] Erreur submit creation:', error);
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
   // ==================== VOTING ====================
   
-  // Passer en phase de vote
-  socket.on('meme:startVoting', async (data, callback) => {
-    try {
-      const { lobbyId } = data;
-      
-      const lobby = await db.startVotingPhase(lobbyId);
-      const creations = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
-      
-      // Calculer timeRemaining
-      const voteTime = lobby.settings?.voteTime || 30;
-      
-      io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
-        lobby,
-        creations,
-        currentIndex: 0,
-        timeRemaining: voteTime
-      });
-      
-      callback({ success: true, lobby });
-    } catch (error) {
-      console.error('[MEME] Erreur start voting:', error);
-      callback({ success: false, message: error.message });
-    }
-  });
-  
-  // Voter sur une création
+  // Voter
   socket.on('meme:vote', async (data, callback) => {
     try {
       const { lobbyId, creationId, odId, pseudo, voteType, isSuper } = data;
       
       // Vérifier qu'on ne vote pas pour soi-même
       const creation = await db.getMemeCreationById(creationId);
+      if (!creation) {
+        return callback?.({ success: false, message: 'Création non trouvée' });
+      }
       if (creation.player_id === odId) {
-        return callback({ success: false, message: 'Impossible de voter pour soi-même' });
+        return callback?.({ success: false, message: 'Impossible de voter pour soi-même' });
       }
       
       // Vérifier super vote
       if (isSuper) {
         const lobby = await db.getMemeLobbyById(lobbyId);
-        const participant = (lobby.participants || []).find(p => p.odId === odId);
+        const participant = (lobby?.participants || []).find(p => p.odId === odId);
         if (participant?.superVoteUsedThisRound) {
-          return callback({ success: false, message: 'Super vote déjà utilisé cette manche' });
+          return callback?.({ success: false, message: 'Super vote déjà utilisé' });
         }
         await db.markSuperVoteUsed(lobbyId, odId);
       }
       
       const result = await db.addVoteToCreation(creationId, odId, pseudo, voteType, isSuper);
       
-      // Mettre à jour le score du créateur
-      await db.updateParticipantScore(lobbyId, creation.player_id, result.points);
-      
-      // Notifier tout le monde
+      // Notifier
       io.to(`meme:${lobbyId}`).emit('meme:voteReceived', {
         creationId,
         odId,
@@ -403,10 +412,10 @@ module.exports = function(io, socket, db) {
         totalScore: result.creation.total_score
       });
       
-      callback({ success: true, points: result.points });
+      if (callback) callback({ success: true, points: result.points });
     } catch (error) {
       console.error('[MEME] Erreur vote:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -418,14 +427,9 @@ module.exports = function(io, socket, db) {
       const lobby = await db.advanceToNextVote(lobbyId);
       
       if (lobby.phase === 'results') {
-        // Fin des votes, afficher résultats
         const creations = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
-        io.to(`meme:${lobbyId}`).emit('meme:roundResults', {
-          lobby,
-          creations
-        });
+        io.to(`meme:${lobbyId}`).emit('meme:roundResults', { lobby, creations });
       } else {
-        // Vote suivant - envoyer timeRemaining
         const voteTime = lobby.settings?.voteTime || 30;
         io.to(`meme:${lobbyId}`).emit('meme:nextVoteStarted', {
           lobby,
@@ -434,10 +438,10 @@ module.exports = function(io, socket, db) {
         });
       }
       
-      callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MEME] Erreur next vote:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
@@ -449,15 +453,11 @@ module.exports = function(io, socket, db) {
       const lobby = await db.advanceToNextRound(lobbyId);
       
       if (lobby.phase === 'final') {
-        // Fin de partie
         const allCreations = await db.getMemeCreationsByLobby(lobbyId);
-        io.to(`meme:${lobbyId}`).emit('meme:gameFinished', {
-          lobby,
-          allCreations
-        });
+        io.to(`meme:${lobbyId}`).emit('meme:gameFinished', { lobby, allCreations });
       } else {
         // Nouvelle manche - assigner les memes
-        const tags = lobby.settings.tags || [];
+        const tags = lobby.settings?.tags || [];
         const participants = lobby.participants || [];
         const assignedTemplateIds = [];
         
@@ -469,8 +469,8 @@ module.exports = function(io, socket, db) {
           }
         }
         
-        // Envoyer avec timeRemaining
         const creationTime = lobby.settings?.creationTime || 120;
+        
         io.to(`meme:${lobbyId}`).emit('meme:newRoundStarted', {
           lobby,
           roundNumber: lobby.current_round,
@@ -489,23 +489,22 @@ module.exports = function(io, socket, db) {
         }
       }
       
-      callback({ success: true, lobby });
+      if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MEME] Erreur next round:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
   // ==================== UTILITIES ====================
   
-  // Récupérer l'état actuel du lobby
   socket.on('meme:getLobbyState', async (data, callback) => {
     try {
-      const { lobbyId } = data;
+      const { lobbyId, odId } = data;
       
       const lobby = await db.getMemeLobbyById(lobbyId);
       if (!lobby) {
-        return callback({ success: false, message: 'Lobby non trouvé' });
+        return callback?.({ success: false, message: 'Lobby non trouvé' });
       }
       
       let creations = [];
@@ -513,34 +512,18 @@ module.exports = function(io, socket, db) {
       
       if (lobby.current_round > 0) {
         creations = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
-        
-        if (data.odId) {
-          assignment = await db.getMemeAssignment(lobbyId, lobby.current_round, data.odId);
+        if (odId) {
+          assignment = await db.getMemeAssignment(lobbyId, lobby.current_round, odId);
         }
       }
       
-      callback({ success: true, lobby, creations, assignment });
+      if (callback) callback({ success: true, lobby, creations, assignment });
     } catch (error) {
       console.error('[MEME] Erreur get lobby state:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
-  // Rejoindre en mode monitoring (admin)
-  socket.on('meme:joinMonitoring', async (data, callback) => {
-    try {
-      const { lobbyId } = data;
-      socket.join(`meme:${lobbyId}`);
-      
-      const lobby = await db.getMemeLobbyById(lobbyId);
-      callback({ success: true, lobby });
-    } catch (error) {
-      console.error('[MEME] Erreur join monitoring:', error);
-      callback({ success: false, message: error.message });
-    }
-  });
-  
-  // Supprimer un lobby (admin/créateur)
   socket.on('meme:deleteLobby', async (data, callback) => {
     try {
       const { lobbyId } = data;
@@ -550,32 +533,30 @@ module.exports = function(io, socket, db) {
       io.to(`meme:${lobbyId}`).emit('meme:lobbyDeleted', { lobbyId });
       io.emit('meme:lobbyDeleted', { lobbyId });
       
-      callback({ success: true });
+      if (callback) callback({ success: true });
     } catch (error) {
       console.error('[MEME] Erreur delete lobby:', error);
-      callback({ success: false, message: error.message });
+      if (callback) callback({ success: false, message: error.message });
     }
   });
   
-  // Gérer la déconnexion
+  // Déconnexion
   socket.on('disconnect', async () => {
-    if (socket.memeLobbyId && socket.odId) {
+    if (socket.memeLobbyId && socket.memeOdId) {
       try {
-        // Vérifier si le jeu est en cours
         const lobby = await db.getMemeLobbyById(socket.memeLobbyId);
         
         if (lobby && lobby.status === 'playing') {
-          // Jeu en cours - NE PAS retirer le joueur, il pourra se reconnecter
-          console.log(`[MEME] ${socket.odId} disconnected during game, keeping in lobby`);
-          // On peut notifier les autres que le joueur est temporairement déconnecté
+          // Jeu en cours - garder le joueur, il peut revenir
+          console.log(`[MEME] ${socket.memeOdId} disconnected during game, keeping in lobby`);
           io.to(`meme:${socket.memeLobbyId}`).emit('meme:playerDisconnected', {
-            odId: socket.odId,
+            odId: socket.memeOdId,
             temporary: true
           });
         } else if (lobby && lobby.status === 'waiting') {
           // En attente - retirer le joueur
-          console.log(`[MEME] ${socket.odId} disconnected from waiting lobby, removing`);
-          const updatedLobby = await db.leaveMemeLobby(socket.memeLobbyId, socket.odId);
+          console.log(`[MEME] ${socket.memeOdId} disconnected from waiting lobby`);
+          const updatedLobby = await db.leaveMemeLobby(socket.memeLobbyId, socket.memeOdId);
           if (updatedLobby) {
             io.to(`meme:${socket.memeLobbyId}`).emit('meme:lobbyUpdated', updatedLobby);
           } else {

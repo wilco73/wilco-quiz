@@ -3,16 +3,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 /**
  * useMemeGame - Hook pour gérer le jeu Make It Meme via WebSocket
  * 
- * v4 - Fix timer: utilise timeRemaining du serveur (pas endTime)
- * 
- * @param {Object} socket - Instance socket.io
- * @param {Object} currentUser - { id, pseudo, role }
- * @returns {Object} État et actions du jeu
+ * v5 - Simplifié:
+ * - Socket pour tout (pas d'API REST)
+ * - Timer local décrémenté après réception du temps serveur
+ * - Gestion propre des listeners
  */
 export default function useMemeGame(socket, currentUser) {
   // États du jeu
   const [lobby, setLobby] = useState(null);
-  const [phase, setPhase] = useState('lobby');
+  const [phase, setPhase] = useState('lobby'); // lobby, creating, submitting, voting, round_results, final_results
   const [currentRound, setCurrentRound] = useState(1);
   const [timeRemaining, setTimeRemaining] = useState(0);
   
@@ -35,25 +34,23 @@ export default function useMemeGame(socket, currentUser) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // Ref pour le timer
+  // Refs
   const timerRef = useRef(null);
+  const lobbyIdRef = useRef(null);
 
-  // ==================== TIMER LOCAL ====================
-  // Le serveur envoie timeRemaining, on le décrémente localement
+  // ==================== TIMER ====================
   
-  useEffect(() => {
+  // Fonction pour démarrer le timer avec une valeur
+  const startTimer = useCallback((seconds) => {
     // Nettoyer le timer précédent
     if (timerRef.current) {
       clearInterval(timerRef.current);
-      timerRef.current = null;
     }
     
-    // Si pas de temps ou phase lobby, pas de timer
-    if (timeRemaining <= 0 || phase === 'lobby') {
-      return;
-    }
+    setTimeRemaining(seconds);
     
-    // Décrémenter chaque seconde
+    if (seconds <= 0) return;
+    
     timerRef.current = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev <= 1) {
@@ -64,173 +61,182 @@ export default function useMemeGame(socket, currentUser) {
         return prev - 1;
       });
     }, 1000);
+  }, []);
 
+  // Cleanup timer on unmount
+  useEffect(() => {
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
-        timerRef.current = null;
       }
     };
-  }, [phase]); // Redémarrer quand la phase change
+  }, []);
+
+  // ==================== HELPERS ====================
+  
+  const updatePlayersFromLobby = useCallback((lobbyData) => {
+    if (!lobbyData?.participants) return;
+    setPlayers(lobbyData.participants.map(p => ({
+      odId: p.odId,
+      pseudo: p.pseudo,
+      totalScore: p.score || 0,
+    })));
+  }, []);
 
   // ==================== SOCKET LISTENERS ====================
   
   useEffect(() => {
     if (!socket) return;
 
-    // Lobby updates
-    socket.on('meme:lobbyUpdated', (updatedLobby) => {
-      console.log('[useMemeGame] lobbyUpdated:', updatedLobby?.id);
+    const handleLobbyUpdated = (updatedLobby) => {
+      // Vérifier que c'est bien notre lobby
+      if (lobbyIdRef.current && updatedLobby.id !== lobbyIdRef.current) return;
+      
+      console.log('[useMemeGame] lobbyUpdated');
       setLobby(updatedLobby);
       updatePlayersFromLobby(updatedLobby);
-    });
+    };
 
-    socket.on('meme:lobbyDeleted', ({ lobbyId }) => {
-      if (lobby?.id === lobbyId) {
+    const handleLobbyDeleted = ({ lobbyId }) => {
+      if (lobbyIdRef.current === lobbyId) {
+        console.log('[useMemeGame] lobbyDeleted');
         setLobby(null);
         setPhase('lobby');
+        lobbyIdRef.current = null;
       }
-    });
+    };
 
-    // Game started - utilise timeRemaining (pas endTime)
-    socket.on('meme:gameStarted', ({ lobby: updatedLobby, phase: newPhase, roundNumber, timeRemaining: serverTime }) => {
-      console.log('[useMemeGame] gameStarted:', { 
-        lobbyId: updatedLobby?.id, 
-        phase: newPhase, 
-        roundNumber, 
-        timeRemaining: serverTime
-      });
+    const handleGameStarted = ({ lobby: updatedLobby, phase: newPhase, roundNumber, timeRemaining: serverTime }) => {
+      console.log('[useMemeGame] gameStarted:', { phase: newPhase, roundNumber, timeRemaining: serverTime });
       
       setLobby(updatedLobby);
       setPhase('creating');
       setCurrentRound(roundNumber);
-      setTimeRemaining(serverTime || updatedLobby?.settings?.creationTime || 120);
       setHasSubmitted(false);
       setHasSuperVote(true);
       updatePlayersFromLobby(updatedLobby);
-    });
+      
+      // Démarrer le timer
+      startTimer(serverTime || 120);
+    };
 
-    // Template assigned
-    socket.on('meme:templateAssigned', ({ odId, assignment: newAssignment }) => {
-      console.log('[useMemeGame] templateAssigned:', { 
-        odId, 
-        myId: currentUser?.id,
-        templateId: newAssignment?.template?.id,
-        templateUrl: newAssignment?.template?.image_url
-      });
+    const handleTemplateAssigned = ({ odId, assignment: newAssignment }) => {
+      console.log('[useMemeGame] templateAssigned:', { odId, myId: currentUser?.id });
       
       if (odId === currentUser?.id) {
         setAssignment(newAssignment);
         setTemplate(newAssignment.template);
       }
-    });
+    };
 
-    // Creation submitted by someone
-    socket.on('meme:creationSubmitted', ({ odId, pseudo, creationId }) => {
+    const handleCreationSubmitted = ({ odId, pseudo }) => {
+      // Marquer le joueur comme ayant soumis
       setLobby(prev => {
         if (!prev) return prev;
-        const updatedParticipants = (prev.participants || []).map(p => 
-          p.odId === odId ? { ...p, hasSubmitted: true } : p
-        );
-        return { ...prev, participants: updatedParticipants };
+        return {
+          ...prev,
+          participants: (prev.participants || []).map(p =>
+            p.odId === odId ? { ...p, hasSubmitted: true } : p
+          )
+        };
       });
-    });
+    };
 
-    // Voting started
-    socket.on('meme:votingStarted', ({ lobby: updatedLobby, creations, currentIndex, timeRemaining: serverTime }) => {
-      console.log('[useMemeGame] votingStarted:', { timeRemaining: serverTime, creationsCount: creations?.length });
+    const handleVotingStarted = ({ lobby: updatedLobby, creations, currentIndex, timeRemaining: serverTime }) => {
+      console.log('[useMemeGame] votingStarted:', { creationsCount: creations?.length });
+      
       setLobby(updatedLobby);
-      setAllMemes(creations);
-      setCurrentVoteIndex(currentIndex);
+      setAllMemes(creations || []);
+      setCurrentVoteIndex(currentIndex || 0);
       setPhase('voting');
-      setTimeRemaining(serverTime || updatedLobby?.settings?.voteTime || 30);
       setVotesReceived({});
       setHasVoted(false);
-    });
+      updatePlayersFromLobby(updatedLobby);
+      
+      startTimer(serverTime || 30);
+    };
 
-    // Vote received
-    socket.on('meme:voteReceived', ({ creationId, odId, voteType, isSuper, totalScore }) => {
+    const handleVoteReceived = ({ creationId, odId, voteType, isSuper, totalScore }) => {
       setVotesReceived(prev => ({
         ...prev,
         [creationId]: [...(prev[creationId] || []), { odId, voteType, isSuper }]
       }));
       
-      // Mettre à jour le score du meme
-      setAllMemes(prev => prev.map(m => 
+      setAllMemes(prev => prev.map(m =>
         m.id === creationId ? { ...m, total_score: totalScore } : m
       ));
-    });
+    };
 
-    // Next vote
-    socket.on('meme:nextVoteStarted', ({ lobby: updatedLobby, currentIndex, timeRemaining: serverTime }) => {
+    const handleNextVoteStarted = ({ lobby: updatedLobby, currentIndex, timeRemaining: serverTime }) => {
       setLobby(updatedLobby);
       setCurrentVoteIndex(currentIndex);
-      setTimeRemaining(serverTime || updatedLobby?.settings?.voteTime || 30);
       setHasVoted(false);
-    });
+      startTimer(serverTime || 30);
+    };
 
-    // Round results
-    socket.on('meme:roundResults', ({ lobby: updatedLobby, creations }) => {
+    const handleRoundResults = ({ lobby: updatedLobby, creations }) => {
+      console.log('[useMemeGame] roundResults');
       setLobby(updatedLobby);
-      setAllMemes(creations);
+      setAllMemes(creations || []);
       setPhase('round_results');
       updatePlayersFromLobby(updatedLobby);
-    });
+    };
 
-    // New round started
-    socket.on('meme:newRoundStarted', ({ lobby: updatedLobby, roundNumber, timeRemaining: serverTime }) => {
-      console.log('[useMemeGame] newRoundStarted:', { roundNumber, timeRemaining: serverTime });
+    const handleNewRoundStarted = ({ lobby: updatedLobby, roundNumber, timeRemaining: serverTime }) => {
+      console.log('[useMemeGame] newRoundStarted:', { roundNumber });
+      
       setLobby(updatedLobby);
       setCurrentRound(roundNumber);
       setPhase('creating');
-      setTimeRemaining(serverTime || updatedLobby?.settings?.creationTime || 120);
       setHasSubmitted(false);
       setHasSuperVote(true);
       setTemplate(null);
       setAssignment(null);
       updatePlayersFromLobby(updatedLobby);
-    });
+      
+      startTimer(serverTime || 120);
+    };
 
-    // Game finished
-    socket.on('meme:gameFinished', ({ lobby: updatedLobby, allCreations }) => {
+    const handleGameFinished = ({ lobby: updatedLobby, allCreations }) => {
+      console.log('[useMemeGame] gameFinished');
       setLobby(updatedLobby);
-      setAllMemes(allCreations);
+      setAllMemes(allCreations || []);
       setPhase('final_results');
       updatePlayersFromLobby(updatedLobby);
-    });
+    };
+
+    // Enregistrer les listeners
+    socket.on('meme:lobbyUpdated', handleLobbyUpdated);
+    socket.on('meme:lobbyDeleted', handleLobbyDeleted);
+    socket.on('meme:gameStarted', handleGameStarted);
+    socket.on('meme:templateAssigned', handleTemplateAssigned);
+    socket.on('meme:creationSubmitted', handleCreationSubmitted);
+    socket.on('meme:votingStarted', handleVotingStarted);
+    socket.on('meme:voteReceived', handleVoteReceived);
+    socket.on('meme:nextVoteStarted', handleNextVoteStarted);
+    socket.on('meme:roundResults', handleRoundResults);
+    socket.on('meme:newRoundStarted', handleNewRoundStarted);
+    socket.on('meme:gameFinished', handleGameFinished);
 
     return () => {
-      socket.off('meme:lobbyUpdated');
-      socket.off('meme:lobbyDeleted');
-      socket.off('meme:gameStarted');
-      socket.off('meme:templateAssigned');
-      socket.off('meme:creationSubmitted');
-      socket.off('meme:votingStarted');
-      socket.off('meme:voteReceived');
-      socket.off('meme:nextVoteStarted');
-      socket.off('meme:roundResults');
-      socket.off('meme:newRoundStarted');
-      socket.off('meme:gameFinished');
+      socket.off('meme:lobbyUpdated', handleLobbyUpdated);
+      socket.off('meme:lobbyDeleted', handleLobbyDeleted);
+      socket.off('meme:gameStarted', handleGameStarted);
+      socket.off('meme:templateAssigned', handleTemplateAssigned);
+      socket.off('meme:creationSubmitted', handleCreationSubmitted);
+      socket.off('meme:votingStarted', handleVotingStarted);
+      socket.off('meme:voteReceived', handleVoteReceived);
+      socket.off('meme:nextVoteStarted', handleNextVoteStarted);
+      socket.off('meme:roundResults', handleRoundResults);
+      socket.off('meme:newRoundStarted', handleNewRoundStarted);
+      socket.off('meme:gameFinished', handleGameFinished);
     };
-  }, [socket, currentUser?.id]);
-
-  // Helper pour mettre à jour les joueurs depuis le lobby
-  const updatePlayersFromLobby = (lobbyData) => {
-    if (!lobbyData?.participants) return;
-    
-    setPlayers(lobbyData.participants.map(p => ({
-      odId: p.odId,
-      pseudo: p.pseudo,
-      totalScore: p.score || 0,
-      memes: p.memes || [],
-    })));
-  };
+  }, [socket, currentUser?.id, updatePlayersFromLobby, startTimer]);
 
   // ==================== ACTIONS ====================
 
-  // Créer un lobby
-  const createLobby = useCallback(async (settings = {}) => {
-    if (!socket || !currentUser) return null;
+  const createLobby = useCallback((settings = {}) => {
+    if (!socket || !currentUser) return Promise.resolve(null);
     
     setLoading(true);
     setError(null);
@@ -249,27 +255,25 @@ export default function useMemeGame(socket, currentUser) {
         }
       }, (response) => {
         setLoading(false);
-        if (response.success) {
+        if (response?.success) {
           setLobby(response.lobby);
           setPhase('lobby');
+          lobbyIdRef.current = response.lobby.id;
           updatePlayersFromLobby(response.lobby);
           resolve(response.lobby);
         } else {
-          setError(response.message);
+          setError(response?.message || 'Erreur création');
           resolve(null);
         }
       });
     });
-  }, [socket, currentUser]);
+  }, [socket, currentUser, updatePlayersFromLobby]);
 
-  // Rejoindre un lobby
-  const joinLobby = useCallback(async (lobbyId) => {
-    if (!socket || !currentUser) return null;
+  const joinLobby = useCallback((lobbyId) => {
+    if (!socket || !currentUser) return Promise.resolve(null);
     
     setLoading(true);
     setError(null);
-    
-    console.log('[useMemeGame] joinLobby:', lobbyId);
     
     return new Promise((resolve) => {
       socket.emit('meme:joinLobby', {
@@ -278,23 +282,27 @@ export default function useMemeGame(socket, currentUser) {
         pseudo: currentUser.pseudo,
       }, (response) => {
         setLoading(false);
-        console.log('[useMemeGame] joinLobby response:', response);
-        
-        if (response.success) {
+        if (response?.success) {
           setLobby(response.lobby);
+          lobbyIdRef.current = response.lobby.id;
           updatePlayersFromLobby(response.lobby);
+          
+          // Si jeu en cours, la phase sera mise à jour par gameStarted
+          if (response.lobby.status === 'waiting') {
+            setPhase('lobby');
+          }
+          
           resolve(response.lobby);
         } else {
-          setError(response.message);
+          setError(response?.message || 'Erreur connexion');
           resolve(null);
         }
       });
     });
-  }, [socket, currentUser]);
+  }, [socket, currentUser, updatePlayersFromLobby]);
 
-  // Rejoindre un lobby par son code court
-  const joinLobbyByCode = useCallback(async (code) => {
-    if (!socket || !currentUser) return null;
+  const joinLobbyByCode = useCallback((code) => {
+    if (!socket || !currentUser) return Promise.resolve(null);
     
     setLoading(true);
     setError(null);
@@ -306,75 +314,77 @@ export default function useMemeGame(socket, currentUser) {
         pseudo: currentUser.pseudo,
       }, (response) => {
         setLoading(false);
-        if (response.success) {
+        if (response?.success) {
           setLobby(response.lobby);
+          lobbyIdRef.current = response.lobby.id;
           updatePlayersFromLobby(response.lobby);
+          
+          if (response.lobby.status === 'waiting') {
+            setPhase('lobby');
+          }
+          
           resolve(response.lobby);
         } else {
-          setError(response.message || 'Lobby non trouvé');
+          setError(response?.message || 'Lobby non trouvé');
           resolve(null);
         }
       });
     });
-  }, [socket, currentUser]);
+  }, [socket, currentUser, updatePlayersFromLobby]);
 
-  // Quitter le lobby
-  const leaveLobby = useCallback(async () => {
-    if (!socket || !lobby || !currentUser) return;
+  const leaveLobby = useCallback(() => {
+    if (!socket || !lobby || !currentUser) return Promise.resolve(false);
     
     return new Promise((resolve) => {
       socket.emit('meme:leaveLobby', {
         lobbyId: lobby.id,
         odId: currentUser.id,
       }, (response) => {
-        if (response.success) {
+        if (response?.success) {
           setLobby(null);
           setPhase('lobby');
           setTemplate(null);
           setAssignment(null);
+          lobbyIdRef.current = null;
         }
-        resolve(response.success);
+        resolve(response?.success || false);
       });
     });
   }, [socket, lobby, currentUser]);
 
-  // Mettre à jour les settings
-  const updateSettings = useCallback(async (settings) => {
-    if (!socket || !lobby) return;
+  const updateSettings = useCallback((settings) => {
+    if (!socket || !lobby) return Promise.resolve(false);
     
     return new Promise((resolve) => {
       socket.emit('meme:updateSettings', {
         lobbyId: lobby.id,
         settings,
       }, (response) => {
-        if (response.success) {
+        if (response?.success) {
           setLobby(response.lobby);
         }
-        resolve(response.success);
+        resolve(response?.success || false);
       });
     });
   }, [socket, lobby]);
 
-  // Démarrer la partie
-  const startGame = useCallback(async () => {
-    if (!socket || !lobby) return false;
+  const startGame = useCallback(() => {
+    if (!socket || !lobby) return Promise.resolve(false);
     
     return new Promise((resolve) => {
       socket.emit('meme:startGame', {
         lobbyId: lobby.id,
       }, (response) => {
-        console.log('[useMemeGame] startGame response:', response);
-        if (!response.success) {
-          setError(response.message);
+        if (!response?.success) {
+          setError(response?.message || 'Erreur démarrage');
         }
-        resolve(response.success);
+        resolve(response?.success || false);
       });
     });
   }, [socket, lobby]);
 
-  // Rotation de template - NE PAS ÉJECTER SI ERREUR
-  const rotateTemplate = useCallback(async () => {
-    if (!socket || !lobby || !currentUser) return null;
+  const rotateTemplate = useCallback(() => {
+    if (!socket || !lobby || !currentUser) return Promise.resolve(null);
     
     return new Promise((resolve) => {
       socket.emit('meme:rotateTemplate', {
@@ -382,30 +392,20 @@ export default function useMemeGame(socket, currentUser) {
         roundNumber: currentRound,
         odId: currentUser.id,
       }, (response) => {
-        if (response.success) {
+        if (response?.success) {
           setAssignment(response.assignment);
           setTemplate(response.assignment.template);
           resolve(response.assignment);
         } else {
-          // NE PAS setError pour ne pas éjecter - juste loguer
-          console.log('[useMemeGame] rotateTemplate failed:', response.message);
-          // On peut afficher un toast mais sans changer l'état
+          console.log('[useMemeGame] rotateTemplate failed:', response?.message);
           resolve(null);
         }
       });
     });
   }, [socket, lobby, currentUser, currentRound]);
 
-  // Undo de template
-  const undoTemplate = useCallback(async () => {
-    if (!socket || !lobby || !currentUser) return null;
-    
-    console.log('[useMemeGame] undoTemplate called', {
-      lobbyId: lobby.id,
-      roundNumber: currentRound,
-      odId: currentUser.id,
-      assignment: assignment
-    });
+  const undoTemplate = useCallback(() => {
+    if (!socket || !lobby || !currentUser) return Promise.resolve(null);
     
     return new Promise((resolve) => {
       socket.emit('meme:undoTemplate', {
@@ -413,22 +413,20 @@ export default function useMemeGame(socket, currentUser) {
         roundNumber: currentRound,
         odId: currentUser.id,
       }, (response) => {
-        console.log('[useMemeGame] undoTemplate response:', response);
-        if (response.success) {
+        if (response?.success) {
           setAssignment(response.assignment);
           setTemplate(response.assignment.template);
           resolve(response.assignment);
         } else {
-          console.log('[useMemeGame] undoTemplate failed:', response.message);
+          console.log('[useMemeGame] undoTemplate failed:', response?.message);
           resolve(null);
         }
       });
     });
-  }, [socket, lobby, currentUser, currentRound, assignment]);
+  }, [socket, lobby, currentUser, currentRound]);
 
-  // Soumettre une création
-  const submitCreation = useCallback(async (creationData) => {
-    if (!socket || !lobby || !currentUser || !template) return false;
+  const submitCreation = useCallback((creationData) => {
+    if (!socket || !lobby || !currentUser || !template) return Promise.resolve(false);
     
     setLoading(true);
     
@@ -439,27 +437,27 @@ export default function useMemeGame(socket, currentUser) {
         odId: currentUser.id,
         pseudo: currentUser.pseudo,
         templateId: template.id,
-        textLayers: creationData.textLayers,
-        finalImageBase64: creationData.finalImage,
+        textLayers: creationData.textLayers || [],
+        finalImageBase64: creationData.finalImage || '',
       }, (response) => {
         setLoading(false);
-        if (response.success) {
+        if (response?.success) {
           setHasSubmitted(true);
           setPhase('submitting');
+          resolve(true);
         } else {
-          setError(response.message);
+          setError(response?.message || 'Erreur envoi');
+          resolve(false);
         }
-        resolve(response.success);
       });
     });
   }, [socket, lobby, currentUser, template, currentRound]);
 
-  // Voter
-  const vote = useCallback(async (voteType, isSuper = false) => {
-    if (!socket || !lobby || !currentUser) return false;
+  const vote = useCallback((voteType, isSuper = false) => {
+    if (!socket || !lobby || !currentUser) return Promise.resolve(false);
     
     const currentMeme = allMemes[currentVoteIndex];
-    if (!currentMeme) return false;
+    if (!currentMeme) return Promise.resolve(false);
     
     return new Promise((resolve) => {
       socket.emit('meme:vote', {
@@ -470,20 +468,16 @@ export default function useMemeGame(socket, currentUser) {
         voteType,
         isSuper,
       }, (response) => {
-        if (response.success) {
+        if (response?.success) {
           setHasVoted(true);
-          if (isSuper) {
-            setHasSuperVote(false);
-          }
+          if (isSuper) setHasSuperVote(false);
         }
-        resolve(response.success);
+        resolve(response?.success || false);
       });
     });
   }, [socket, lobby, currentUser, allMemes, currentVoteIndex]);
 
-  // Rejouer
-  const playAgain = useCallback(async () => {
-    // Réinitialiser l'état pour une nouvelle partie
+  const playAgain = useCallback(() => {
     setPhase('lobby');
     setCurrentRound(1);
     setTemplate(null);
@@ -494,15 +488,13 @@ export default function useMemeGame(socket, currentUser) {
     setHasVoted(false);
   }, []);
 
-  // Retour à la liste
   const backToLobbyList = useCallback(() => {
-    if (lobby) {
-      leaveLobby();
-    }
+    if (lobby) leaveLobby();
     setLobby(null);
     setPhase('lobby');
     setTemplate(null);
     setAssignment(null);
+    lobbyIdRef.current = null;
   }, [lobby, leaveLobby]);
 
   // ==================== COMPUTED VALUES ====================
@@ -511,7 +503,6 @@ export default function useMemeGame(socket, currentUser) {
   const isOwnMeme = currentMeme?.player_id === currentUser?.id;
   const isCreator = lobby?.creator_id === currentUser?.id;
   
-  // Calcul des capacités d'undo/rotation
   const rotationsUsed = assignment?.rotations_used || 0;
   const undosUsed = assignment?.undos_used || 0;
   const maxRotations = lobby?.settings?.maxRotations ?? 3;
@@ -520,11 +511,8 @@ export default function useMemeGame(socket, currentUser) {
   const canRotate = rotationsUsed < maxRotations;
   const canUndo = (assignment?.templates_history?.length > 1) && (undosUsed < maxUndos);
 
-  const votesCount = Object.keys(votesReceived).reduce((acc, key) => 
-    acc + (votesReceived[key]?.length || 0), 0
-  );
-  const totalVoters = (lobby?.participants?.length || 0) - 1;
-  const allVoted = votesCount >= totalVoters;
+  const votesCount = Object.values(votesReceived).reduce((acc, votes) => acc + votes.length, 0);
+  const totalVoters = Math.max(0, (lobby?.participants?.length || 0) - 1);
 
   return {
     // État
@@ -542,7 +530,6 @@ export default function useMemeGame(socket, currentUser) {
     hasVoted,
     votesCount,
     totalVoters,
-    allVoted,
     players,
     loading,
     error,
@@ -571,7 +558,7 @@ export default function useMemeGame(socket, currentUser) {
     playAgain,
     backToLobbyList,
     
-    // Setters directs
+    // Setters
     setError,
   };
 }
