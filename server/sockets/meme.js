@@ -322,7 +322,7 @@ module.exports = function(io, socket, db) {
         finalImageBase64
       );
       
-      // Notifier les autres (sans l'image pour l'instant)
+      // Notifier les autres
       io.to(`meme:${lobbyId}`).emit('meme:creationSubmitted', {
         odId,
         pseudo,
@@ -330,6 +330,30 @@ module.exports = function(io, socket, db) {
       });
       
       callback({ success: true, creation });
+      
+      // Vérifier si tous les joueurs ont soumis
+      const allCreations = await db.getMemeCreationsByLobby(lobbyId, roundNumber);
+      const participants = lobby.participants || [];
+      
+      console.log(`[MEME] Submissions: ${allCreations.length}/${participants.length}`);
+      
+      if (allCreations.length >= participants.length) {
+        // Tous ont soumis ! Passer automatiquement au vote
+        console.log(`[MEME] All players submitted, starting voting phase`);
+        
+        const updatedLobby = await db.startVotingPhase(lobbyId);
+        const creations = await db.getMemeCreationsByLobby(lobbyId, updatedLobby.current_round);
+        
+        const voteTime = updatedLobby.settings?.voteTime || 30;
+        
+        io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
+          lobby: updatedLobby,
+          creations,
+          currentIndex: 0,
+          timeRemaining: voteTime
+        });
+      }
+      
     } catch (error) {
       console.error('[MEME] Erreur submit creation:', error);
       callback({ success: false, message: error.message });
@@ -556,14 +580,29 @@ module.exports = function(io, socket, db) {
   socket.on('disconnect', async () => {
     if (socket.memeLobbyId && socket.odId) {
       try {
-        const lobby = await db.leaveMemeLobby(socket.memeLobbyId, socket.odId);
-        if (lobby) {
-          io.to(`meme:${socket.memeLobbyId}`).emit('meme:lobbyUpdated', lobby);
-        } else {
-          io.emit('meme:lobbyDeleted', { lobbyId: socket.memeLobbyId });
+        // Vérifier si le jeu est en cours
+        const lobby = await db.getMemeLobbyById(socket.memeLobbyId);
+        
+        if (lobby && lobby.status === 'playing') {
+          // Jeu en cours - NE PAS retirer le joueur, il pourra se reconnecter
+          console.log(`[MEME] ${socket.odId} disconnected during game, keeping in lobby`);
+          // On peut notifier les autres que le joueur est temporairement déconnecté
+          io.to(`meme:${socket.memeLobbyId}`).emit('meme:playerDisconnected', {
+            odId: socket.odId,
+            temporary: true
+          });
+        } else if (lobby && lobby.status === 'waiting') {
+          // En attente - retirer le joueur
+          console.log(`[MEME] ${socket.odId} disconnected from waiting lobby, removing`);
+          const updatedLobby = await db.leaveMemeLobby(socket.memeLobbyId, socket.odId);
+          if (updatedLobby) {
+            io.to(`meme:${socket.memeLobbyId}`).emit('meme:lobbyUpdated', updatedLobby);
+          } else {
+            io.emit('meme:lobbyDeleted', { lobbyId: socket.memeLobbyId });
+          }
         }
       } catch (error) {
-        console.error('[MEME] Erreur leave on disconnect:', error);
+        console.error('[MEME] Erreur on disconnect:', error);
       }
     }
   });

@@ -3092,13 +3092,17 @@ async function getMemeLobbyByCode(code) {
 async function joinMemeLobby(lobbyId, odId, pseudo) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
-  if (lobby.status !== 'waiting') throw new Error('La partie a déjà commencé');
   
   const participants = lobby.participants || [];
   
-  // Vérifie si déjà présent
+  // Si déjà participant, permettre la reconnexion même si le jeu est en cours
   if (participants.some(p => p.odId === odId)) {
-    return lobby; // Déjà dans le lobby
+    return lobby; // Reconnexion OK
+  }
+  
+  // Si pas encore participant, vérifier que le lobby est en attente
+  if (lobby.status !== 'waiting') {
+    throw new Error('La partie a déjà commencé');
   }
   
   participants.push({
