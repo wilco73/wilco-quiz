@@ -153,26 +153,25 @@ export default function MemeGameContainer({
         lobby={game.lobby}
         currentUser={currentUser}
         gamePhase={game.phase}
-        currentRound={game.currentRound}
-        totalRounds={game.totalRounds}
-        timeRemaining={game.timeRemaining}
-        currentTemplate={game.currentTemplate}
-        creations={game.creations}
-        currentVoteIndex={game.currentVoteIndex}
-        votes={game.votes}
-        roundResults={game.roundResults}
-        finalResults={game.finalResults}
+        template={game.template}
+        currentMeme={game.currentMeme}
+        allMemes={game.allMemes}
         players={game.players}
+        timeRemaining={game.timeRemaining}
+        currentVoteIndex={game.currentVoteIndex}
+        hasSuperVote={game.hasSuperVote}
         rotationsUsed={game.rotationsUsed}
         undosUsed={game.undosUsed}
-        maxRotations={game.lobby?.settings?.maxRotations || 3}
-        maxUndos={game.lobby?.settings?.maxUndos || 1}
-        onRotate={() => game.rotateTemplate()}
-        onUndo={() => game.undoTemplate()}
-        onSubmit={(creation) => game.submitCreation(creation)}
-        onVote={(creationId, superVote) => game.vote(creationId, superVote)}
+        canUndo={game.canUndo}
+        votesCount={game.votesCount}
+        totalVoters={game.totalVoters}
+        hasVoted={game.hasVoted}
+        onSubmitCreation={(textLayers, finalImage) => game.submitCreation({ textLayers, finalImage })}
+        onVote={(voteType, isSuper) => game.vote(voteType, isSuper)}
+        onRotateTemplate={() => game.rotateTemplate()}
+        onUndoTemplate={() => game.undoTemplate()}
         onPlayAgain={() => game.playAgain()}
-        onBack={handleBack}
+        onBackToLobby={handleBack}
       />
     );
   }

@@ -43,6 +43,7 @@ const PHASES = {
 export default function MemeGameView({
   lobby,
   currentUser,
+  gamePhase, // Phase passée par le hook (creating, voting, etc.)
   template,
   currentMeme,
   allMemes = [],
@@ -67,7 +68,8 @@ export default function MemeGameView({
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const phase = lobby?.phase || PHASES.WAITING;
+  // Utiliser gamePhase (du hook) en priorité, sinon fallback sur lobby.phase
+  const phase = gamePhase || lobby?.phase || PHASES.WAITING;
   const currentRound = lobby?.current_round || 1;
   const totalRounds = lobby?.settings?.rounds || 3;
   const settings = lobby?.settings || {};
