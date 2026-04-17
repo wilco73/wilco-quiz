@@ -53,6 +53,9 @@ export default function MemeGameView({
   hasSuperVote = true,
   rotationsUsed = 0,
   undosUsed = 0,
+  maxRotations = 3,
+  maxUndos = 1,
+  canRotate = true,
   canUndo = false,
   templatesHistory = [],
   votesCount = 0,
@@ -156,13 +159,14 @@ export default function MemeGameView({
                   template={template}
                   onSave={handleSubmitCreation}
                   onCancel={null}
-                  maxRotations={settings.maxRotations || 3}
-                  maxUndos={settings.maxUndos || 1}
+                  maxRotations={maxRotations}
+                  maxUndos={maxUndos}
                   rotationsUsed={rotationsUsed}
                   undosUsed={undosUsed}
+                  canRotate={canRotate}
+                  canUndo={canUndo}
                   onRotate={onRotateTemplate}
                   onUndo={onUndoTemplate}
-                  canUndo={canUndo}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center">

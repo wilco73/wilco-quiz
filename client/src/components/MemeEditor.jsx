@@ -62,9 +62,10 @@ export default function MemeEditor({
   maxUndos = 1,
   rotationsUsed = 0,
   undosUsed = 0,
+  canRotate = true,
+  canUndo = false,
   onRotate,
   onUndo,
-  canUndo = false,
 }) {
   // États
   const [textLayers, setTextLayers] = useState([]);
@@ -432,9 +433,9 @@ export default function MemeEditor({
             {onRotate && (
               <button
                 onClick={onRotate}
-                disabled={rotationsUsed >= maxRotations}
+                disabled={!canRotate}
                 className="p-2 hover:bg-gray-700 rounded text-yellow-400 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 text-xs"
-                title={`Changer d'image (${maxRotations - rotationsUsed} restants)`}
+                title={canRotate ? `Changer d'image (${maxRotations - rotationsUsed} restants)` : 'Plus de changements disponibles'}
               >
                 <RotateCw className="w-4 h-4" />
                 <span>{maxRotations - rotationsUsed}</span>
@@ -443,9 +444,9 @@ export default function MemeEditor({
             {onUndo && (
               <button
                 onClick={onUndo}
-                disabled={!canUndo || undosUsed >= maxUndos}
+                disabled={!canUndo}
                 className="p-2 hover:bg-gray-700 rounded text-blue-400 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 text-xs"
-                title={`Revenir à l'image précédente (${maxUndos - undosUsed} restants)`}
+                title={canUndo ? `Revenir à l'image précédente (${maxUndos - undosUsed} restants)` : 'Pas d\'image précédente'}
               >
                 <Undo className="w-4 h-4" />
                 <span>{maxUndos - undosUsed}</span>

@@ -3,6 +3,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 /**
  * useMemeGame - Hook pour gérer le jeu Make It Meme via WebSocket
  * 
+ * v3 - Corrections:
+ * - Logging détaillé pour debug timer
+ * - Gestion erreur rotation sans éjection
+ * - Fix undo
+ * 
  * @param {Object} socket - Instance socket.io
  * @param {Object} currentUser - { id, pseudo, role }
  * @returns {Object} État et actions du jeu
@@ -10,7 +15,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 export default function useMemeGame(socket, currentUser) {
   // États du jeu
   const [lobby, setLobby] = useState(null);
-  const [phase, setPhase] = useState('lobby'); // lobby, creating, submitting, voting, round_results, final_results
+  const [phase, setPhase] = useState('lobby');
   const [currentRound, setCurrentRound] = useState(1);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [phaseEndTime, setPhaseEndTime] = useState(null);
@@ -39,9 +44,9 @@ export default function useMemeGame(socket, currentUser) {
 
   // ==================== TIMER ====================
   
-  // Calculer le temps restant basé sur phaseEndTime
   useEffect(() => {
     if (!phaseEndTime) {
+      console.log('[useMemeGame] No phaseEndTime, setting timer to 0');
       setTimeRemaining(0);
       return;
     }
@@ -50,10 +55,22 @@ export default function useMemeGame(socket, currentUser) {
       const now = Date.now();
       const endTime = new Date(phaseEndTime).getTime();
       const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+      
+      // Log uniquement au premier calcul
+      if (timerRef.current === null) {
+        console.log('[useMemeGame] Timer started:', {
+          phaseEndTime,
+          endTimeMs: endTime,
+          nowMs: now,
+          remaining
+        });
+      }
+      
       setTimeRemaining(remaining);
       
       if (remaining <= 0) {
         clearInterval(timerRef.current);
+        timerRef.current = null;
       }
     };
 
@@ -63,6 +80,7 @@ export default function useMemeGame(socket, currentUser) {
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
+        timerRef.current = null;
       }
     };
   }, [phaseEndTime]);
@@ -74,6 +92,7 @@ export default function useMemeGame(socket, currentUser) {
 
     // Lobby updates
     socket.on('meme:lobbyUpdated', (updatedLobby) => {
+      console.log('[useMemeGame] lobbyUpdated:', updatedLobby?.id);
       setLobby(updatedLobby);
       updatePlayersFromLobby(updatedLobby);
     });
@@ -87,6 +106,14 @@ export default function useMemeGame(socket, currentUser) {
 
     // Game started
     socket.on('meme:gameStarted', ({ lobby: updatedLobby, phase: newPhase, roundNumber, endTime }) => {
+      console.log('[useMemeGame] gameStarted:', { 
+        lobbyId: updatedLobby?.id, 
+        phase: newPhase, 
+        roundNumber, 
+        endTime,
+        settings: updatedLobby?.settings
+      });
+      
       setLobby(updatedLobby);
       setPhase('creating');
       setCurrentRound(roundNumber);
@@ -98,6 +125,13 @@ export default function useMemeGame(socket, currentUser) {
 
     // Template assigned
     socket.on('meme:templateAssigned', ({ odId, assignment: newAssignment }) => {
+      console.log('[useMemeGame] templateAssigned:', { 
+        odId, 
+        myId: currentUser?.id,
+        templateId: newAssignment?.template?.id,
+        templateUrl: newAssignment?.template?.image_url
+      });
+      
       if (odId === currentUser?.id) {
         setAssignment(newAssignment);
         setTemplate(newAssignment.template);
@@ -106,7 +140,6 @@ export default function useMemeGame(socket, currentUser) {
 
     // Creation submitted by someone
     socket.on('meme:creationSubmitted', ({ odId, pseudo, creationId }) => {
-      // Mettre à jour le lobby pour afficher qui a soumis
       setLobby(prev => {
         if (!prev) return prev;
         const updatedParticipants = (prev.participants || []).map(p => 
@@ -118,6 +151,7 @@ export default function useMemeGame(socket, currentUser) {
 
     // Voting started
     socket.on('meme:votingStarted', ({ lobby: updatedLobby, creations, currentIndex, endTime }) => {
+      console.log('[useMemeGame] votingStarted:', { endTime, creationsCount: creations?.length });
       setLobby(updatedLobby);
       setAllMemes(creations);
       setCurrentVoteIndex(currentIndex);
@@ -129,12 +163,14 @@ export default function useMemeGame(socket, currentUser) {
 
     // Vote received
     socket.on('meme:voteReceived', ({ creationId, odId, voteType, isSuper, totalScore }) => {
-      // Mettre à jour le compteur de votes
-      setVotesReceived(prev => ({ ...prev, [odId]: true }));
+      setVotesReceived(prev => ({
+        ...prev,
+        [creationId]: [...(prev[creationId] || []), { odId, voteType, isSuper }]
+      }));
       
       // Mettre à jour le score du meme
-      setAllMemes(prev => prev.map(meme => 
-        meme.id === creationId ? { ...meme, total_score: totalScore } : meme
+      setAllMemes(prev => prev.map(m => 
+        m.id === creationId ? { ...m, total_score: totalScore } : m
       ));
     });
 
@@ -143,7 +179,6 @@ export default function useMemeGame(socket, currentUser) {
       setLobby(updatedLobby);
       setCurrentVoteIndex(currentIndex);
       setPhaseEndTime(endTime);
-      setVotesReceived({});
       setHasVoted(false);
     });
 
@@ -155,16 +190,17 @@ export default function useMemeGame(socket, currentUser) {
       updatePlayersFromLobby(updatedLobby);
     });
 
-    // New round
+    // New round started
     socket.on('meme:newRoundStarted', ({ lobby: updatedLobby, roundNumber, endTime }) => {
+      console.log('[useMemeGame] newRoundStarted:', { roundNumber, endTime });
       setLobby(updatedLobby);
-      setPhase('creating');
       setCurrentRound(roundNumber);
+      setPhase('creating');
       setPhaseEndTime(endTime);
       setHasSubmitted(false);
       setHasSuperVote(true);
-      setVotesReceived({});
-      setHasVoted(false);
+      setTemplate(null);
+      setAssignment(null);
       updatePlayersFromLobby(updatedLobby);
     });
 
@@ -189,7 +225,7 @@ export default function useMemeGame(socket, currentUser) {
       socket.off('meme:newRoundStarted');
       socket.off('meme:gameFinished');
     };
-  }, [socket, currentUser?.id, lobby?.id]);
+  }, [socket, currentUser?.id]);
 
   // Helper pour mettre à jour les joueurs depuis le lobby
   const updatePlayersFromLobby = (lobbyData) => {
@@ -216,12 +252,19 @@ export default function useMemeGame(socket, currentUser) {
       socket.emit('meme:createLobby', {
         odId: currentUser.id,
         pseudo: currentUser.pseudo,
-        userRole: currentUser.role,
-        settings,
+        settings: {
+          rounds: settings.rounds || 3,
+          creationTime: settings.creationTime || 120,
+          voteTime: settings.voteTime || 30,
+          maxRotations: settings.maxRotations || 3,
+          maxUndos: settings.maxUndos || 1,
+          tags: settings.tags || [],
+        }
       }, (response) => {
         setLoading(false);
         if (response.success) {
           setLobby(response.lobby);
+          setPhase('lobby');
           updatePlayersFromLobby(response.lobby);
           resolve(response.lobby);
         } else {
@@ -239,6 +282,8 @@ export default function useMemeGame(socket, currentUser) {
     setLoading(true);
     setError(null);
     
+    console.log('[useMemeGame] joinLobby:', lobbyId);
+    
     return new Promise((resolve) => {
       socket.emit('meme:joinLobby', {
         lobbyId,
@@ -246,6 +291,8 @@ export default function useMemeGame(socket, currentUser) {
         pseudo: currentUser.pseudo,
       }, (response) => {
         setLoading(false);
+        console.log('[useMemeGame] joinLobby response:', response);
+        
         if (response.success) {
           setLobby(response.lobby);
           updatePlayersFromLobby(response.lobby);
@@ -258,7 +305,7 @@ export default function useMemeGame(socket, currentUser) {
     });
   }, [socket, currentUser]);
 
-  // Rejoindre un lobby par son code court (6 caractères)
+  // Rejoindre un lobby par son code court
   const joinLobbyByCode = useCallback(async (code) => {
     if (!socket || !currentUser) return null;
     
@@ -323,21 +370,22 @@ export default function useMemeGame(socket, currentUser) {
 
   // Démarrer la partie
   const startGame = useCallback(async () => {
-    if (!socket || !lobby) return;
-    
-    setLoading(true);
+    if (!socket || !lobby) return false;
     
     return new Promise((resolve) => {
       socket.emit('meme:startGame', {
         lobbyId: lobby.id,
       }, (response) => {
-        setLoading(false);
+        console.log('[useMemeGame] startGame response:', response);
+        if (!response.success) {
+          setError(response.message);
+        }
         resolve(response.success);
       });
     });
   }, [socket, lobby]);
 
-  // Rotation de template
+  // Rotation de template - NE PAS ÉJECTER SI ERREUR
   const rotateTemplate = useCallback(async () => {
     if (!socket || !lobby || !currentUser) return null;
     
@@ -350,10 +398,13 @@ export default function useMemeGame(socket, currentUser) {
         if (response.success) {
           setAssignment(response.assignment);
           setTemplate(response.assignment.template);
+          resolve(response.assignment);
         } else {
-          setError(response.message);
+          // NE PAS setError pour ne pas éjecter - juste loguer
+          console.log('[useMemeGame] rotateTemplate failed:', response.message);
+          // On peut afficher un toast mais sans changer l'état
+          resolve(null);
         }
-        resolve(response.success ? response.assignment : null);
       });
     });
   }, [socket, lobby, currentUser, currentRound]);
@@ -362,25 +413,34 @@ export default function useMemeGame(socket, currentUser) {
   const undoTemplate = useCallback(async () => {
     if (!socket || !lobby || !currentUser) return null;
     
+    console.log('[useMemeGame] undoTemplate called', {
+      lobbyId: lobby.id,
+      roundNumber: currentRound,
+      odId: currentUser.id,
+      assignment: assignment
+    });
+    
     return new Promise((resolve) => {
-      socket.emit('meme:undoRotation', {
+      socket.emit('meme:undoTemplate', {
         lobbyId: lobby.id,
         roundNumber: currentRound,
         odId: currentUser.id,
       }, (response) => {
+        console.log('[useMemeGame] undoTemplate response:', response);
         if (response.success) {
           setAssignment(response.assignment);
           setTemplate(response.assignment.template);
+          resolve(response.assignment);
         } else {
-          setError(response.message);
+          console.log('[useMemeGame] undoTemplate failed:', response.message);
+          resolve(null);
         }
-        resolve(response.success ? response.assignment : null);
       });
     });
-  }, [socket, lobby, currentUser, currentRound]);
+  }, [socket, lobby, currentUser, currentRound, assignment]);
 
   // Soumettre une création
-  const submitCreation = useCallback(async (textLayers, finalImageBase64) => {
+  const submitCreation = useCallback(async (creationData) => {
     if (!socket || !lobby || !currentUser || !template) return false;
     
     setLoading(true);
@@ -392,8 +452,8 @@ export default function useMemeGame(socket, currentUser) {
         odId: currentUser.id,
         pseudo: currentUser.pseudo,
         templateId: template.id,
-        textLayers,
-        finalImageBase64,
+        textLayers: creationData.textLayers,
+        finalImageBase64: creationData.finalImage,
       }, (response) => {
         setLoading(false);
         if (response.success) {
@@ -428,8 +488,6 @@ export default function useMemeGame(socket, currentUser) {
           if (isSuper) {
             setHasSuperVote(false);
           }
-        } else {
-          setError(response.message);
         }
         resolve(response.success);
       });
@@ -438,28 +496,27 @@ export default function useMemeGame(socket, currentUser) {
 
   // Rejouer
   const playAgain = useCallback(async () => {
-    // Reset l'état et retourner au lobby
+    // Réinitialiser l'état pour une nouvelle partie
     setPhase('lobby');
     setCurrentRound(1);
     setTemplate(null);
     setAssignment(null);
-    setHasSubmitted(false);
     setAllMemes([]);
-    setCurrentVoteIndex(0);
+    setHasSubmitted(false);
     setHasSuperVote(true);
-    setVotesReceived({});
     setHasVoted(false);
-    
-    // Le lobby reste le même, juste reset pour une nouvelle partie
-    if (lobby) {
-      updatePlayersFromLobby({ ...lobby, participants: lobby.participants.map(p => ({ ...p, score: 0, memes: [] })) });
-    }
-  }, [lobby]);
+  }, []);
 
-  // Retour au menu
-  const backToLobbyList = useCallback(async () => {
-    await leaveLobby();
-  }, [leaveLobby]);
+  // Retour à la liste
+  const backToLobbyList = useCallback(() => {
+    if (lobby) {
+      leaveLobby();
+    }
+    setLobby(null);
+    setPhase('lobby');
+    setTemplate(null);
+    setAssignment(null);
+  }, [lobby, leaveLobby]);
 
   // ==================== COMPUTED VALUES ====================
   
@@ -467,18 +524,20 @@ export default function useMemeGame(socket, currentUser) {
   const isOwnMeme = currentMeme?.player_id === currentUser?.id;
   const isCreator = lobby?.creator_id === currentUser?.id;
   
-  // Calcul des votants (tous sauf le créateur du meme actuel)
-  const totalVoters = currentMeme 
-    ? (lobby?.participants || []).filter(p => p.odId !== currentMeme.player_id).length 
-    : 0;
-  const votesCount = Object.keys(votesReceived).length;
-  const allVoted = totalVoters > 0 && votesCount >= totalVoters;
-  
-  const canUndo = assignment?.templates_history?.length > 1 && 
-    (assignment?.undos_used || 0) < (lobby?.settings?.maxUndos || 1);
-  
+  // Calcul des capacités d'undo/rotation
   const rotationsUsed = assignment?.rotations_used || 0;
   const undosUsed = assignment?.undos_used || 0;
+  const maxRotations = lobby?.settings?.maxRotations ?? 3;
+  const maxUndos = lobby?.settings?.maxUndos ?? 1;
+  
+  const canRotate = rotationsUsed < maxRotations;
+  const canUndo = (assignment?.templates_history?.length > 1) && (undosUsed < maxUndos);
+
+  const votesCount = Object.keys(votesReceived).reduce((acc, key) => 
+    acc + (votesReceived[key]?.length || 0), 0
+  );
+  const totalVoters = (lobby?.participants?.length || 0) - 1;
+  const allVoted = votesCount >= totalVoters;
 
   return {
     // État
@@ -505,8 +564,11 @@ export default function useMemeGame(socket, currentUser) {
     isOwnMeme,
     isCreator,
     canUndo,
+    canRotate,
     rotationsUsed,
     undosUsed,
+    maxRotations,
+    maxUndos,
     
     // Actions
     createLobby,
@@ -522,7 +584,7 @@ export default function useMemeGame(socket, currentUser) {
     playAgain,
     backToLobbyList,
     
-    // Setters directs (pour les cas spéciaux)
+    // Setters directs
     setError,
   };
 }
