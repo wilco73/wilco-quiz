@@ -8,6 +8,62 @@ const router = express.Router();
 
 const db = require('../database');
 
+// POST - Créer un nouveau lobby (comme drawing-lobbies)
+router.post('/', async (req, res) => {
+  try {
+    const { creator_id, creator_pseudo, settings } = req.body;
+    
+    if (!creator_id || !creator_pseudo) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'creator_id et creator_pseudo sont requis' 
+      });
+    }
+    
+    const lobby = await db.createMemeLobby(creator_id, creator_pseudo, settings || {});
+    
+    console.log('[MEME LOBBY API] Lobby créé:', lobby.id, 'code:', lobby.code);
+    
+    res.json({ success: true, lobby });
+  } catch (error) {
+    console.error('[MEME LOBBY API] Erreur createMemeLobby:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST - Rejoindre un lobby par code
+router.post('/join-by-code', async (req, res) => {
+  try {
+    const { code, odId, pseudo } = req.body;
+    
+    if (!code || !odId || !pseudo) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'code, odId et pseudo sont requis' 
+      });
+    }
+    
+    // Trouver le lobby par son code
+    const lobby = await db.getMemeLobbyByCode(code);
+    
+    if (!lobby) {
+      return res.status(404).json({ success: false, message: 'Lobby non trouvé' });
+    }
+    
+    if (lobby.status !== 'waiting') {
+      return res.status(400).json({ success: false, message: 'La partie a déjà commencé' });
+    }
+    
+    // Ajouter le joueur
+    const updatedLobby = await db.joinMemeLobby(lobby.id, odId, pseudo);
+    
+    res.json({ success: true, lobby: updatedLobby });
+  } catch (error) {
+    console.error('[MEME LOBBY API] Erreur joinByCode:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // GET - Tous les lobbies (admin)
 router.get('/', async (req, res) => {
   try {

@@ -669,21 +669,80 @@ const App = () => {
               setCurrentMysteryLobby(lobby);
               setView('mystery-game');
             }}
-            onJoinMemeLobby={(lobbyOrCode) => {
-              // Si c'est un objet avec un code (rejoint par code depuis l'accueil)
+            onJoinMemeLobby={async (lobbyOrCode) => {
+              // Si c'est un objet avec seulement un code (rejoint par code depuis l'accueil)
               if (lobbyOrCode.code && !lobbyOrCode.id) {
-                setCurrentMemeLobby(null);
-                setCurrentMemeLobbyCode(lobbyOrCode.code);
+                try {
+                  // Rejoindre via API REST
+                  const res = await fetch(`${API_URL}/meme-lobbies/join-by-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      code: lobbyOrCode.code,
+                      odId: currentUser.id,
+                      pseudo: currentUser.pseudo,
+                    })
+                  });
+                  
+                  const data = await res.json();
+                  
+                  if (data.success) {
+                    setCurrentMemeLobby(data.lobby);
+                    setCurrentMemeLobbyCode(null);
+                    setView('meme-game');
+                  } else {
+                    toast.error(data.message || 'Lobby non trouvé');
+                  }
+                } catch (error) {
+                  console.error('Erreur join by code:', error);
+                  toast.error('Erreur lors de la connexion au lobby');
+                }
               } else {
-                // C'est un lobby complet
+                // C'est un lobby complet (depuis la liste)
                 setCurrentMemeLobby(lobbyOrCode);
                 setCurrentMemeLobbyCode(null);
+                setView('meme-game');
               }
-              setView('meme-game');
             }}
-            onCreateMemeLobby={() => {
-              setCurrentMemeLobby(null); // null = créer un nouveau lobby
-              setView('meme-game');
+            onCreateMemeLobby={async () => {
+              if (!currentUser?.teamName) {
+                toast.error('Vous devez rejoindre une équipe d\'abord');
+                return;
+              }
+              
+              try {
+                // Créer le lobby via API REST (comme drawing-lobbies)
+                const res = await fetch(`${API_URL}/meme-lobbies`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    creator_id: currentUser.id,
+                    creator_pseudo: currentUser.pseudo,
+                    settings: {
+                      rounds: 3,
+                      creationTime: 120,
+                      voteTime: 30,
+                      maxRotations: 3,
+                      maxUndos: 1,
+                      tags: [],
+                    }
+                  })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                  setCurrentMemeLobby(data.lobby);
+                  setCurrentMemeLobbyCode(null);
+                  setView('meme-game');
+                  toast.success('Lobby Make It Meme créé !');
+                } else {
+                  toast.error(data.message || 'Erreur lors de la création');
+                }
+              } catch (error) {
+                console.error('Erreur création meme lobby:', error);
+                toast.error('Erreur lors de la création du lobby');
+              }
             }}
           />
         );
@@ -718,19 +777,18 @@ const App = () => {
           />
         );
       
-      case 'meme-game':
-        return (
-          <MemeGameContainer
-            currentUser={currentUser}
-            lobbyId={currentMemeLobby?.id}
-            lobbyCode={currentMemeLobbyCode}
-            onBack={() => {
-              setCurrentMemeLobby(null);
-              setCurrentMemeLobbyCode(null);
-              setView('lobby-list');
-            }}
-          />
-        );
+        case 'meme-game':
+          return (
+            <MemeGameContainer
+              currentUser={currentUser}
+              lobby={currentMemeLobby}
+              onBack={() => {
+                setCurrentMemeLobby(null);
+                setCurrentMemeLobbyCode(null);
+                setView('lobby-list');
+              }}
+            />
+          );
       
       case 'scoreboard':
         return (

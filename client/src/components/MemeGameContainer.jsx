@@ -9,20 +9,20 @@ import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 /**
  * MemeGameContainer - Conteneur principal pour le jeu Make It Meme
  * 
- * CORRIGÉ v11:
- * - Gère lobbyId ET lobbyCode
- * - Si on passe un code, rejoint directement par code
- * - Plus d'écran intermédiaire quand on vient de l'accueil
+ * v12 CORRIGÉ:
+ * - Accepte `lobby` directement (quand créé depuis l'accueil)
+ * - Accepte `lobbyCode` pour rejoindre par code
+ * - Plus d'écran intermédiaire si on a déjà un lobby
  * 
  * Props:
  * - currentUser: { id, pseudo, role }
- * - lobbyId: string (optionnel, rejoindre par ID)
+ * - lobby: object (optionnel, si déjà créé/rejoint)
  * - lobbyCode: string (optionnel, rejoindre par code court)
  * - onBack: () => void
  */
 export default function MemeGameContainer({ 
   currentUser, 
-  lobbyId: initialLobbyId, 
+  lobby: initialLobby,
   lobbyCode: initialLobbyCode,
   onBack 
 }) {
@@ -52,29 +52,31 @@ export default function MemeGameContainer({
     fetchTags();
   }, []);
 
-  // Rejoindre automatiquement si on a un ID ou un CODE
+  // Si on a un lobby initial (créé depuis l'accueil), l'utiliser directement
+  useEffect(() => {
+    if (initialLobby && !game.lobby) {
+      console.log('[MemeGameContainer] Using initial lobby:', initialLobby.id);
+      // Rejoindre le lobby via socket pour synchroniser
+      game.joinLobby(initialLobby.id);
+    }
+  }, [initialLobby]);
+
+  // Si on a un code, rejoindre par code
   useEffect(() => {
     if (initialJoinAttempted) return;
-    if (game.lobby) return; // Déjà dans un lobby
+    if (game.lobby) return;
+    if (initialLobby) return; // Ne pas rejoindre par code si on a déjà un lobby
     
-    const joinInitial = async () => {
-      setInitialJoinAttempted(true);
-      
-      if (initialLobbyCode) {
-        // Rejoindre par code court
+    const joinByCode = async () => {
+      if (initialLobbyCode && socket && currentUser) {
+        setInitialJoinAttempted(true);
         console.log('[MemeGameContainer] Joining by code:', initialLobbyCode);
         await game.joinLobbyByCode(initialLobbyCode);
-      } else if (initialLobbyId) {
-        // Rejoindre par ID
-        console.log('[MemeGameContainer] Joining by ID:', initialLobbyId);
-        await game.joinLobby(initialLobbyId);
       }
     };
     
-    if (socket && currentUser && (initialLobbyId || initialLobbyCode)) {
-      joinInitial();
-    }
-  }, [initialLobbyId, initialLobbyCode, socket, currentUser, game.lobby, initialJoinAttempted]);
+    joinByCode();
+  }, [initialLobbyCode, socket, currentUser, game.lobby, initialLobby, initialJoinAttempted]);
 
   // Handlers
   const handleCreateLobby = async () => {
@@ -91,15 +93,12 @@ export default function MemeGameContainer({
 
   const handleJoinLobby = async () => {
     if (!joinLobbyId.trim()) return;
-    // Essayer d'abord par code (6 chars), sinon par ID
     const input = joinLobbyId.trim().toUpperCase();
     let success;
     
     if (input.length === 6 && !input.includes('-')) {
-      // C'est probablement un code court
       success = await game.joinLobbyByCode(input);
     } else {
-      // C'est un UUID
       success = await game.joinLobby(input);
     }
     
@@ -192,10 +191,8 @@ export default function MemeGameContainer({
     );
   }
 
-  // Vue initiale - SEULEMENT si on n'a pas été appelé avec un ID ou code
-  // (sinon on attend le chargement ou on affiche l'erreur)
-  if (initialLobbyId || initialLobbyCode) {
-    // On attend le résultat du join
+  // Si on attend de rejoindre un lobby (par code ou lobby initial)
+  if (initialLobby || initialLobbyCode) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -206,11 +203,11 @@ export default function MemeGameContainer({
     );
   }
 
-  // Vue pour créer/rejoindre (accessible uniquement depuis l'admin ou si aucun lobby spécifié)
+  // Vue pour créer/rejoindre - SEULEMENT accessible depuis l'admin
+  // (si on arrive ici depuis l'accueil, c'est un bug)
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-gray-900 p-4">
       <div className="max-w-md mx-auto pt-8">
-        {/* Bouton retour */}
         <button
           onClick={handleBack}
           className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
@@ -219,7 +216,6 @@ export default function MemeGameContainer({
           Retour
         </button>
 
-        {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">
             😂 Make It Meme
@@ -229,7 +225,6 @@ export default function MemeGameContainer({
           </p>
         </div>
 
-        {/* Actions */}
         <div className="space-y-4">
           <button
             onClick={handleCreateLobby}
