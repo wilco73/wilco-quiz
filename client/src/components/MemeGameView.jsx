@@ -100,7 +100,7 @@ export default function MemeGameView({
   };
 
   // Vérifier si c'est le propre meme du joueur
-  const isOwnMeme = currentMeme?.player_id === currentUser?.odId;
+  const isOwnMeme = currentMeme?.player_id === currentUser?.id;
 
   // Timer critique
   const isCritical = timeRemaining <= 10;
@@ -254,7 +254,7 @@ export default function MemeGameView({
                       <div
                         key={player.odId}
                         className={`flex items-center justify-between p-2 rounded-lg ${
-                          player.odId === currentUser?.odId
+                          player.odId === currentUser?.id
                             ? 'bg-purple-600/30 border border-purple-500'
                             : 'bg-gray-700/50'
                         }`}

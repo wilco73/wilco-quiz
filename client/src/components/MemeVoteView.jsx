@@ -48,7 +48,7 @@ export default function MemeVoteView({
     setHasVotedLocal(false);
   }, [meme?.id]);
 
-  const isOwnMeme = meme?.player_id === currentUser?.odId;
+  const isOwnMeme = meme?.player_id === currentUser?.id;
 
   const handleVote = (voteType) => {
     if (hasVoted || isOwnMeme) return;
