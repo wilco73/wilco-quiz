@@ -2,7 +2,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * useMemeGame - Hook pour gérer le jeu Make It Meme
- * v9 - Fix compteur de votes
+ * v10 - Workflow local-first
+ * 
+ * Workflow:
+ * 1. Joueur valide → stocke localement + émet playerReady
+ * 2. Joueur peut annuler → reset local + émet playerNotReady  
+ * 3. Tous ready OU timer expire → serveur émet submitNow
+ * 4. Client envoie la création via API (même si pas validée = état actuel)
+ * 5. Serveur attend toutes les créations → passe au vote
  */
 
 const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -31,7 +38,12 @@ export default function useMemeGame(socket, currentUser) {
   
   const timerRef = useRef(null);
   const lobbyIdRef = useRef(null);
+  
+  // Stockage local de la création en cours (pas encore envoyée en BDD)
   const pendingCreationRef = useRef(null);
+  
+  // Callback pour récupérer l'état actuel de l'éditeur (même si pas validé)
+  const getCurrentCreationRef = useRef(null);
 
   // Timer
   const startTimer = useCallback((seconds) => {
@@ -90,6 +102,30 @@ export default function useMemeGame(socket, currentUser) {
     return () => socket.off('connect', handleConnect);
   }, [socket, currentUser, updatePlayersFromLobby]);
 
+  // Fonction pour envoyer la création au serveur
+  const sendCreationToServer = useCallback(async (creation) => {
+    if (!creation) {
+      console.log('[useMemeGame] No creation to send');
+      return;
+    }
+    
+    console.log('[useMemeGame] Sending creation to server...');
+    
+    try {
+      const response = await fetch(`${API_URL}/api/meme-creations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(creation),
+      });
+      
+      const result = await response.json();
+      console.log('[useMemeGame] Creation sent:', result?.success);
+      
+    } catch (err) {
+      console.error('[useMemeGame] Error sending creation:', err);
+    }
+  }, []);
+
   // Socket listeners
   useEffect(() => {
     if (!socket) return;
@@ -116,6 +152,7 @@ export default function useMemeGame(socket, currentUser) {
       setCurrentRound(roundNumber);
       setHasSubmitted(false);
       setHasSuperVote(true);
+      pendingCreationRef.current = null;
       updatePlayersFromLobby(updatedLobby);
       startTimer(serverTime || 120);
     };
@@ -151,34 +188,38 @@ export default function useMemeGame(socket, currentUser) {
       });
     };
 
-    // Le serveur demande d'envoyer les créations (tous ready ou timer expiré)
+    // LE SERVEUR DEMANDE D'ENVOYER LA CRÉATION
     const handleSubmitNow = async () => {
       console.log('[useMemeGame] submitNow received');
       
-      const creation = pendingCreationRef.current;
-      if (!creation) {
-        console.log('[useMemeGame] No pending creation to submit');
-        return;
+      // Priorité 1: création déjà validée (pendingCreationRef)
+      let creation = pendingCreationRef.current;
+      
+      // Priorité 2: si pas validée, récupérer l'état actuel de l'éditeur
+      if (!creation && getCurrentCreationRef.current) {
+        console.log('[useMemeGame] Getting current editor state...');
+        const currentState = getCurrentCreationRef.current();
+        if (currentState && currentState.finalImage) {
+          creation = {
+            lobbyId: lobbyIdRef.current,
+            roundNumber: currentRound,
+            odId: currentUser?.id,
+            pseudo: currentUser?.pseudo,
+            templateId: template?.id,
+            textLayers: currentState.textLayers || [],
+            finalImageBase64: currentState.finalImage,
+          };
+        }
       }
       
-      console.log('[useMemeGame] Sending creation to server...');
-      
-      try {
-        const response = await fetch(`${API_URL}/api/meme-creations`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(creation),
-        });
-        
-        const result = await response.json();
-        console.log('[useMemeGame] Creation sent:', result?.success);
-        
-        // Reset la création pending
-        pendingCreationRef.current = null;
-        
-      } catch (err) {
-        console.error('[useMemeGame] Error sending creation:', err);
+      if (creation) {
+        await sendCreationToServer(creation);
+      } else {
+        console.log('[useMemeGame] No creation to send (no pending and no current state)');
       }
+      
+      // Reset
+      pendingCreationRef.current = null;
     };
 
     const handleVotingStarted = ({ lobby: updatedLobby, creations, currentIndex, timeRemaining: serverTime }) => {
@@ -188,25 +229,22 @@ export default function useMemeGame(socket, currentUser) {
       setAllMemes(creations || []);
       setCurrentVoteIndex(currentIndex || 0);
       setPhase('voting');
-      setVotesReceived({}); // Reset votes pour ce meme
+      setVotesReceived({});
       setHasVoted(false);
-      setHasSubmitted(false); // Reset pour la prochaine manche
-      pendingCreationRef.current = null; // Clear pending
+      setHasSubmitted(false);
+      pendingCreationRef.current = null;
       updatePlayersFromLobby(updatedLobby);
       startTimer(serverTime || 30);
     };
 
-    // FIX: Mettre à jour le compteur de votes
     const handleVoteReceived = ({ creationId, odId, voteType, isSuper, totalScore }) => {
       console.log('[useMemeGame] voteReceived:', { creationId, odId, voteType });
       
-      // Mettre à jour votesReceived pour le compteur
       setVotesReceived(prev => ({
         ...prev,
         [creationId]: [...(prev[creationId] || []), { odId, voteType, isSuper }]
       }));
       
-      // Mettre à jour le score du meme
       setAllMemes(prev => prev.map(m =>
         m.id === creationId ? { ...m, total_score: totalScore } : m
       ));
@@ -216,7 +254,7 @@ export default function useMemeGame(socket, currentUser) {
       console.log('[useMemeGame] nextVoteStarted, index:', currentIndex);
       setLobby(updatedLobby);
       setCurrentVoteIndex(currentIndex);
-      setVotesReceived({}); // Reset votes pour le nouveau meme
+      setVotesReceived({});
       setHasVoted(false);
       startTimer(serverTime || 30);
     };
@@ -239,6 +277,7 @@ export default function useMemeGame(socket, currentUser) {
       setTemplate(null);
       setAssignment(null);
       setVotesReceived({});
+      pendingCreationRef.current = null;
       updatePlayersFromLobby(updatedLobby);
       startTimer(serverTime || 120);
     };
@@ -252,7 +291,7 @@ export default function useMemeGame(socket, currentUser) {
     };
 
     const handleLobbyReset = ({ lobby: updatedLobby }) => {
-      console.log('[useMemeGame] lobbyReset - ready to play again');
+      console.log('[useMemeGame] lobbyReset');
       setLobby(updatedLobby);
       setPhase('lobby');
       setCurrentRound(1);
@@ -264,6 +303,7 @@ export default function useMemeGame(socket, currentUser) {
       setHasVoted(false);
       setVotesReceived({});
       setCurrentVoteIndex(0);
+      pendingCreationRef.current = null;
       updatePlayersFromLobby(updatedLobby);
     };
 
@@ -298,7 +338,7 @@ export default function useMemeGame(socket, currentUser) {
       socket.off('meme:gameFinished');
       socket.off('meme:lobbyReset');
     };
-  }, [socket, currentUser?.id, updatePlayersFromLobby, startTimer]);
+  }, [socket, currentUser, currentRound, template, updatePlayersFromLobby, startTimer, sendCreationToServer]);
 
   // Actions
   const createLobby = useCallback((settings = {}) => {
@@ -470,16 +510,16 @@ export default function useMemeGame(socket, currentUser) {
     });
   }, [socket, lobby, currentUser, currentRound]);
 
-  // Valider localement (pas d'envoi en BDD)
-  const submitCreation = useCallback(async (creationData) => {
+  // Valider localement (pas d'envoi en BDD, juste notification ready)
+  const submitCreation = useCallback((creationData) => {
     if (!socket || !lobby || !currentUser || !template) {
       return false;
     }
     
     console.log('[useMemeGame] submitCreation (local only)');
     
-    // Stocker la création localement (dans le ref pour accès dans les handlers)
-    const creation = {
+    // Stocker la création localement
+    pendingCreationRef.current = {
       lobbyId: lobby.id,
       roundNumber: currentRound,
       odId: currentUser.id,
@@ -489,10 +529,9 @@ export default function useMemeGame(socket, currentUser) {
       finalImageBase64: creationData.finalImage || '',
     };
     
-    pendingCreationRef.current = creation;
     setHasSubmitted(true);
     
-    // Notifier le serveur que ce joueur est "ready" (sans envoyer l'image)
+    // Notifier le serveur que ce joueur est "ready"
     socket.emit('meme:playerReady', {
       lobbyId: lobby.id,
       roundNumber: currentRound,
@@ -502,7 +541,7 @@ export default function useMemeGame(socket, currentUser) {
     return true;
   }, [socket, lobby, currentUser, template, currentRound]);
 
-  // Annuler la soumission (juste reset local)
+  // Annuler la validation (reset local)
   const cancelSubmission = useCallback(() => {
     if (!socket || !lobby || !currentUser) return Promise.resolve(false);
     
@@ -511,7 +550,7 @@ export default function useMemeGame(socket, currentUser) {
     pendingCreationRef.current = null;
     setHasSubmitted(false);
     
-    // Notifier le serveur que ce joueur n'est plus "ready"
+    // Notifier le serveur
     socket.emit('meme:playerNotReady', {
       lobbyId: lobby.id,
       roundNumber: currentRound,
@@ -520,6 +559,11 @@ export default function useMemeGame(socket, currentUser) {
     
     return Promise.resolve(true);
   }, [socket, lobby, currentUser, currentRound]);
+
+  // Permettre à MemeEditor de fournir son état actuel
+  const setGetCurrentCreation = useCallback((getter) => {
+    getCurrentCreationRef.current = getter;
+  }, []);
 
   const vote = useCallback((voteType, isSuper = false) => {
     if (!socket || !lobby || !currentUser) return Promise.resolve(false);
@@ -547,7 +591,6 @@ export default function useMemeGame(socket, currentUser) {
 
   const playAgain = useCallback(() => {
     if (!socket || !lobby) {
-      // Fallback: reset local seulement
       setPhase('lobby');
       setCurrentRound(1);
       setTemplate(null);
@@ -557,13 +600,13 @@ export default function useMemeGame(socket, currentUser) {
       setHasSuperVote(true);
       setHasVoted(false);
       setVotesReceived({});
+      pendingCreationRef.current = null;
       return Promise.resolve(false);
     }
     
     return new Promise((resolve) => {
       socket.emit('meme:playAgain', { lobbyId: lobby.id }, (response) => {
         if (response?.success) {
-          // Le reset sera fait via handleLobbyReset
           console.log('[useMemeGame] playAgain success');
         } else {
           console.error('[useMemeGame] playAgain failed:', response?.message);
@@ -582,12 +625,10 @@ export default function useMemeGame(socket, currentUser) {
     lobbyIdRef.current = null;
   }, [lobby, leaveLobby]);
 
-  // Computed - FIX: compter les votes du meme actuel seulement
+  // Computed
   const currentMeme = allMemes[currentVoteIndex] || null;
   const currentMemeVotes = currentMeme ? (votesReceived[currentMeme.id] || []) : [];
   const votesCount = currentMemeVotes.length;
-  
-  // Nombre de votants = participants - 1 (l'auteur ne vote pas pour son meme)
   const totalVoters = Math.max(0, (lobby?.participants?.length || 0) - 1);
   
   const isOwnMeme = currentMeme?.player_id === currentUser?.id;
@@ -607,6 +648,7 @@ export default function useMemeGame(socket, currentUser) {
     totalVoters, players, loading, error, isOwnMeme, isCreator, canUndo, canRotate,
     rotationsUsed, undosUsed, maxRotations, maxUndos,
     createLobby, joinLobby, joinLobbyByCode, leaveLobby, updateSettings, startGame,
-    rotateTemplate, undoTemplate, submitCreation, cancelSubmission, vote, playAgain, backToLobbyList, setError,
+    rotateTemplate, undoTemplate, submitCreation, cancelSubmission, vote, playAgain, 
+    backToLobbyList, setError, setGetCurrentCreation,
   };
 }

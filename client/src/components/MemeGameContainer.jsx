@@ -179,6 +179,7 @@ export default function MemeGameContainer({
         onUndoTemplate={() => game.undoTemplate()}
         onPlayAgain={() => game.playAgain()}
         onBackToLobby={handleBack}
+        onSetGetCurrentCreation={(getter) => game.setGetCurrentCreation(getter)}
       />
     );
   }

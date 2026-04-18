@@ -3355,6 +3355,7 @@ async function updateParticipantScore(lobbyId, odId, scoreChange) {
   return data;
 }
 
+// Mise à jour des participants (scores)
 async function updateMemeLobbyParticipants(lobbyId, participants) {
   const { data, error } = await supabase
     .from('meme_lobbies')
@@ -3362,7 +3363,6 @@ async function updateMemeLobbyParticipants(lobbyId, participants) {
     .eq('id', lobbyId)
     .select()
     .single();
-  
   if (error) throw error;
   return data;
 }

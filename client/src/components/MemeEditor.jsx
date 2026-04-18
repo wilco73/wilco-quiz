@@ -66,6 +66,7 @@ export default function MemeEditor({
   canUndo = false,
   onRotate,
   onUndo,
+  onRegisterGetter, // Callback pour enregistrer le getter de l'état actuel
 }) {
   // États
   const [textLayers, setTextLayers] = useState([]);
@@ -107,6 +108,12 @@ export default function MemeEditor({
       setSelectedLayerId(null);
     }
   }, [template]);
+
+  // Ref pour accéder aux textLayers depuis le getter
+  const textLayersRef = useRef(textLayers);
+  useEffect(() => {
+    textLayersRef.current = textLayers;
+  }, [textLayers]);
 
   // Calculer l'échelle pour afficher l'image dans le conteneur
   useEffect(() => {
@@ -381,6 +388,21 @@ export default function MemeEditor({
       img.src = template.image_url;
     });
   };
+
+  // Enregistrer le getter pour récupérer l'état actuel (utilisé par submitNow)
+  useEffect(() => {
+    if (onRegisterGetter) {
+      onRegisterGetter(async () => {
+        try {
+          const finalImage = await generateFinalImage();
+          return { textLayers: textLayersRef.current, finalImage };
+        } catch (error) {
+          console.error('Erreur génération image:', error);
+          return null;
+        }
+      });
+    }
+  }, [onRegisterGetter, template]);
 
   // Sauvegarder
   const handleSave = async () => {

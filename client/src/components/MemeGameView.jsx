@@ -63,12 +63,13 @@ export default function MemeGameView({
   totalVoters = 0,
   hasVoted = false,
   onSubmitCreation,
-  onCancelSubmission, // Nouvelle prop
+  onCancelSubmission,
   onVote,
   onRotateTemplate,
   onUndoTemplate,
   onPlayAgain,
   onBackToLobby,
+  onSetGetCurrentCreation, // Pour enregistrer le getter de l'état actuel de l'éditeur
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -187,6 +188,7 @@ export default function MemeGameView({
                       onRotate={onRotateTemplate}
                       onUndo={onUndoTemplate}
                       disabled={hasSubmitted}
+                      onRegisterGetter={onSetGetCurrentCreation}
                     />
                   </div>
                   

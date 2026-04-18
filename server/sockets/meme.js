@@ -354,7 +354,7 @@ module.exports = function(io, socket, db) {
     }
   });
   
-  // Joueur signale qu'il est prêt (meme validé localement)
+  // Joueur signale qu'il est prêt (meme validé localement, pas encore envoyé)
   socket.on('meme:playerReady', async (data, callback) => {
     try {
       const { lobbyId, roundNumber, odId } = data;
@@ -366,14 +366,14 @@ module.exports = function(io, socket, db) {
         return callback?.({ success: false, message: 'Phase de création terminée' });
       }
       
-      // Marquer le joueur comme ready
+      // Marquer le joueur comme ready dans les participants
       const participants = (lobby.participants || []).map(p =>
         p.odId === odId ? { ...p, hasSubmitted: true } : p
       );
       
       await db.updateMemeLobbyParticipants(lobbyId, participants);
       
-      // Notifier les autres
+      // Notifier les autres joueurs
       io.to(`meme:${lobbyId}`).emit('meme:creationSubmitted', { odId });
       
       // Vérifier si tous sont ready
@@ -383,17 +383,15 @@ module.exports = function(io, socket, db) {
       if (readyCount >= participants.length) {
         console.log(`[MEME] All ready! Triggering submitNow...`);
         
+        // Annuler le timer création
+        const memeCreations = require('../routes/meme-creations');
+        
         // Demander à tous les clients d'envoyer leurs créations
         io.to(`meme:${lobbyId}`).emit('meme:submitNow');
         
-        // Signaler à meme-creations.js d'annuler le timer création et de passer au vote dans 3s
-        try {
-          const memeCreations = require('../routes/meme-creations');
-          if (memeCreations.signalAllReady) {
-            memeCreations.signalAllReady(lobbyId);
-          }
-        } catch (e) {
-          console.error('[MEME] Could not signal allReady:', e.message);
+        // Signaler avec le nombre de créations attendues
+        if (memeCreations.signalAllReady) {
+          memeCreations.signalAllReady(lobbyId, participants.length);
         }
       }
       
@@ -404,7 +402,7 @@ module.exports = function(io, socket, db) {
     }
   });
   
-  // Joueur annule son ready
+  // Joueur annule son ready (reset local)
   socket.on('meme:playerNotReady', async (data, callback) => {
     try {
       const { lobbyId, roundNumber, odId } = data;
@@ -423,7 +421,7 @@ module.exports = function(io, socket, db) {
       
       await db.updateMemeLobbyParticipants(lobbyId, participants);
       
-      // Notifier les autres
+      // Notifier les autres joueurs
       io.to(`meme:${lobbyId}`).emit('meme:creationCancelled', { odId });
       
       if (callback) callback({ success: true });
