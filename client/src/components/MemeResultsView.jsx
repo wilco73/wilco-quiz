@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Trophy, Medal, Crown, ThumbsUp, ThumbsDown, Star, 
-  Download, Share2, Home, RotateCcw, ChevronLeft, ChevronRight,
+  Download, Home, RotateCcw, ChevronLeft, ChevronRight,
   ImageIcon
 } from 'lucide-react';
 
@@ -9,44 +9,38 @@ import {
  * MemeResultsView - Résultats de fin de partie Make It Meme
  * 
  * Props:
- * - players: [{ odId, pseudo, totalScore, memes: [{ image, votes, score }] }]
- * - currentUser: { odId, pseudo }
+ * - players: [{ odId, pseudo, avatar, totalScore }]
+ * - allMemes: [{ id, player_id, player_pseudo, final_image_base64, total_score, votes }]
+ * - currentUser: { id, pseudo }
  * - onPlayAgain: () => void
  * - onBackToLobby: () => void
- * - lobbyId: string
  */
 export default function MemeResultsView({
   players = [],
+  allMemes = [],
   currentUser,
   onPlayAgain,
   onBackToLobby,
-  lobbyId,
 }) {
   const [selectedMemeIndex, setSelectedMemeIndex] = useState(0);
-  const [showGallery, setShowGallery] = useState(false);
-  const [galleryPlayerIndex, setGalleryPlayerIndex] = useState(0);
+
+  // Enrichir les players avec leurs memes
+  const playersWithMemes = players.map(player => ({
+    ...player,
+    memes: allMemes.filter(m => m.player_id === player.odId)
+  }));
 
   // Trier par score décroissant
-  const sortedPlayers = [...players].sort((a, b) => b.totalScore - a.totalScore);
+  const sortedPlayers = [...playersWithMemes].sort((a, b) => b.totalScore - a.totalScore);
   
   // Podium (top 3)
-  const podium = sortedPlayers.slice(0, 3);
-  const winner = podium[0];
-  const second = podium[1];
-  const third = podium[2];
+  const winner = sortedPlayers[0];
+  const second = sortedPlayers[1];
+  const third = sortedPlayers[2];
 
   // Position du joueur actuel
-  const currentPlayerRank = sortedPlayers.findIndex(p => p.odId === currentUser?.odId) + 1;
-  const currentPlayerData = sortedPlayers.find(p => p.odId === currentUser?.odId);
-
-  // Collecter tous les memes pour la galerie
-  const allMemes = players.flatMap(player => 
-    (player.memes || []).map(meme => ({
-      ...meme,
-      playerPseudo: player.pseudo,
-      playerId: player.odId,
-    }))
-  );
+  const currentPlayerRank = sortedPlayers.findIndex(p => p.odId === currentUser?.id) + 1;
+  const currentPlayerData = sortedPlayers.find(p => p.odId === currentUser?.id);
 
   // Télécharger un meme
   const downloadMeme = (imageBase64, filename) => {
@@ -56,11 +50,11 @@ export default function MemeResultsView({
     link.click();
   };
 
-  // Télécharger tous les memes en ZIP (simplifié - télécharge un par un)
+  // Télécharger tous les memes
   const downloadAllMemes = () => {
     allMemes.forEach((meme, index) => {
       setTimeout(() => {
-        downloadMeme(meme.final_image_base64, `meme_${index + 1}_${meme.playerPseudo}.png`);
+        downloadMeme(meme.final_image_base64, `meme_${index + 1}_${meme.player_pseudo}.png`);
       }, index * 500);
     });
   };
@@ -72,41 +66,62 @@ export default function MemeResultsView({
     3: 'from-orange-400 to-orange-600',
   };
 
-  const podiumIcons = {
-    1: <Crown className="w-8 h-8 text-yellow-300" />,
-    2: <Medal className="w-7 h-7 text-gray-300" />,
-    3: <Medal className="w-6 h-6 text-orange-300" />,
+  // Rendu d'un avatar
+  const renderAvatar = (player, size = 'md') => {
+    const sizeClasses = {
+      sm: 'w-8 h-8 text-lg',
+      md: 'w-12 h-12 text-2xl',
+      lg: 'w-16 h-16 text-3xl',
+    };
+    
+    if (player?.avatar) {
+      return (
+        <img 
+          src={player.avatar} 
+          alt={player.pseudo}
+          className={`${sizeClasses[size]} rounded-full object-cover border-2 border-white/30`}
+        />
+      );
+    }
+    
+    // Avatar par défaut avec emoji
+    return (
+      <div className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center border-2 border-white/30`}>
+        {player?.pseudo?.charAt(0)?.toUpperCase() || '?'}
+      </div>
+    );
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-indigo-900 p-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">
-            🏆 Résultats
+        <div className="text-center mb-6">
+          <Crown className="w-12 h-12 text-yellow-400 mx-auto mb-2" />
+          <h1 className="text-3xl font-bold text-white">
+            Résultats
           </h1>
-          <p className="text-gray-400">
-            La partie est terminée !
-          </p>
         </div>
 
         {/* Podium */}
-        <div className="flex items-end justify-center gap-4 mb-8 h-64">
+        <div className="flex items-end justify-center gap-4 mb-8 h-56">
           {/* 2ème place */}
           {second && (
             <div className="flex flex-col items-center">
-              <div className="mb-2">{podiumIcons[2]}</div>
-              <div className={`w-24 sm:w-32 bg-gradient-to-t ${podiumColors[2]} rounded-t-lg p-3 h-32 flex flex-col items-center justify-end`}>
+              <div className="mb-2">
+                <Medal className="w-6 h-6 text-gray-300" />
+              </div>
+              {renderAvatar(second, 'md')}
+              <div className={`w-24 sm:w-28 bg-gradient-to-t ${podiumColors[2]} rounded-t-lg p-2 h-28 flex flex-col items-center justify-end mt-2`}>
                 <p className="text-white font-bold text-sm truncate w-full text-center">
                   {second.pseudo}
                 </p>
-                <p className="text-white/80 text-lg font-bold">
+                <p className="text-white/90 text-lg font-bold">
                   {second.totalScore}
                 </p>
               </div>
-              <div className="bg-gray-700 w-24 sm:w-32 text-center py-1 rounded-b-lg">
-                <span className="text-gray-300 font-bold">2ème</span>
+              <div className="bg-gray-600 w-24 sm:w-28 text-center py-1 rounded-b-lg">
+                <span className="text-gray-200 font-bold text-sm">2ème</span>
               </div>
             </div>
           )}
@@ -114,16 +129,19 @@ export default function MemeResultsView({
           {/* 1ère place */}
           {winner && (
             <div className="flex flex-col items-center">
-              <div className="mb-2 animate-bounce">{podiumIcons[1]}</div>
-              <div className={`w-28 sm:w-36 bg-gradient-to-t ${podiumColors[1]} rounded-t-lg p-3 h-44 flex flex-col items-center justify-end`}>
+              <div className="mb-2 animate-bounce">
+                <Crown className="w-8 h-8 text-yellow-400" />
+              </div>
+              {renderAvatar(winner, 'lg')}
+              <div className={`w-28 sm:w-32 bg-gradient-to-t ${podiumColors[1]} rounded-t-lg p-3 h-36 flex flex-col items-center justify-end mt-2`}>
                 <p className="text-white font-bold truncate w-full text-center">
                   {winner.pseudo}
                 </p>
-                <p className="text-white/90 text-2xl font-bold">
+                <p className="text-white text-2xl font-bold">
                   {winner.totalScore}
                 </p>
               </div>
-              <div className="bg-yellow-600 w-28 sm:w-36 text-center py-1 rounded-b-lg">
+              <div className="bg-yellow-600 w-28 sm:w-32 text-center py-1 rounded-b-lg">
                 <span className="text-white font-bold">1er 🎉</span>
               </div>
             </div>
@@ -132,23 +150,26 @@ export default function MemeResultsView({
           {/* 3ème place */}
           {third && (
             <div className="flex flex-col items-center">
-              <div className="mb-2">{podiumIcons[3]}</div>
-              <div className={`w-24 sm:w-32 bg-gradient-to-t ${podiumColors[3]} rounded-t-lg p-3 h-24 flex flex-col items-center justify-end`}>
-                <p className="text-white font-bold text-sm truncate w-full text-center">
+              <div className="mb-2">
+                <Medal className="w-5 h-5 text-orange-400" />
+              </div>
+              {renderAvatar(third, 'sm')}
+              <div className={`w-20 sm:w-24 bg-gradient-to-t ${podiumColors[3]} rounded-t-lg p-2 h-20 flex flex-col items-center justify-end mt-2`}>
+                <p className="text-white font-bold text-xs truncate w-full text-center">
                   {third.pseudo}
                 </p>
-                <p className="text-white/80 text-lg font-bold">
+                <p className="text-white/90 font-bold">
                   {third.totalScore}
                 </p>
               </div>
-              <div className="bg-orange-700 w-24 sm:w-32 text-center py-1 rounded-b-lg">
-                <span className="text-white font-bold">3ème</span>
+              <div className="bg-orange-700 w-20 sm:w-24 text-center py-1 rounded-b-lg">
+                <span className="text-white font-bold text-sm">3ème</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* Position du joueur */}
+        {/* Position du joueur si pas sur le podium */}
         {currentPlayerData && currentPlayerRank > 3 && (
           <div className="bg-purple-900/40 border border-purple-500/30 rounded-xl p-4 mb-6 text-center">
             <p className="text-purple-300">
@@ -169,13 +190,13 @@ export default function MemeResultsView({
               <div
                 key={player.odId}
                 className={`flex items-center justify-between p-3 rounded-lg ${
-                  player.odId === currentUser?.odId
+                  player.odId === currentUser?.id
                     ? 'bg-purple-600/30 border border-purple-500'
                     : 'bg-gray-700/50'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                  <span className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm ${
                     index === 0 ? 'bg-yellow-500 text-black' :
                     index === 1 ? 'bg-gray-400 text-black' :
                     index === 2 ? 'bg-orange-500 text-white' :
@@ -183,20 +204,19 @@ export default function MemeResultsView({
                   }`}>
                     {index + 1}
                   </span>
+                  {renderAvatar(player, 'sm')}
                   <span className="text-white font-medium">
                     {player.pseudo}
-                    {player.odId === currentUser?.odId && (
+                    {player.odId === currentUser?.id && (
                       <span className="text-purple-300 text-sm ml-2">(vous)</span>
                     )}
                   </span>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="text-yellow-400 font-bold">{player.totalScore} pts</p>
-                    <p className="text-xs text-gray-400">
-                      {player.memes?.length || 0} meme{(player.memes?.length || 0) > 1 ? 's' : ''}
-                    </p>
-                  </div>
+                <div className="text-right">
+                  <p className="text-yellow-400 font-bold">{player.totalScore} pts</p>
+                  <p className="text-xs text-gray-400">
+                    {player.memes?.length || 0} meme{(player.memes?.length || 0) !== 1 ? 's' : ''}
+                  </p>
                 </div>
               </div>
             ))}
@@ -210,17 +230,18 @@ export default function MemeResultsView({
               <ImageIcon className="w-5 h-5 text-pink-400" />
               Galerie des memes ({allMemes.length})
             </h2>
-            <button
-              onClick={downloadAllMemes}
-              className="flex items-center gap-2 px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-white transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              Tout télécharger
-            </button>
+            {allMemes.length > 0 && (
+              <button
+                onClick={downloadAllMemes}
+                className="flex items-center gap-2 px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-white transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Tout télécharger
+              </button>
+            )}
           </div>
 
-          {/* Carousel */}
-          {allMemes.length > 0 && (
+          {allMemes.length > 0 ? (
             <div className="relative">
               <div className="flex items-center justify-center">
                 <button
@@ -239,25 +260,11 @@ export default function MemeResultsView({
                   />
                   <div className="mt-2 text-center">
                     <p className="text-white font-medium">
-                      Par {allMemes[selectedMemeIndex]?.playerPseudo}
+                      Par {allMemes[selectedMemeIndex]?.player_pseudo}
                     </p>
                     <p className="text-yellow-400 text-sm">
                       {allMemes[selectedMemeIndex]?.total_score || 0} pts
                     </p>
-                    <div className="flex items-center justify-center gap-3 mt-1 text-xs text-gray-400">
-                      <span className="flex items-center gap-1">
-                        <ThumbsUp className="w-3 h-3 text-green-400" />
-                        {allMemes[selectedMemeIndex]?.votes?.up || 0}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Star className="w-3 h-3 text-yellow-400" />
-                        {allMemes[selectedMemeIndex]?.votes?.super || 0}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <ThumbsDown className="w-3 h-3 text-red-400" />
-                        {allMemes[selectedMemeIndex]?.votes?.down || 0}
-                      </span>
-                    </div>
                   </div>
                 </div>
 
@@ -288,14 +295,19 @@ export default function MemeResultsView({
                 <button
                   onClick={() => downloadMeme(
                     allMemes[selectedMemeIndex]?.final_image_base64,
-                    `meme_${allMemes[selectedMemeIndex]?.playerPseudo}.png`
+                    `meme_${allMemes[selectedMemeIndex]?.player_pseudo}.png`
                   )}
                   className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm text-white transition-colors"
                 >
                   <Download className="w-4 h-4" />
-                  Télécharger ce meme
+                  Télécharger
                 </button>
               </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-400">
+              <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>Aucun meme à afficher</p>
             </div>
           )}
         </div>

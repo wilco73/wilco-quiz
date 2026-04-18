@@ -297,6 +297,7 @@ export default function MemeGameView({
         return (
           <MemeResultsView
             players={players}
+            allMemes={allMemes}
             currentUser={currentUser}
             onPlayAgain={onPlayAgain}
             onBackToLobby={onBackToLobby}
