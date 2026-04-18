@@ -3355,6 +3355,18 @@ async function updateParticipantScore(lobbyId, odId, scoreChange) {
   return data;
 }
 
+async function updateMemeLobbyParticipants(lobbyId, participants) {
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update({ participants })
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
 async function markSuperVoteUsed(lobbyId, odId) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
@@ -3993,6 +4005,7 @@ module.exports = {
   startVotingPhase,
   advanceToNextVote,
   updateParticipantScore,
+  updateMemeLobbyParticipants,
   markSuperVoteUsed,
   deleteMemeLobby,
   cleanupOldMemeLobbies,

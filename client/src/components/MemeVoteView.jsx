@@ -118,14 +118,12 @@ export default function MemeVoteView({
         </div>
       </div>
 
-      {/* Auteur du meme */}
-      <div className="text-center mb-2">
-        <span className="text-gray-400">Meme de </span>
-        <span className={`font-bold ${isOwnMeme ? 'text-purple-400' : 'text-white'}`}>
-          {meme?.pseudo || 'Anonyme'}
-          {isOwnMeme && ' (vous)'}
-        </span>
-      </div>
+      {/* Auteur du meme - caché pendant le vote sauf si c'est le sien */}
+      {isOwnMeme && (
+        <div className="text-center mb-2">
+          <span className="text-purple-400 font-bold">Votre création</span>
+        </div>
+      )}
 
       {/* Image du meme */}
       <div className="flex-1 flex items-center justify-center mb-4">
