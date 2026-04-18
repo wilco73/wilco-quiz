@@ -298,14 +298,17 @@ export default function MemeEditor({
 
     // Dessiner l'image de fond
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // Note: crossOrigin enlevé car pose des problèmes CORS avec les nouveaux memes
     
     return new Promise((resolve, reject) => {
       img.onload = () => {
         ctx.drawImage(img, 0, 0, template.width, template.height);
 
+        // Utiliser textLayersRef pour avoir les valeurs à jour
+        const layers = textLayersRef.current || textLayers;
+        
         // Dessiner chaque texte
-        textLayers.forEach(layer => {
+        layers.forEach(layer => {
           ctx.save();
           
           // Appliquer rotation

@@ -44,6 +44,16 @@ export default function useMemeGame(socket, currentUser) {
   
   // Callback pour récupérer l'état actuel de l'éditeur (même si pas validé)
   const getCurrentCreationRef = useRef(null);
+  
+  // Refs pour avoir les valeurs à jour dans handleSubmitNow
+  const currentRoundRef = useRef(currentRound);
+  const templateRef = useRef(template);
+  const currentUserRef = useRef(currentUser);
+  
+  // Sync les refs
+  useEffect(() => { currentRoundRef.current = currentRound; }, [currentRound]);
+  useEffect(() => { templateRef.current = template; }, [template]);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
   // Timer
   const startTimer = useCallback((seconds) => {
@@ -198,21 +208,30 @@ export default function useMemeGame(socket, currentUser) {
       // Priorité 2: si pas validée, récupérer l'état actuel de l'éditeur
       if (!creation && getCurrentCreationRef.current) {
         console.log('[useMemeGame] Getting current editor state...');
-        const currentState = getCurrentCreationRef.current();
-        if (currentState && currentState.finalImage) {
-          creation = {
-            lobbyId: lobbyIdRef.current,
-            roundNumber: currentRound,
-            odId: currentUser?.id,
-            pseudo: currentUser?.pseudo,
-            templateId: template?.id,
-            textLayers: currentState.textLayers || [],
-            finalImageBase64: currentState.finalImage,
-          };
+        try {
+          // Le getter est async car il génère l'image
+          const currentState = await getCurrentCreationRef.current();
+          console.log('[useMemeGame] Got state:', currentState ? 'yes' : 'no');
+          
+          if (currentState && currentState.finalImage) {
+            creation = {
+              lobbyId: lobbyIdRef.current,
+              roundNumber: currentRoundRef.current,
+              odId: currentUserRef.current?.id,
+              pseudo: currentUserRef.current?.pseudo,
+              templateId: templateRef.current?.id,
+              textLayers: currentState.textLayers || [],
+              finalImageBase64: currentState.finalImage,
+            };
+            console.log('[useMemeGame] Created creation object from editor state');
+          }
+        } catch (err) {
+          console.error('[useMemeGame] Error getting editor state:', err);
         }
       }
       
       if (creation) {
+        console.log('[useMemeGame] Sending creation to server...');
         await sendCreationToServer(creation);
       } else {
         console.log('[useMemeGame] No creation to send (no pending and no current state)');
