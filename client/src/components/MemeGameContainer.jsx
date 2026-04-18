@@ -162,6 +162,7 @@ export default function MemeGameContainer({
         timeRemaining={game.timeRemaining}
         currentVoteIndex={game.currentVoteIndex}
         hasSuperVote={game.hasSuperVote}
+        hasSubmitted={game.hasSubmitted}
         rotationsUsed={game.rotationsUsed}
         undosUsed={game.undosUsed}
         maxRotations={game.maxRotations}
@@ -172,6 +173,7 @@ export default function MemeGameContainer({
         totalVoters={game.totalVoters}
         hasVoted={game.hasVoted}
         onSubmitCreation={(textLayers, finalImage) => game.submitCreation({ textLayers, finalImage })}
+        onCancelSubmission={() => game.cancelSubmission()}
         onVote={(voteType, isSuper) => game.vote(voteType, isSuper)}
         onRotateTemplate={() => game.rotateTemplate()}
         onUndoTemplate={() => game.undoTemplate()}

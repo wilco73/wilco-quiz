@@ -34,6 +34,20 @@ function init(socketIO) {
     console.log(`[MEME API] Game started signal for ${lobbyId}, creation time: ${creationTime}s`);
     startCreationTimer(lobbyId, creationTime);
   });
+  
+  // Écouter quand tous les joueurs sont prêts
+  memeEvents.on('allReady', async (lobbyId) => {
+    console.log(`[MEME API] All ready signal received for ${lobbyId}`);
+    
+    // Annuler le timer création
+    if (creationTimers.has(lobbyId)) {
+      clearTimeout(creationTimers.get(lobbyId));
+      creationTimers.delete(lobbyId);
+    }
+    
+    // Attendre 3s que les créations arrivent, puis passer au vote
+    setTimeout(() => startVotingAfterSubmit(lobbyId), 3000);
+  });
 }
 
 function signalAllVoted(lobbyId) {
@@ -42,6 +56,10 @@ function signalAllVoted(lobbyId) {
 
 function signalGameStarted(lobbyId, creationTime) {
   memeEvents.emit('gameStarted', lobbyId, creationTime);
+}
+
+function signalAllReady(lobbyId) {
+  memeEvents.emit('allReady', lobbyId);
 }
 
 // ==================== TIMER CRÉATION ====================
@@ -69,24 +87,34 @@ async function handleCreationTimeout(lobbyId) {
       return;
     }
     
-    // Vérifier qui n'a pas soumis et créer des créations vides pour eux
+    // Demander à tous les clients d'envoyer leurs créations
+    console.log(`[MEME TIMER] Emitting submitNow to all players`);
+    io.to(`meme:${lobbyId}`).emit('meme:submitNow');
+    
+    // Attendre 3s que les créations arrivent, puis passer au vote
+    setTimeout(() => startVotingAfterSubmit(lobbyId), 3000);
+    
+  } catch (error) {
+    console.error(`[MEME TIMER] handleCreationTimeout error:`, error);
+  }
+}
+
+// Démarrer le vote après réception des créations
+async function startVotingAfterSubmit(lobbyId) {
+  try {
+    const lobby = await db.getMemeLobbyById(lobbyId);
+    if (!lobby || lobby.phase !== 'creation') {
+      console.log(`[MEME TIMER] Lobby not in creation phase for voting, skipping`);
+      return;
+    }
+    
     const currentRound = lobby.current_round;
-    const creations = await db.getMemeCreationsByLobby(lobbyId, currentRound);
-    const submittedIds = creations.map(c => c.player_id);
-    const participants = lobby.participants || [];
-    
-    const missingParticipants = participants.filter(p => !submittedIds.includes(p.odId));
-    console.log(`[MEME TIMER] Missing submissions: ${missingParticipants.length}`);
-    
-    // Pour ceux qui n'ont pas soumis, on crée une création vide (ou on les skip)
-    // Option: ne pas créer de création, ils auront 0 points pour ce round
-    
-    // Passer au vote
     const allCreations = await db.getMemeCreationsByLobby(lobbyId, currentRound);
+    
+    console.log(`[MEME TIMER] Starting vote with ${allCreations.length} creations`);
     
     if (allCreations.length === 0) {
       console.log(`[MEME TIMER] No creations at all, skipping to results`);
-      // Passer directement aux résultats si personne n'a soumis
       const updatedLobby = await db.updateMemeLobbyPhase(lobbyId, 'results');
       io.to(`meme:${lobbyId}`).emit('meme:roundResults', {
         lobby: updatedLobby,
@@ -96,7 +124,6 @@ async function handleCreationTimeout(lobbyId) {
       return;
     }
     
-    console.log(`[MEME TIMER] Starting vote with ${allCreations.length} creations`);
     const updatedLobby = await db.startVotingPhase(lobbyId);
     const voteTime = updatedLobby.settings?.voteTime || 30;
     
@@ -110,7 +137,7 @@ async function handleCreationTimeout(lobbyId) {
     startVoteTimer(lobbyId, voteTime);
     
   } catch (error) {
-    console.error(`[MEME TIMER] handleCreationTimeout error:`, error);
+    console.error(`[MEME TIMER] startVotingAfterSubmit error:`, error);
   }
 }
 
@@ -381,4 +408,5 @@ router.get('/:id', async (req, res) => {
 router.init = init;
 router.signalAllVoted = signalAllVoted;
 router.signalGameStarted = signalGameStarted;
+router.signalAllReady = signalAllReady;
 module.exports = router;

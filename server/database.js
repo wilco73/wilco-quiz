@@ -3405,6 +3405,20 @@ async function deleteMemeAssignmentsByLobby(lobbyId) {
   return true;
 }
 
+// Supprimer la création d'un joueur pour un round spécifique (annulation)
+async function deleteMemeCreationByPlayer(lobbyId, roundNumber, playerId) {
+  const { data, error } = await supabase
+    .from('meme_creations')
+    .delete()
+    .eq('lobby_id', lobbyId)
+    .eq('round_number', roundNumber)
+    .eq('player_id', playerId)
+    .select();
+  
+  if (error) throw error;
+  return data && data.length > 0;
+}
+
 async function markSuperVoteUsed(lobbyId, odId) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
@@ -4051,6 +4065,7 @@ module.exports = {
   resetMemeLobbyForReplay,
   deleteMemeCreationsByLobby,
   deleteMemeAssignmentsByLobby,
+  deleteMemeCreationByPlayer,
 
   // Meme Creations
   getMemeCreationsByLobby,

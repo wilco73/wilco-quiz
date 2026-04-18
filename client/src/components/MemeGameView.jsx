@@ -51,6 +51,7 @@ export default function MemeGameView({
   timeRemaining = 0,
   currentVoteIndex = 0,
   hasSuperVote = true,
+  hasSubmitted = false, // Passé depuis le hook
   rotationsUsed = 0,
   undosUsed = 0,
   maxRotations = 3,
@@ -62,13 +63,13 @@ export default function MemeGameView({
   totalVoters = 0,
   hasVoted = false,
   onSubmitCreation,
+  onCancelSubmission, // Nouvelle prop
   onVote,
   onRotateTemplate,
   onUndoTemplate,
   onPlayAgain,
   onBackToLobby,
 }) {
-  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Utiliser gamePhase (du hook) en priorité, sinon fallback sur lobby.phase
@@ -77,9 +78,8 @@ export default function MemeGameView({
   const totalRounds = lobby?.settings?.rounds || 3;
   const settings = lobby?.settings || {};
 
-  // Reset hasSubmitted au changement de round
+  // Reset isSubmitting au changement de round
   useEffect(() => {
-    setHasSubmitted(false);
     setIsSubmitting(false);
   }, [currentRound]);
 
@@ -90,10 +90,24 @@ export default function MemeGameView({
     setIsSubmitting(true);
     try {
       await onSubmitCreation(textLayers, finalImageBase64);
-      setHasSubmitted(true);
+      // hasSubmitted est maintenant géré par le hook
     } catch (error) {
       console.error('Erreur soumission:', error);
       alert('Erreur lors de l\'envoi du meme');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Gérer l'annulation
+  const handleCancelSubmission = async () => {
+    if (!hasSubmitted || isSubmitting) return;
+    
+    setIsSubmitting(true);
+    try {
+      await onCancelSubmission();
+    } catch (error) {
+      console.error('Erreur annulation:', error);
     } finally {
       setIsSubmitting(false);
     }
@@ -135,7 +149,9 @@ export default function MemeGameView({
                 </div>
                 <div className="flex items-center gap-2 text-white">
                   <Users className="w-4 h-4 text-blue-400" />
-                  <span>{lobby?.participants?.length || 0} joueurs</span>
+                  <span>
+                    {lobby?.participants?.filter(p => p.hasSubmitted).length || 0}/{lobby?.participants?.length || 0} prêts
+                  </span>
                 </div>
               </div>
               
@@ -152,22 +168,58 @@ export default function MemeGameView({
               </div>
             </div>
 
-            {/* Éditeur */}
-            <div className="flex-1">
+            {/* Zone principale */}
+            <div className="flex-1 relative">
               {template ? (
-                <MemeEditor
-                  template={template}
-                  onSave={handleSubmitCreation}
-                  onCancel={null}
-                  maxRotations={maxRotations}
-                  maxUndos={maxUndos}
-                  rotationsUsed={rotationsUsed}
-                  undosUsed={undosUsed}
-                  canRotate={canRotate}
-                  canUndo={canUndo}
-                  onRotate={onRotateTemplate}
-                  onUndo={onUndoTemplate}
-                />
+                <>
+                  {/* Éditeur - désactivé si hasSubmitted */}
+                  <div className={hasSubmitted ? 'pointer-events-none opacity-60' : ''}>
+                    <MemeEditor
+                      template={template}
+                      onSave={handleSubmitCreation}
+                      onCancel={null}
+                      maxRotations={maxRotations}
+                      maxUndos={maxUndos}
+                      rotationsUsed={rotationsUsed}
+                      undosUsed={undosUsed}
+                      canRotate={canRotate && !hasSubmitted}
+                      canUndo={canUndo && !hasSubmitted}
+                      onRotate={onRotateTemplate}
+                      onUndo={onUndoTemplate}
+                      disabled={hasSubmitted}
+                    />
+                  </div>
+                  
+                  {/* Overlay "En attente" si hasSubmitted */}
+                  {hasSubmitted && (
+                    <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+                      <div className="bg-gray-900/90 rounded-2xl p-8 text-center shadow-2xl border border-green-500/30 pointer-events-auto">
+                        <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <span className="text-3xl">✓</span>
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2">
+                          Meme envoyé !
+                        </h3>
+                        <p className="text-gray-400 mb-4">
+                          En attente des autres joueurs...
+                        </p>
+                        <div className="flex items-center justify-center gap-2 text-purple-300 mb-4">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>
+                            {lobby?.participants?.filter(p => p.hasSubmitted).length || 0}/{lobby?.participants?.length || 0} ont terminé
+                          </span>
+                        </div>
+                        <button
+                          onClick={handleCancelSubmission}
+                          disabled={isSubmitting}
+                          className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                        >
+                          {isSubmitting ? 'Annulation...' : 'Annuler et modifier'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="h-full flex items-center justify-center">
                   <Loader2 className="w-12 h-12 text-purple-500 animate-spin" />

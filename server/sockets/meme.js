@@ -319,6 +319,120 @@ module.exports = function(io, socket, db) {
     }
   });
   
+  // Annuler une soumission
+  socket.on('meme:cancelSubmission', async (data, callback) => {
+    try {
+      const { lobbyId, roundNumber, odId } = data;
+      
+      console.log(`[MEME] cancelSubmission from ${odId}`);
+      
+      // Vérifier le lobby
+      const lobby = await db.getMemeLobbyById(lobbyId);
+      if (!lobby) {
+        return callback?.({ success: false, message: 'Lobby non trouvé' });
+      }
+      if (lobby.phase !== 'creation') {
+        return callback?.({ success: false, message: 'La phase de création est terminée' });
+      }
+      
+      // Supprimer la création du joueur pour ce round
+      const deleted = await db.deleteMemeCreationByPlayer(lobbyId, roundNumber || lobby.current_round, odId);
+      
+      if (!deleted) {
+        return callback?.({ success: false, message: 'Aucune création à annuler' });
+      }
+      
+      console.log(`[MEME] Creation cancelled for ${odId}`);
+      
+      // Notifier les autres joueurs
+      io.to(`meme:${lobbyId}`).emit('meme:creationCancelled', { odId });
+      
+      if (callback) callback({ success: true });
+    } catch (error) {
+      console.error('[MEME] Erreur cancel submission:', error);
+      if (callback) callback({ success: false, message: error.message });
+    }
+  });
+  
+  // Joueur signale qu'il est prêt (meme validé localement)
+  socket.on('meme:playerReady', async (data, callback) => {
+    try {
+      const { lobbyId, roundNumber, odId } = data;
+      
+      console.log(`[MEME] playerReady from ${odId}`);
+      
+      const lobby = await db.getMemeLobbyById(lobbyId);
+      if (!lobby || lobby.phase !== 'creation') {
+        return callback?.({ success: false, message: 'Phase de création terminée' });
+      }
+      
+      // Marquer le joueur comme ready
+      const participants = (lobby.participants || []).map(p =>
+        p.odId === odId ? { ...p, hasSubmitted: true } : p
+      );
+      
+      await db.updateMemeLobbyParticipants(lobbyId, participants);
+      
+      // Notifier les autres
+      io.to(`meme:${lobbyId}`).emit('meme:creationSubmitted', { odId });
+      
+      // Vérifier si tous sont ready
+      const readyCount = participants.filter(p => p.hasSubmitted).length;
+      console.log(`[MEME] Ready: ${readyCount}/${participants.length}`);
+      
+      if (readyCount >= participants.length) {
+        console.log(`[MEME] All ready! Triggering submitNow...`);
+        
+        // Demander à tous les clients d'envoyer leurs créations
+        io.to(`meme:${lobbyId}`).emit('meme:submitNow');
+        
+        // Signaler à meme-creations.js d'annuler le timer création et de passer au vote dans 3s
+        try {
+          const memeCreations = require('../routes/meme-creations');
+          if (memeCreations.signalAllReady) {
+            memeCreations.signalAllReady(lobbyId);
+          }
+        } catch (e) {
+          console.error('[MEME] Could not signal allReady:', e.message);
+        }
+      }
+      
+      if (callback) callback({ success: true });
+    } catch (error) {
+      console.error('[MEME] Erreur playerReady:', error);
+      if (callback) callback({ success: false, message: error.message });
+    }
+  });
+  
+  // Joueur annule son ready
+  socket.on('meme:playerNotReady', async (data, callback) => {
+    try {
+      const { lobbyId, roundNumber, odId } = data;
+      
+      console.log(`[MEME] playerNotReady from ${odId}`);
+      
+      const lobby = await db.getMemeLobbyById(lobbyId);
+      if (!lobby || lobby.phase !== 'creation') {
+        return callback?.({ success: false, message: 'Phase de création terminée' });
+      }
+      
+      // Marquer le joueur comme not ready
+      const participants = (lobby.participants || []).map(p =>
+        p.odId === odId ? { ...p, hasSubmitted: false } : p
+      );
+      
+      await db.updateMemeLobbyParticipants(lobbyId, participants);
+      
+      // Notifier les autres
+      io.to(`meme:${lobbyId}`).emit('meme:creationCancelled', { odId });
+      
+      if (callback) callback({ success: true });
+    } catch (error) {
+      console.error('[MEME] Erreur playerNotReady:', error);
+      if (callback) callback({ success: false, message: error.message });
+    }
+  });
+  
   // Soumettre une création (via socket, pas API REST)
   socket.on('meme:submitCreation', async (data, callback) => {
     try {
