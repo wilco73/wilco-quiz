@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { API_URL } from '../config';
+import Pagination from './Pagination';
 
 /**
  * MemeTemplateManager - Interface admin pour gérer les images meme
@@ -15,6 +16,10 @@ export default function MemeTemplateManager() {
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
   const [showZoneEditor, setShowZoneEditor] = useState(false);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(12);
 
   useEffect(() => {
     fetchTemplates();
@@ -140,6 +145,17 @@ export default function MemeTemplateManager() {
     return matchesSearch && matchesTags;
   });
 
+  // Pagination des résultats filtrés
+  const totalItems = filteredTemplates.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedTemplates = filteredTemplates.slice(startIndex, startIndex + itemsPerPage);
+
+  // Reset page quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedTags, showInactive]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -236,9 +252,26 @@ export default function MemeTemplateManager() {
         </div>
       </div>
 
+      {/* Pagination en haut */}
+      {filteredTemplates.length > 0 && (
+        <div className="bg-gray-800 rounded-lg px-4 mb-4">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(newLimit) => {
+              setItemsPerPage(newLimit);
+              setCurrentPage(1);
+            }}
+            itemsPerPageOptions={[12, 24, 48, 96]}
+          />
+        </div>
+      )}
+
       {/* Grille de templates */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        {filteredTemplates.map(template => (
+        {paginatedTemplates.map(template => (
           <div
             key={template.id}
             className={`bg-gray-800 rounded-lg overflow-hidden border transition-all hover:border-purple-500 ${
@@ -332,6 +365,23 @@ export default function MemeTemplateManager() {
           </div>
         ))}
       </div>
+
+      {/* Pagination en bas */}
+      {filteredTemplates.length > 0 && (
+        <div className="bg-gray-800 rounded-lg px-4 mt-4">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(newLimit) => {
+              setItemsPerPage(newLimit);
+              setCurrentPage(1);
+            }}
+            itemsPerPageOptions={[12, 24, 48, 96]}
+          />
+        </div>
+      )}
 
       {filteredTemplates.length === 0 && (
         <div className="text-center py-12 text-gray-500">
