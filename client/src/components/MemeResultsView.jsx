@@ -4,6 +4,7 @@ import {
   Download, Home, RotateCcw, ChevronLeft, ChevronRight,
   ImageIcon
 } from 'lucide-react';
+import Avatar from './Avatar';
 
 /**
  * MemeResultsView - Résultats de fin de partie Make It Meme
@@ -66,32 +67,6 @@ export default function MemeResultsView({
     3: 'from-orange-400 to-orange-600',
   };
 
-  // Rendu d'un avatar
-  const renderAvatar = (player, size = 'md') => {
-    const sizeClasses = {
-      sm: 'w-8 h-8 text-lg',
-      md: 'w-12 h-12 text-2xl',
-      lg: 'w-16 h-16 text-3xl',
-    };
-    
-    if (player?.avatar) {
-      return (
-        <img 
-          src={player.avatar} 
-          alt={player.pseudo}
-          className={`${sizeClasses[size]} rounded-full object-cover border-2 border-white/30`}
-        />
-      );
-    }
-    
-    // Avatar par défaut avec emoji
-    return (
-      <div className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center border-2 border-white/30`}>
-        {player?.pseudo?.charAt(0)?.toUpperCase() || '?'}
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-indigo-900 p-4">
       <div className="max-w-4xl mx-auto">
@@ -111,7 +86,7 @@ export default function MemeResultsView({
               <div className="mb-2">
                 <Medal className="w-6 h-6 text-gray-300" />
               </div>
-              {renderAvatar(second, 'md')}
+              <Avatar avatarId={second.avatar || 'default'} size="lg" />
               <div className={`w-24 sm:w-28 bg-gradient-to-t ${podiumColors[2]} rounded-t-lg p-2 h-28 flex flex-col items-center justify-end mt-2`}>
                 <p className="text-white font-bold text-sm truncate w-full text-center">
                   {second.pseudo}
@@ -132,7 +107,7 @@ export default function MemeResultsView({
               <div className="mb-2 animate-bounce">
                 <Crown className="w-8 h-8 text-yellow-400" />
               </div>
-              {renderAvatar(winner, 'lg')}
+              <Avatar avatarId={winner.avatar || 'default'} size="xl" />
               <div className={`w-28 sm:w-32 bg-gradient-to-t ${podiumColors[1]} rounded-t-lg p-3 h-36 flex flex-col items-center justify-end mt-2`}>
                 <p className="text-white font-bold truncate w-full text-center">
                   {winner.pseudo}
@@ -153,7 +128,7 @@ export default function MemeResultsView({
               <div className="mb-2">
                 <Medal className="w-5 h-5 text-orange-400" />
               </div>
-              {renderAvatar(third, 'sm')}
+              <Avatar avatarId={third.avatar || 'default'} size="lg" />
               <div className={`w-20 sm:w-24 bg-gradient-to-t ${podiumColors[3]} rounded-t-lg p-2 h-20 flex flex-col items-center justify-end mt-2`}>
                 <p className="text-white font-bold text-xs truncate w-full text-center">
                   {third.pseudo}
@@ -204,7 +179,7 @@ export default function MemeResultsView({
                   }`}>
                     {index + 1}
                   </span>
-                  {renderAvatar(player, 'sm')}
+                  <Avatar avatarId={player.avatar || 'default'} size="sm" />
                   <span className="text-white font-medium">
                     {player.pseudo}
                     {player.odId === currentUser?.id && (
