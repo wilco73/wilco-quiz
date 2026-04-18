@@ -82,9 +82,10 @@ export default function MemeEditor({
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
 
-  // Charger les zones prédéfinies si présentes
+  // Charger les zones prédéfinies si présentes, sinon reset
   useEffect(() => {
     if (template?.preset_zones && template.preset_zones.length > 0) {
+      // Template avec zones prédéfinies
       const presetLayers = template.preset_zones.map((zone, index) => ({
         ...DEFAULT_TEXT,
         id: `text-${Date.now()}-${index}`,
@@ -100,6 +101,10 @@ export default function MemeEditor({
       if (presetLayers.length > 0) {
         setSelectedLayerId(presetLayers[0].id);
       }
+    } else {
+      // Pas de zones prédéfinies ou nouveau template sans preset -> reset
+      setTextLayers([]);
+      setSelectedLayerId(null);
     }
   }, [template]);
 
