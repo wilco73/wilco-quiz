@@ -206,6 +206,22 @@ export default function useMemeGame(socket, currentUser) {
       updatePlayersFromLobby(updatedLobby);
     };
 
+    const handleLobbyReset = ({ lobby: updatedLobby }) => {
+      console.log('[useMemeGame] lobbyReset - ready to play again');
+      setLobby(updatedLobby);
+      setPhase('lobby');
+      setCurrentRound(1);
+      setTemplate(null);
+      setAssignment(null);
+      setAllMemes([]);
+      setHasSubmitted(false);
+      setHasSuperVote(true);
+      setHasVoted(false);
+      setVotesReceived({});
+      setCurrentVoteIndex(0);
+      updatePlayersFromLobby(updatedLobby);
+    };
+
     socket.on('meme:lobbyUpdated', handleLobbyUpdated);
     socket.on('meme:lobbyDeleted', handleLobbyDeleted);
     socket.on('meme:gameStarted', handleGameStarted);
@@ -217,6 +233,7 @@ export default function useMemeGame(socket, currentUser) {
     socket.on('meme:roundResults', handleRoundResults);
     socket.on('meme:newRoundStarted', handleNewRoundStarted);
     socket.on('meme:gameFinished', handleGameFinished);
+    socket.on('meme:lobbyReset', handleLobbyReset);
 
     return () => {
       socket.off('meme:lobbyUpdated');
@@ -230,6 +247,7 @@ export default function useMemeGame(socket, currentUser) {
       socket.off('meme:roundResults');
       socket.off('meme:newRoundStarted');
       socket.off('meme:gameFinished');
+      socket.off('meme:lobbyReset');
     };
   }, [socket, currentUser?.id, updatePlayersFromLobby, startTimer]);
 
@@ -475,16 +493,32 @@ export default function useMemeGame(socket, currentUser) {
   }, [socket, lobby, currentUser, allMemes, currentVoteIndex]);
 
   const playAgain = useCallback(() => {
-    setPhase('lobby');
-    setCurrentRound(1);
-    setTemplate(null);
-    setAssignment(null);
-    setAllMemes([]);
-    setHasSubmitted(false);
-    setHasSuperVote(true);
-    setHasVoted(false);
-    setVotesReceived({});
-  }, []);
+    if (!socket || !lobby) {
+      // Fallback: reset local seulement
+      setPhase('lobby');
+      setCurrentRound(1);
+      setTemplate(null);
+      setAssignment(null);
+      setAllMemes([]);
+      setHasSubmitted(false);
+      setHasSuperVote(true);
+      setHasVoted(false);
+      setVotesReceived({});
+      return Promise.resolve(false);
+    }
+    
+    return new Promise((resolve) => {
+      socket.emit('meme:playAgain', { lobbyId: lobby.id }, (response) => {
+        if (response?.success) {
+          // Le reset sera fait via handleLobbyReset
+          console.log('[useMemeGame] playAgain success');
+        } else {
+          console.error('[useMemeGame] playAgain failed:', response?.message);
+        }
+        resolve(response?.success || false);
+      });
+    });
+  }, [socket, lobby]);
 
   const backToLobbyList = useCallback(() => {
     if (lobby) leaveLobby();

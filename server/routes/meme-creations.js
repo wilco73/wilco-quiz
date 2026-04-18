@@ -1,6 +1,6 @@
 /**
  * Routes API pour Meme Creations
- * v6 - Timer serveur complet (vote + résultats + passage manche suivante)
+ * v7 - Timer serveur complet (création + vote + résultats)
  */
 
 const express = require('express');
@@ -10,10 +10,108 @@ const db = require('../database');
 let io = null;
 const voteTimers = new Map();
 const resultsTimers = new Map();
+const creationTimers = new Map();
+
+const EventEmitter = require('events');
+const memeEvents = new EventEmitter();
 
 function init(socketIO) {
   io = socketIO;
   console.log('[MEME API] io initialized');
+  
+  // Écouter l'événement interne "tous ont voté"
+  memeEvents.on('allVoted', async (lobbyId) => {
+    console.log(`[MEME API] All voted signal received for ${lobbyId}`);
+    if (voteTimers.has(lobbyId)) {
+      clearTimeout(voteTimers.get(lobbyId));
+      voteTimers.delete(lobbyId);
+    }
+    setTimeout(() => advanceVote(lobbyId), 1500);
+  });
+  
+  // Écouter quand une partie démarre pour lancer le timer création
+  memeEvents.on('gameStarted', async (lobbyId, creationTime) => {
+    console.log(`[MEME API] Game started signal for ${lobbyId}, creation time: ${creationTime}s`);
+    startCreationTimer(lobbyId, creationTime);
+  });
+}
+
+function signalAllVoted(lobbyId) {
+  memeEvents.emit('allVoted', lobbyId);
+}
+
+function signalGameStarted(lobbyId, creationTime) {
+  memeEvents.emit('gameStarted', lobbyId, creationTime);
+}
+
+// ==================== TIMER CRÉATION ====================
+
+function startCreationTimer(lobbyId, creationTime) {
+  if (creationTimers.has(lobbyId)) clearTimeout(creationTimers.get(lobbyId));
+  
+  console.log(`[MEME TIMER] Creation timer: ${creationTime}s for ${lobbyId}`);
+  
+  const timerId = setTimeout(async () => {
+    await handleCreationTimeout(lobbyId);
+  }, creationTime * 1000);
+  
+  creationTimers.set(lobbyId, timerId);
+}
+
+async function handleCreationTimeout(lobbyId) {
+  try {
+    console.log(`[MEME TIMER] Creation timeout for ${lobbyId}`);
+    creationTimers.delete(lobbyId);
+    
+    const lobby = await db.getMemeLobbyById(lobbyId);
+    if (!lobby || lobby.phase !== 'creation') {
+      console.log(`[MEME TIMER] Lobby not in creation phase, skipping`);
+      return;
+    }
+    
+    // Vérifier qui n'a pas soumis et créer des créations vides pour eux
+    const currentRound = lobby.current_round;
+    const creations = await db.getMemeCreationsByLobby(lobbyId, currentRound);
+    const submittedIds = creations.map(c => c.player_id);
+    const participants = lobby.participants || [];
+    
+    const missingParticipants = participants.filter(p => !submittedIds.includes(p.odId));
+    console.log(`[MEME TIMER] Missing submissions: ${missingParticipants.length}`);
+    
+    // Pour ceux qui n'ont pas soumis, on crée une création vide (ou on les skip)
+    // Option: ne pas créer de création, ils auront 0 points pour ce round
+    
+    // Passer au vote
+    const allCreations = await db.getMemeCreationsByLobby(lobbyId, currentRound);
+    
+    if (allCreations.length === 0) {
+      console.log(`[MEME TIMER] No creations at all, skipping to results`);
+      // Passer directement aux résultats si personne n'a soumis
+      const updatedLobby = await db.updateMemeLobbyPhase(lobbyId, 'results');
+      io.to(`meme:${lobbyId}`).emit('meme:roundResults', {
+        lobby: updatedLobby,
+        creations: []
+      });
+      startResultsTimer(lobbyId, 5);
+      return;
+    }
+    
+    console.log(`[MEME TIMER] Starting vote with ${allCreations.length} creations`);
+    const updatedLobby = await db.startVotingPhase(lobbyId);
+    const voteTime = updatedLobby.settings?.voteTime || 30;
+    
+    io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
+      lobby: updatedLobby,
+      creations: allCreations,
+      currentIndex: 0,
+      timeRemaining: voteTime
+    });
+    
+    startVoteTimer(lobbyId, voteTime);
+    
+  } catch (error) {
+    console.error(`[MEME TIMER] handleCreationTimeout error:`, error);
+  }
 }
 
 // ==================== TIMER VOTE ====================
@@ -157,6 +255,9 @@ async function advanceToNextRoundOrFinish(lobbyId) {
           });
         }
       }
+      
+      // Démarrer le timer création pour la nouvelle manche
+      startCreationTimer(lobbyId, creationTime);
     }
     
     resultsTimers.delete(lobbyId);
@@ -232,6 +333,12 @@ router.post('/', async (req, res) => {
     if (allSubmitted && io) {
       console.log(`[MEME API] ===== ALL SUBMITTED - STARTING VOTE =====`);
       
+      // Annuler le timer de création
+      if (creationTimers.has(lobbyId)) {
+        clearTimeout(creationTimers.get(lobbyId));
+        creationTimers.delete(lobbyId);
+      }
+      
       const updatedLobby = await db.startVotingPhase(lobbyId);
       const voteTime = updatedLobby.settings?.voteTime || 30;
       
@@ -272,4 +379,6 @@ router.get('/:id', async (req, res) => {
 });
 
 router.init = init;
+router.signalAllVoted = signalAllVoted;
+router.signalGameStarted = signalGameStarted;
 module.exports = router;

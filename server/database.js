@@ -3367,6 +3367,44 @@ async function updateMemeLobbyParticipants(lobbyId, participants) {
   return data;
 }
 
+// Reset du lobby pour rejouer
+async function resetMemeLobbyForReplay(lobbyId, participants) {
+  const { data, error } = await supabase
+    .from('meme_lobbies')
+    .update({
+      status: 'waiting',
+      phase: null,
+      current_round: 0,
+      current_vote_index: 0,
+      participants: participants
+    })
+    .eq('id', lobbyId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Supprimer les créations d'un lobby
+async function deleteMemeCreationsByLobby(lobbyId) {
+  const { error } = await supabase
+    .from('meme_creations')
+    .delete()
+    .eq('lobby_id', lobbyId);
+  if (error) throw error;
+  return true;
+}
+
+// Supprimer les assignments d'un lobby
+async function deleteMemeAssignmentsByLobby(lobbyId) {
+  const { error } = await supabase
+    .from('meme_assignments')
+    .delete()
+    .eq('lobby_id', lobbyId);
+  if (error) throw error;
+  return true;
+}
+
 async function markSuperVoteUsed(lobbyId, odId) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
@@ -4010,6 +4048,9 @@ module.exports = {
   deleteMemeLobby,
   cleanupOldMemeLobbies,
   generateShortCode,
+  resetMemeLobbyForReplay,
+  deleteMemeCreationsByLobby,
+  deleteMemeAssignmentsByLobby,
 
   // Meme Creations
   getMemeCreationsByLobby,

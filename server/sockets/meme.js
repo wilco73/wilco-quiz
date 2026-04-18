@@ -244,6 +244,16 @@ module.exports = function(io, socket, db) {
         }
       }
       
+      // Signaler à meme-creations.js de démarrer le timer création
+      try {
+        const memeCreations = require('../routes/meme-creations');
+        if (memeCreations.signalGameStarted) {
+          memeCreations.signalGameStarted(lobbyId, creationTime);
+        }
+      } catch (e) {
+        console.error('[MEME] Could not signal gameStarted:', e.message);
+      }
+      
       if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MEME] Erreur start game:', error);
@@ -430,8 +440,8 @@ module.exports = function(io, socket, db) {
       }
       
       // Vérifier super vote
+      const lobby = await db.getMemeLobbyById(lobbyId);
       if (isSuper) {
-        const lobby = await db.getMemeLobbyById(lobbyId);
         const participant = (lobby?.participants || []).find(p => p.odId === odId);
         if (participant?.superVoteUsedThisRound) {
           return callback?.({ success: false, message: 'Super vote déjà utilisé' });
@@ -441,7 +451,7 @@ module.exports = function(io, socket, db) {
       
       const result = await db.addVoteToCreation(creationId, odId, pseudo, voteType, isSuper);
       
-      // Notifier
+      // Notifier tout le monde du vote
       io.to(`meme:${lobbyId}`).emit('meme:voteReceived', {
         creationId,
         odId,
@@ -451,6 +461,29 @@ module.exports = function(io, socket, db) {
       });
       
       if (callback) callback({ success: true, points: result.points });
+      
+      // Vérifier si tous ont voté pour cette création
+      const updatedCreation = await db.getMemeCreationById(creationId);
+      const votes = updatedCreation.votes || [];
+      const participants = lobby?.participants || [];
+      // Nombre de votants attendus = tous sauf l'auteur
+      const expectedVoters = participants.length - 1;
+      
+      console.log(`[MEME] Votes for creation ${creationId}: ${votes.length}/${expectedVoters}`);
+      
+      if (votes.length >= expectedVoters) {
+        console.log(`[MEME] All voted! Signaling to advance...`);
+        // Signaler à meme-creations.js d'avancer
+        try {
+          const memeCreations = require('../routes/meme-creations');
+          if (memeCreations.signalAllVoted) {
+            memeCreations.signalAllVoted(lobbyId);
+          }
+        } catch (e) {
+          console.error('[MEME] Could not signal allVoted:', e.message);
+        }
+      }
+      
     } catch (error) {
       console.error('[MEME] Erreur vote:', error);
       if (callback) callback({ success: false, message: error.message });
@@ -574,6 +607,45 @@ module.exports = function(io, socket, db) {
       if (callback) callback({ success: true });
     } catch (error) {
       console.error('[MEME] Erreur delete lobby:', error);
+      if (callback) callback({ success: false, message: error.message });
+    }
+  });
+  
+  // Rejouer avec les mêmes joueurs
+  socket.on('meme:playAgain', async (data, callback) => {
+    try {
+      const { lobbyId } = data;
+      
+      console.log(`[MEME] Play again requested for ${lobbyId}`);
+      
+      const lobby = await db.getMemeLobbyById(lobbyId);
+      if (!lobby) {
+        return callback?.({ success: false, message: 'Lobby non trouvé' });
+      }
+      
+      // Réinitialiser les scores des participants
+      const participants = (lobby.participants || []).map(p => ({
+        ...p,
+        score: 0,
+        hasSubmitted: false,
+        superVoteUsedThisRound: false
+      }));
+      
+      // Reset le lobby
+      const resetLobby = await db.resetMemeLobbyForReplay(lobbyId, participants);
+      
+      // Supprimer les anciennes créations et assignments
+      await db.deleteMemeCreationsByLobby(lobbyId);
+      await db.deleteMemeAssignmentsByLobby(lobbyId);
+      
+      console.log(`[MEME] Lobby reset, notifying players`);
+      
+      // Notifier tous les joueurs
+      io.to(`meme:${lobbyId}`).emit('meme:lobbyReset', { lobby: resetLobby });
+      
+      if (callback) callback({ success: true, lobby: resetLobby });
+    } catch (error) {
+      console.error('[MEME] Erreur play again:', error);
       if (callback) callback({ success: false, message: error.message });
     }
   });
