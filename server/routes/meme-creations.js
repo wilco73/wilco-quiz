@@ -110,7 +110,11 @@ async function advanceToNextRoundOrFinish(lobbyId) {
       console.log(`[MEME TIMER] Game finished!`);
       
       const allCreations = await db.getMemeCreationsByLobby(lobbyId);
+      console.log(`[MEME TIMER] All creations for lobby ${lobbyId}:`, allCreations?.length);
+      
       const updatedLobby = await db.updateMemeLobbyPhase(lobbyId, 'final');
+      
+      console.log(`[MEME TIMER] Emitting gameFinished with ${allCreations?.length} creations`);
       
       io.to(`meme:${lobbyId}`).emit('meme:gameFinished', {
         lobby: updatedLobby,
