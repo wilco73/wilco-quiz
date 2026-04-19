@@ -296,16 +296,40 @@ export default function MemeEditor({
     canvas.height = template.height;
     const ctx = canvas.getContext('2d');
 
-    // Dessiner l'image de fond
-    const img = new Image();
-    // Note: crossOrigin enlevé car pose des problèmes CORS avec les nouveaux memes
-    
-    return new Promise((resolve, reject) => {
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, template.width, template.height);
+    // Charger l'image en contournant CORS via fetch + blob
+    // Cela évite le problème de "tainted canvas"
+    const loadImageAsBlob = async (url) => {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            URL.revokeObjectURL(img.src);
+            resolve(img);
+          };
+          img.onerror = reject;
+          img.src = URL.createObjectURL(blob);
+        });
+      } catch (err) {
+        // Fallback: essayer avec crossOrigin
+        console.warn('[MemeEditor] Fetch failed, trying with crossOrigin:', err);
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = url;
+        });
+      }
+    };
 
-        // Utiliser textLayersRef pour avoir les valeurs à jour
-        const layers = textLayersRef.current || textLayers;
+    try {
+      const img = await loadImageAsBlob(template.image_url);
+      ctx.drawImage(img, 0, 0, template.width, template.height);
+
+      // Utiliser textLayersRef pour avoir les valeurs à jour
+      const layers = textLayersRef.current || textLayers;
         
         // Dessiner chaque texte
         layers.forEach(layer => {
@@ -385,11 +409,11 @@ export default function MemeEditor({
 
         // Convertir en base64
         const base64 = canvas.toDataURL('image/png');
-        resolve(base64);
-      };
-      img.onerror = reject;
-      img.src = template.image_url;
-    });
+        return base64;
+      } catch (err) {
+        console.error('[MemeEditor] generateFinalImage error:', err);
+        throw err;
+      }
   };
 
   // Enregistrer le getter pour récupérer l'état actuel (utilisé par submitNow)
