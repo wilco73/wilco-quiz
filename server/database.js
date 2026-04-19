@@ -3051,7 +3051,7 @@ async function getMemeLobbyById(lobbyId) {
   return data;
 }
 
-async function createMemeLobby(creatorId, creatorPseudo, settings = {}) {
+async function createMemeLobby(creatorId, creatorPseudo, creatorAvatar = null, settings = {}) {
   const code = await generateUniqueCode();
   const isPrivate = settings.isPrivate || false;
   
@@ -3062,12 +3062,12 @@ async function createMemeLobby(creatorId, creatorPseudo, settings = {}) {
     .from('meme_lobbies')
     .insert({
       creator_id: creatorId,
-      creator_pseudo: creatorPseudo,  // <-- AJOUTÉ !
+      creator_pseudo: creatorPseudo,
       code: code,
       is_private: isPrivate,
       status: 'waiting',
       settings: otherSettings,
-      participants: [{ odId: creatorId, pseudo: creatorPseudo, score: 0 }],
+      participants: [{ odId: creatorId, pseudo: creatorPseudo, avatar: creatorAvatar, score: 0 }],
       created_at: new Date().toISOString()
     })
     .select()

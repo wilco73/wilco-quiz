@@ -15,9 +15,9 @@ module.exports = function(io, socket, db) {
   // Créer un lobby meme
   socket.on('meme:createLobby', async (data, callback) => {
     try {
-      const { odId, pseudo, settings } = data;
+      const { odId, pseudo, avatar, settings } = data;
       
-      const lobby = await db.createMemeLobby(odId, pseudo, settings);
+      const lobby = await db.createMemeLobby(odId, pseudo, avatar, settings);
       
       // Rejoindre la room socket
       socket.join(`meme:${lobby.id}`);

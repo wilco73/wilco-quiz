@@ -77,6 +77,68 @@ export default function useMemeGame(socket, currentUser) {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
+  // Auto-submit quand le timer atteint 0 en phase création
+  const autoSubmitTriggeredRef = useRef(false);
+  const sendCreationToServerRef = useRef(null);
+  
+  useEffect(() => {
+    // Ne déclencher que si:
+    // - Timer = 0
+    // - En phase creating
+    // - Pas déjà soumis
+    // - Pas déjà déclenché
+    // - On a un template
+    if (
+      timeRemaining === 0 && 
+      phase === 'creating' && 
+      !hasSubmitted && 
+      !autoSubmitTriggeredRef.current &&
+      templateRef.current &&
+      getCurrentCreationRef.current
+    ) {
+      autoSubmitTriggeredRef.current = true;
+      console.log('[useMemeGame] Timer reached 0, auto-submitting...');
+      
+      setIsUploading(true);
+      
+      // Générer et envoyer la création
+      (async () => {
+        try {
+          const currentState = await getCurrentCreationRef.current();
+          console.log('[useMemeGame] Auto-submit got state:', currentState ? 'yes' : 'no');
+          
+          if (currentState && currentState.finalImage) {
+            const creation = {
+              lobbyId: lobbyIdRef.current,
+              roundNumber: currentRoundRef.current,
+              odId: currentUserRef.current?.id,
+              pseudo: currentUserRef.current?.pseudo,
+              templateId: templateRef.current?.id,
+              textLayers: currentState.textLayers || [],
+              finalImageBase64: currentState.finalImage,
+            };
+            
+            // Utiliser la ref car sendCreationToServer est défini après
+            if (sendCreationToServerRef.current) {
+              await sendCreationToServerRef.current(creation);
+            }
+            setHasSubmitted(true);
+            console.log('[useMemeGame] Auto-submit complete!');
+          }
+        } catch (err) {
+          console.error('[useMemeGame] Auto-submit error:', err);
+        } finally {
+          setIsUploading(false);
+        }
+      })();
+    }
+    
+    // Reset le flag quand on change de phase ou de round
+    if (phase !== 'creating') {
+      autoSubmitTriggeredRef.current = false;
+    }
+  }, [timeRemaining, phase, hasSubmitted]);
+
   const updatePlayersFromLobby = useCallback((lobbyData) => {
     if (!lobbyData?.participants) return;
     setPlayers(lobbyData.participants.map(p => ({
@@ -100,6 +162,7 @@ export default function useMemeGame(socket, currentUser) {
           lobbyId: currentLobbyId,
           odId: currentUser.id,
           pseudo: currentUser.pseudo,
+          avatar: currentUser.avatar,
         }, (response) => {
           if (response?.success) {
             setLobby(response.lobby);
@@ -136,6 +199,11 @@ export default function useMemeGame(socket, currentUser) {
       console.error('[useMemeGame] Error sending creation:', err);
     }
   }, []);
+
+  // Mettre à jour la ref pour auto-submit
+  useEffect(() => {
+    sendCreationToServerRef.current = sendCreationToServer;
+  }, [sendCreationToServer]);
 
   // Socket listeners
   useEffect(() => {

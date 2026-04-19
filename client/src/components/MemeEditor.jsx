@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Plus, Trash2, RotateCw, Move, Type, Bold, Italic, Underline, Strikethrough,
-  AlignLeft, AlignCenter, AlignRight, ChevronUp, ChevronDown, Download, Check, Undo
+  AlignLeft, AlignCenter, AlignRight, ChevronUp, ChevronDown, Download, Check, Undo,
+  Loader2
 } from 'lucide-react';
 
 /**
@@ -431,14 +432,21 @@ export default function MemeEditor({
     }
   }, [onRegisterGetter, template]);
 
+  // État de chargement pour le bouton Valider
+  const [isSaving, setIsSaving] = useState(false);
+
   // Sauvegarder
   const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       const finalImage = await generateFinalImage();
-      onSave(textLayers, finalImage);
+      await onSave(textLayers, finalImage);
     } catch (error) {
       console.error('Erreur génération image:', error);
       alert('Erreur lors de la génération de l\'image');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -663,10 +671,24 @@ export default function MemeEditor({
           )}
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-2 text-sm"
+            disabled={isSaving}
+            className={`px-4 py-2 text-white rounded-lg flex items-center gap-2 text-sm transition-colors ${
+              isSaving 
+                ? 'bg-green-700 cursor-wait' 
+                : 'bg-green-600 hover:bg-green-700'
+            }`}
           >
-            <Check className="w-4 h-4" />
-            Valider
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Envoi...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                Valider
+              </>
+            )}
           </button>
         </div>
       </div>
