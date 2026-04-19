@@ -408,8 +408,27 @@ export default function MemeEditor({
           ctx.restore();
         });
 
-        // Convertir en base64
-        const base64 = canvas.toDataURL('image/png');
+        // Réduire la taille de l'image si elle est trop grande
+        let outputCanvas = canvas;
+        const MAX_DIMENSION = 800; // Max 800px de large/haut
+        
+        if (canvas.width > MAX_DIMENSION || canvas.height > MAX_DIMENSION) {
+          const scale = Math.min(MAX_DIMENSION / canvas.width, MAX_DIMENSION / canvas.height);
+          const newWidth = Math.round(canvas.width * scale);
+          const newHeight = Math.round(canvas.height * scale);
+          
+          outputCanvas = document.createElement('canvas');
+          outputCanvas.width = newWidth;
+          outputCanvas.height = newHeight;
+          const outputCtx = outputCanvas.getContext('2d');
+          outputCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+          
+          console.log(`[MemeEditor] Resized from ${canvas.width}x${canvas.height} to ${newWidth}x${newHeight}`);
+        }
+
+        // Convertir en JPEG avec qualité réduite (0.7 = 70%)
+        const base64 = outputCanvas.toDataURL('image/jpeg', 0.7);
+        console.log('[MemeEditor] Image size:', Math.round(base64.length / 1024), 'KB');
         return base64;
       } catch (err) {
         console.error('[MemeEditor] generateFinalImage error:', err);

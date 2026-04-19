@@ -183,21 +183,47 @@ export default function useMemeGame(socket, currentUser) {
       return;
     }
     
-    console.log('[useMemeGame] Sending creation to server...');
+    const imageSize = creation.finalImageBase64 ? Math.round(creation.finalImageBase64.length / 1024) : 0;
+    console.log(`[useMemeGame] Sending creation to server (image: ${imageSize}KB)...`);
     
-    try {
-      const response = await fetch(`${API_URL}/api/meme-creations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(creation),
-      });
-      
-      const result = await response.json();
-      console.log('[useMemeGame] Creation sent:', result?.success);
-      
-    } catch (err) {
-      console.error('[useMemeGame] Error sending creation:', err);
+    // Retry logic
+    const maxRetries = 2;
+    let lastError = null;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`[useMemeGame] Retry attempt ${attempt}/${maxRetries}...`);
+          await new Promise(r => setTimeout(r, 1000)); // Attendre 1s entre les tentatives
+        }
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+        
+        const response = await fetch(`${API_URL}/api/meme-creations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(creation),
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log('[useMemeGame] Creation sent successfully:', result?.success);
+        return; // Succès, on sort
+        
+      } catch (err) {
+        lastError = err;
+        console.error(`[useMemeGame] Error sending creation (attempt ${attempt + 1}):`, err.message);
+      }
     }
+    
+    console.error('[useMemeGame] All retries failed:', lastError);
   }, []);
 
   // Mettre à jour la ref pour auto-submit
