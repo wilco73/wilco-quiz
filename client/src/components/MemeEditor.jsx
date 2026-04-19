@@ -666,6 +666,7 @@ export default function MemeEditor({
             src={template.image_url}
             alt="Meme template"
             className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+            crossOrigin="anonymous"
             onLoad={() => setImageLoaded(true)}
           />
 

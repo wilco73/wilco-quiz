@@ -39,7 +39,7 @@ module.exports = function(io, socket, db) {
   // Rejoindre un lobby
   socket.on('meme:joinLobby', async (data, callback) => {
     try {
-      const { lobbyId, odId, pseudo } = data;
+      const { lobbyId, odId, pseudo, avatar } = data;
       
       console.log(`[MEME] joinLobby request: ${pseudo} (${odId}) -> ${lobbyId}`);
       
@@ -59,7 +59,7 @@ module.exports = function(io, socket, db) {
       
       // Rejoindre le lobby dans la BDD (ajoute si nouveau, retourne tel quel si déjà dedans)
       if (!isAlreadyParticipant) {
-        lobby = await db.joinMemeLobby(lobbyId, odId, pseudo);
+        lobby = await db.joinMemeLobby(lobbyId, odId, pseudo, avatar);
       }
       
       // TOUJOURS rejoindre la room socket
@@ -126,7 +126,7 @@ module.exports = function(io, socket, db) {
   // Rejoindre un lobby par code court
   socket.on('meme:joinLobbyByCode', async (data, callback) => {
     try {
-      const { code, odId, pseudo } = data;
+      const { code, odId, pseudo, avatar } = data;
       
       console.log(`[MEME] joinLobbyByCode: ${code} by ${pseudo}`);
       
@@ -136,7 +136,7 @@ module.exports = function(io, socket, db) {
       }
       
       // Réutiliser la logique de joinLobby
-      socket.emit('meme:joinLobby', { lobbyId: lobby.id, odId, pseudo }, callback);
+      socket.emit('meme:joinLobby', { lobbyId: lobby.id, odId, pseudo, avatar }, callback);
       
     } catch (error) {
       console.error('[MEME] joinLobbyByCode error:', error);

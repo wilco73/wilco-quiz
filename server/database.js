@@ -3089,7 +3089,7 @@ async function getMemeLobbyByCode(code) {
 }
 
 
-async function joinMemeLobby(lobbyId, odId, pseudo) {
+async function joinMemeLobby(lobbyId, odId, pseudo, avatar = null) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
   
@@ -3108,6 +3108,7 @@ async function joinMemeLobby(lobbyId, odId, pseudo) {
   participants.push({
     odId,
     pseudo,
+    avatar,
     score: 0,
     superVoteUsedThisRound: false
   });

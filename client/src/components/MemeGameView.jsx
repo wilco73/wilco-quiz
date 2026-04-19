@@ -51,7 +51,8 @@ export default function MemeGameView({
   timeRemaining = 0,
   currentVoteIndex = 0,
   hasSuperVote = true,
-  hasSubmitted = false, // Passé depuis le hook
+  hasSubmitted = false,
+  isUploading = false, // Pendant l'envoi automatique après timer
   rotationsUsed = 0,
   undosUsed = 0,
   maxRotations = 3,
@@ -69,7 +70,7 @@ export default function MemeGameView({
   onUndoTemplate,
   onPlayAgain,
   onBackToLobby,
-  onSetGetCurrentCreation, // Pour enregistrer le getter de l'état actuel de l'éditeur
+  onSetGetCurrentCreation,
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -191,6 +192,21 @@ export default function MemeGameView({
                       onRegisterGetter={onSetGetCurrentCreation}
                     />
                   </div>
+                  
+                  {/* Overlay "Envoi en cours" quand le timer expire */}
+                  {isUploading && !hasSubmitted && (
+                    <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/70">
+                      <div className="bg-gray-900/95 rounded-2xl p-8 text-center shadow-2xl border border-yellow-500/30">
+                        <Loader2 className="w-16 h-16 text-yellow-400 animate-spin mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-white mb-2">
+                          Temps écoulé !
+                        </h3>
+                        <p className="text-yellow-300">
+                          Envoi de votre meme en cours...
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Overlay "En attente" si hasSubmitted */}
                   {hasSubmitted && (
