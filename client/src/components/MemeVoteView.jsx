@@ -12,6 +12,7 @@ import { ThumbsUp, Minus, ThumbsDown, Star, Clock, Users, Hash, Loader2 } from '
  * - totalMemes: number
  * - canVote: boolean (false si c'est son propre meme)
  * - hasSuperVote: boolean (si le joueur peut encore utiliser son super vote)
+ * - hasSuperDownvote: boolean (si le joueur peut encore utiliser son super downvote)
  * - onVote: (voteType: 'up' | 'neutral' | 'down', isSuper: boolean) => void
  * - roundNumber: number
  * - totalRounds: number
@@ -27,6 +28,7 @@ export default function MemeVoteView({
   totalMemes,
   canVote = true,
   hasSuperVote = true,
+  hasSuperDownvote = true,
   onVote,
   roundNumber = 1,
   totalRounds = 3,
@@ -36,6 +38,7 @@ export default function MemeVoteView({
 }) {
   const [selectedVote, setSelectedVote] = useState(null);
   const [isSuper, setIsSuper] = useState(false);
+  const [isSuperDown, setIsSuperDown] = useState(false);
   const [hasVotedLocal, setHasVotedLocal] = useState(false);
 
   // Le vote est considéré fait si le parent dit qu'on a voté OU si on a voté localement
@@ -45,6 +48,7 @@ export default function MemeVoteView({
   useEffect(() => {
     setSelectedVote(null);
     setIsSuper(false);
+    setIsSuperDown(false);
     setHasVotedLocal(false);
   }, [meme?.id]);
 
@@ -53,6 +57,9 @@ export default function MemeVoteView({
   const handleVote = (voteType) => {
     if (hasVoted || isOwnMeme) return;
     setSelectedVote(voteType);
+    // Reset les super si on change de type de vote
+    if (voteType !== 'up') setIsSuper(false);
+    if (voteType !== 'down') setIsSuperDown(false);
   };
 
   const handleSuperToggle = () => {
@@ -60,9 +67,16 @@ export default function MemeVoteView({
     setIsSuper(!isSuper);
   };
 
+  const handleSuperDownToggle = () => {
+    if (!hasSuperDownvote || !selectedVote || selectedVote !== 'down') return;
+    setIsSuperDown(!isSuperDown);
+  };
+
   const submitVote = () => {
     if (!selectedVote || hasVoted) return;
-    onVote(selectedVote, isSuper);
+    // Passer isSuper pour up, isSuperDown pour down
+    const superVote = selectedVote === 'up' ? isSuper : (selectedVote === 'down' ? isSuperDown : false);
+    onVote(selectedVote, superVote);
     setHasVotedLocal(true);
   };
 
@@ -73,7 +87,7 @@ export default function MemeVoteView({
   const votePoints = {
     up: isSuper ? '+200' : '+100',
     neutral: '0',
-    down: '-50',
+    down: isSuperDown ? '-100' : '-50',
   };
 
   return (
@@ -154,11 +168,13 @@ export default function MemeVoteView({
               disabled={hasVoted}
               className={`flex-1 py-4 rounded-xl font-bold text-lg flex flex-col items-center gap-1 transition-all ${
                 selectedVote === 'down'
-                  ? 'bg-red-600 text-white scale-105 ring-2 ring-red-400'
+                  ? isSuperDown
+                    ? 'bg-orange-600 text-white scale-105 ring-2 ring-orange-400'
+                    : 'bg-red-600 text-white scale-105 ring-2 ring-red-400'
                   : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
               } ${hasVoted ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <ThumbsDown className="w-8 h-8" />
+              <ThumbsDown className={`w-8 h-8 ${isSuperDown && selectedVote === 'down' ? 'fill-current' : ''}`} />
               <span className="text-sm">{votePoints.down}</span>
             </button>
 
@@ -216,6 +232,28 @@ export default function MemeVoteView({
           {selectedVote === 'up' && !hasSuperVote && !hasVoted && (
             <p className="text-center text-gray-500 text-sm mb-4">
               Super vote déjà utilisé cette manche
+            </p>
+          )}
+
+          {/* Super downvote toggle */}
+          {selectedVote === 'down' && hasSuperDownvote && !hasVoted && (
+            <button
+              onClick={handleSuperDownToggle}
+              className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all mb-4 ${
+                isSuperDown
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-gray-800 text-orange-400 border border-orange-500/50 hover:bg-gray-700'
+              }`}
+            >
+              <ThumbsDown className={`w-5 h-5 ${isSuperDown ? 'fill-current' : ''}`} />
+              {isSuperDown ? 'Super Downvote activé ! (-100 pts)' : 'Activer le Super Downvote (-100 pts)'}
+            </button>
+          )}
+
+          {/* Indicateur super downvote déjà utilisé */}
+          {selectedVote === 'down' && !hasSuperDownvote && !hasVoted && (
+            <p className="text-center text-gray-500 text-sm mb-4">
+              Super downvote déjà utilisé cette manche
             </p>
           )}
 

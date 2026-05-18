@@ -51,6 +51,7 @@ export default function MemeGameView({
   timeRemaining = 0,
   currentVoteIndex = 0,
   hasSuperVote = true,
+  hasSuperDownvote = true,
   hasSubmitted = false,
   isUploading = false, // Pendant l'envoi automatique après timer
   rotationsUsed = 0,
@@ -294,6 +295,7 @@ export default function MemeGameView({
             totalMemes={allMemes.length}
             canVote={!isOwnMeme}
             hasSuperVote={hasSuperVote}
+            hasSuperDownvote={hasSuperDownvote}
             onVote={onVote}
             roundNumber={currentRound}
             totalRounds={totalRounds}

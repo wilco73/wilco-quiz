@@ -300,8 +300,21 @@ export default function MemeEditor({
     // Charger l'image en contournant CORS via fetch + blob
     // Cela évite le problème de "tainted canvas"
     const loadImageAsBlob = async (url) => {
+      // Ajouter un cache-buster pour éviter les problèmes de cache CORS
+      const cacheBuster = `_cb=${Date.now()}`;
+      const urlWithCacheBuster = url.includes('?') ? `${url}&${cacheBuster}` : `${url}?${cacheBuster}`;
+      
       try {
-        const response = await fetch(url);
+        // Essayer avec fetch normal (nécessite headers CORS)
+        const response = await fetch(urlWithCacheBuster, {
+          mode: 'cors',
+          cache: 'no-store', // Ne pas utiliser le cache
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
         const blob = await response.blob();
         return new Promise((resolve, reject) => {
           const img = new Image();
@@ -313,14 +326,20 @@ export default function MemeEditor({
           img.src = URL.createObjectURL(blob);
         });
       } catch (err) {
-        // Fallback: essayer avec crossOrigin
-        console.warn('[MemeEditor] Fetch failed, trying with crossOrigin:', err);
+        console.warn('[MemeEditor] Fetch CORS failed, trying direct load:', err.message);
+        
+        // Fallback: charger directement avec crossOrigin
+        // Cela fonctionne si le serveur renvoie les bons headers
         return new Promise((resolve, reject) => {
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => resolve(img);
-          img.onerror = reject;
-          img.src = url;
+          img.onerror = (e) => {
+            console.error('[MemeEditor] Image load failed completely:', url);
+            reject(e);
+          };
+          // Utiliser le cache-buster ici aussi
+          img.src = urlWithCacheBuster;
         });
       }
     };

@@ -30,6 +30,7 @@ export default function MemeLobbyView({
     maxRotations: 3,
     maxUndos: 1,
     tags: [],
+    excludedTags: [],
     isPrivate: false,
   });
 
@@ -74,12 +75,40 @@ export default function MemeLobbyView({
     onUpdateSettings?.({ ...localSettings, isPrivate: newIsPrivate });
   };
 
-  // Toggle un tag
+  // Toggle un tag avec 3 états: neutre → inclus → exclu → neutre
   const toggleTag = (tag) => {
-    const newTags = localSettings.tags.includes(tag)
-      ? localSettings.tags.filter(t => t !== tag)
-      : [...localSettings.tags, tag];
-    updateSetting('tags', newTags);
+    const isIncluded = localSettings.tags.includes(tag);
+    const isExcluded = localSettings.excludedTags.includes(tag);
+    
+    let newTags = [...localSettings.tags];
+    let newExcludedTags = [...localSettings.excludedTags];
+    
+    if (!isIncluded && !isExcluded) {
+      // Neutre → Inclus
+      newTags.push(tag);
+    } else if (isIncluded) {
+      // Inclus → Exclu
+      newTags = newTags.filter(t => t !== tag);
+      newExcludedTags.push(tag);
+    } else {
+      // Exclu → Neutre
+      newExcludedTags = newExcludedTags.filter(t => t !== tag);
+    }
+    
+    const newSettings = { 
+      ...localSettings, 
+      tags: newTags, 
+      excludedTags: newExcludedTags 
+    };
+    setLocalSettings(newSettings);
+    onUpdateSettings?.(newSettings);
+  };
+
+  // Obtenir l'état d'un tag
+  const getTagState = (tag) => {
+    if (localSettings.tags.includes(tag)) return 'included';
+    if (localSettings.excludedTags.includes(tag)) return 'excluded';
+    return 'neutral';
   };
 
   return (
@@ -356,7 +385,7 @@ export default function MemeLobbyView({
                     Retours en arrière max
                   </label>
                   <div className="flex gap-2">
-                    {[0, 1, 2, 3].map(n => (
+                    {[0, 1, 2, 3, 5].map(n => (
                       <button
                         key={n}
                         onClick={() => updateSetting('maxUndos', n)}
@@ -369,6 +398,25 @@ export default function MemeLobbyView({
                         {n}
                       </button>
                     ))}
+                    {/* Champ personnalisé */}
+                    <input
+                      type="number"
+                      min="0"
+                      max="99"
+                      value={![0, 1, 2, 3, 5].includes(localSettings.maxUndos) ? localSettings.maxUndos : ''}
+                      placeholder="+"
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val) && val >= 0) {
+                          updateSetting('maxUndos', val);
+                        }
+                      }}
+                      className={`w-14 py-2 rounded-lg font-semibold text-center transition-colors ${
+                        ![0, 1, 2, 3, 5].includes(localSettings.maxUndos)
+                          ? 'bg-purple-600 text-white border-2 border-purple-400'
+                          : 'bg-gray-700 text-gray-300 border border-gray-600'
+                      }`}
+                    />
                   </div>
                 </div>
 
@@ -379,24 +427,45 @@ export default function MemeLobbyView({
                       <Tag className="w-4 h-4" />
                       Filtrer les templates par tags
                     </label>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Cliquez pour inclure (vert), re-cliquez pour exclure (rouge)
+                    </p>
                     <div className="flex flex-wrap gap-2">
-                      {availableTags.map(tag => (
-                        <button
-                          key={tag}
-                          onClick={() => toggleTag(tag)}
-                          className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                            localSettings.tags.includes(tag)
-                              ? 'bg-purple-600 text-white'
-                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          }`}
-                        >
-                          {tag}
-                        </button>
-                      ))}
+                      {availableTags.map(tag => {
+                        const state = getTagState(tag);
+                        return (
+                          <button
+                            key={tag}
+                            onClick={() => toggleTag(tag)}
+                            className={`px-3 py-1 rounded-full text-sm transition-colors flex items-center gap-1 ${
+                              state === 'included'
+                                ? 'bg-green-600 text-white'
+                                : state === 'excluded'
+                                  ? 'bg-red-600 text-white'
+                                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            }`}
+                          >
+                            {state === 'included' && <span>✓</span>}
+                            {state === 'excluded' && <span>✕</span>}
+                            {tag}
+                          </button>
+                        );
+                      })}
                     </div>
-                    {localSettings.tags.length === 0 && (
+                    {localSettings.tags.length === 0 && localSettings.excludedTags.length === 0 && (
                       <p className="text-xs text-gray-500 mt-1">
                         Aucun filtre = tous les templates
+                      </p>
+                    )}
+                    {(localSettings.tags.length > 0 || localSettings.excludedTags.length > 0) && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        {localSettings.tags.length > 0 && (
+                          <span className="text-green-400">Inclus: {localSettings.tags.join(', ')}</span>
+                        )}
+                        {localSettings.tags.length > 0 && localSettings.excludedTags.length > 0 && ' | '}
+                        {localSettings.excludedTags.length > 0 && (
+                          <span className="text-red-400">Exclus: {localSettings.excludedTags.join(', ')}</span>
+                        )}
                       </p>
                     )}
                   </div>

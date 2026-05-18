@@ -3795,9 +3795,37 @@ async function getRandomMemeTemplates(count, excludeIds = [], tags = []) {
 }
 
 // Récupère UN template aléatoire pour un joueur (rotation)
-async function getRandomMemeTemplate(excludeIds = [], tags = []) {
-  const templates = await getRandomMemeTemplates(1, excludeIds, tags);
-  return templates[0] || null;
+async function getRandomMemeTemplate(excludeIds = [], requiredTags = [], excludedTags = []) {
+  let query = supabase
+    .from('meme_templates')
+    .select('*')
+    .eq('is_active', true);
+  
+  if (excludeIds.length > 0) {
+    query = query.not('id', 'in', `(${excludeIds.join(',')})`);
+  }
+  
+  const { data: templates, error } = await query;
+  if (error) throw error;
+  
+  let filtered = templates;
+  
+  // Filtrer par tags inclus (si au moins un tag requis, le template doit avoir au moins un de ces tags)
+  if (requiredTags.length > 0) {
+    filtered = filtered.filter(t => 
+      requiredTags.some(tag => (t.tags || []).includes(tag))
+    );
+  }
+  
+  // Filtrer par tags exclus (le template ne doit avoir AUCUN des tags exclus)
+  if (excludedTags.length > 0) {
+    filtered = filtered.filter(t => 
+      !excludedTags.some(tag => (t.tags || []).includes(tag))
+    );
+  }
+  
+  if (filtered.length === 0) return null;
+  return filtered[Math.floor(Math.random() * filtered.length)];
 }
 
 // ============================================================

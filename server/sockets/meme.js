@@ -209,11 +209,12 @@ module.exports = function(io, socket, db) {
       
       // Assigner un meme à chaque joueur
       const tags = lobby.settings?.tags || [];
+      const excludedTags = lobby.settings?.excludedTags || [];
       const participants = lobby.participants || [];
       const assignedTemplateIds = [];
       
       for (const participant of participants) {
-        const template = await db.getRandomMemeTemplate(assignedTemplateIds, tags);
+        const template = await db.getRandomMemeTemplate(assignedTemplateIds, tags, excludedTags);
         if (template) {
           await db.createMemeAssignment(lobbyId, 1, participant.odId, template.id);
           assignedTemplateIds.push(template.id);
@@ -281,8 +282,9 @@ module.exports = function(io, socket, db) {
       // Récupérer les IDs déjà utilisés
       const usedIds = currentAssignment.templates_history || [currentAssignment.template_id];
       const tags = lobby.settings?.tags || [];
+      const excludedTags = lobby.settings?.excludedTags || [];
       
-      const newTemplate = await db.getRandomMemeTemplate(usedIds, tags);
+      const newTemplate = await db.getRandomMemeTemplate(usedIds, tags, excludedTags);
       if (!newTemplate) {
         return callback?.({ success: false, message: 'Plus de templates disponibles' });
       }
@@ -641,11 +643,12 @@ module.exports = function(io, socket, db) {
       } else {
         // Nouvelle manche - assigner les memes
         const tags = lobby.settings?.tags || [];
+        const excludedTags = lobby.settings?.excludedTags || [];
         const participants = lobby.participants || [];
         const assignedTemplateIds = [];
         
         for (const participant of participants) {
-          const template = await db.getRandomMemeTemplate(assignedTemplateIds, tags);
+          const template = await db.getRandomMemeTemplate(assignedTemplateIds, tags, excludedTags);
           if (template) {
             await db.createMemeAssignment(lobbyId, lobby.current_round, participant.odId, template.id);
             assignedTemplateIds.push(template.id);

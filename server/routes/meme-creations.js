@@ -304,11 +304,12 @@ async function advanceToNextRoundOrFinish(lobbyId) {
       const updatedLobby = await db.advanceToNextRound(lobbyId);
       
       const tags = updatedLobby.settings?.tags || [];
+      const excludedTags = updatedLobby.settings?.excludedTags || [];
       const participants = updatedLobby.participants || [];
       const assignedTemplateIds = [];
       
       for (const participant of participants) {
-        const template = await db.getRandomMemeTemplate(assignedTemplateIds, tags);
+        const template = await db.getRandomMemeTemplate(assignedTemplateIds, tags, excludedTags);
         if (template) {
           await db.createMemeAssignment(lobbyId, updatedLobby.current_round, participant.odId, template.id);
           assignedTemplateIds.push(template.id);

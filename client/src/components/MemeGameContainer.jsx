@@ -162,6 +162,7 @@ export default function MemeGameContainer({
         timeRemaining={game.timeRemaining}
         currentVoteIndex={game.currentVoteIndex}
         hasSuperVote={game.hasSuperVote}
+        hasSuperDownvote={game.hasSuperDownvote}
         hasSubmitted={game.hasSubmitted}
         isUploading={game.isUploading}
         rotationsUsed={game.rotationsUsed}

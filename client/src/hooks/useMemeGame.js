@@ -29,6 +29,7 @@ export default function useMemeGame(socket, currentUser) {
   const [allMemes, setAllMemes] = useState([]);
   const [currentVoteIndex, setCurrentVoteIndex] = useState(0);
   const [hasSuperVote, setHasSuperVote] = useState(true);
+  const [hasSuperDownvote, setHasSuperDownvote] = useState(true);
   const [votesReceived, setVotesReceived] = useState({});
   const [hasVoted, setHasVoted] = useState(false);
   
@@ -257,6 +258,7 @@ export default function useMemeGame(socket, currentUser) {
       setCurrentRound(roundNumber);
       setHasSubmitted(false);
       setHasSuperVote(true);
+      setHasSuperDownvote(true);
       pendingCreationRef.current = null;
       updatePlayersFromLobby(updatedLobby);
       startTimer(serverTime || 120);
@@ -400,6 +402,7 @@ export default function useMemeGame(socket, currentUser) {
       setPhase('creating');
       setHasSubmitted(false);
       setHasSuperVote(true);
+      setHasSuperDownvote(true);
       setTemplate(null);
       setAssignment(null);
       setVotesReceived({});
@@ -426,6 +429,7 @@ export default function useMemeGame(socket, currentUser) {
       setAllMemes([]);
       setHasSubmitted(false);
       setHasSuperVote(true);
+      setHasSuperDownvote(true);
       setHasVoted(false);
       setVotesReceived({});
       setCurrentVoteIndex(0);
@@ -708,7 +712,11 @@ export default function useMemeGame(socket, currentUser) {
       }, (response) => {
         if (response?.success) {
           setHasVoted(true);
-          if (isSuper) setHasSuperVote(false);
+          // Consommer le super vote/downvote approprié
+          if (isSuper) {
+            if (voteType === 'up') setHasSuperVote(false);
+            if (voteType === 'down') setHasSuperDownvote(false);
+          }
         }
         resolve(response?.success || false);
       });
@@ -724,6 +732,7 @@ export default function useMemeGame(socket, currentUser) {
       setAllMemes([]);
       setHasSubmitted(false);
       setHasSuperVote(true);
+      setHasSuperDownvote(true);
       setHasVoted(false);
       setVotesReceived({});
       pendingCreationRef.current = null;
@@ -770,7 +779,7 @@ export default function useMemeGame(socket, currentUser) {
 
   return {
     lobby, phase, currentRound, timeRemaining, template, assignment, hasSubmitted,
-    allMemes, currentMeme, currentVoteIndex, hasSuperVote, hasVoted, votesCount,
+    allMemes, currentMeme, currentVoteIndex, hasSuperVote, hasSuperDownvote, hasVoted, votesCount,
     totalVoters, players, loading, error, isOwnMeme, isCreator, canUndo, canRotate,
     rotationsUsed, undosUsed, maxRotations, maxUndos, isUploading,
     createLobby, joinLobby, joinLobbyByCode, leaveLobby, updateSettings, startGame,
