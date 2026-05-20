@@ -51,13 +51,40 @@ export default function MemeResultsView({
     link.click();
   };
 
-  // Télécharger tous les memes
-  const downloadAllMemes = () => {
-    allMemes.forEach((meme, index) => {
-      setTimeout(() => {
-        downloadMeme(meme.final_image_base64, `meme_${index + 1}_${meme.player_pseudo}.png`);
-      }, index * 500);
-    });
+  // Télécharger tous les memes dans un ZIP
+  const downloadAllMemes = async () => {
+    // Utiliser JSZip si disponible (import dynamique)
+    try {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      
+      for (let i = 0; i < allMemes.length; i++) {
+        const meme = allMemes[i];
+        if (!meme.final_image_base64) continue;
+        
+        // Convertir base64 en blob
+        const base64Data = meme.final_image_base64.split(',')[1];
+        const filename = `meme_${i + 1}_${meme.player_pseudo || 'joueur'}.jpg`;
+        zip.file(filename, base64Data, { base64: true });
+      }
+      
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `memes_${new Date().toISOString().slice(0, 10)}.zip`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      
+    } catch (err) {
+      console.warn('JSZip non disponible, téléchargement individuel:', err);
+      // Fallback: téléchargement individuel avec délai
+      allMemes.forEach((meme, index) => {
+        if (!meme.final_image_base64) return;
+        setTimeout(() => {
+          downloadMeme(meme.final_image_base64, `meme_${index + 1}_${meme.player_pseudo || 'joueur'}.jpg`);
+        }, index * 500);
+      });
+    }
   };
 
   // Couleurs pour le podium

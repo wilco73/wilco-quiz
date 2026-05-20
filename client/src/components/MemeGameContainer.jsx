@@ -158,6 +158,7 @@ export default function MemeGameContainer({
         template={game.template}
         currentMeme={game.currentMeme}
         allMemes={game.allMemes}
+        roundMemes={game.roundMemes}
         players={game.players}
         timeRemaining={game.timeRemaining}
         currentVoteIndex={game.currentVoteIndex}
@@ -165,6 +166,7 @@ export default function MemeGameContainer({
         hasSuperDownvote={game.hasSuperDownvote}
         hasSubmitted={game.hasSubmitted}
         isUploading={game.isUploading}
+        isCreator={game.isCreator}
         rotationsUsed={game.rotationsUsed}
         undosUsed={game.undosUsed}
         maxRotations={game.maxRotations}
@@ -180,6 +182,7 @@ export default function MemeGameContainer({
         onRotateTemplate={() => game.rotateTemplate()}
         onUndoTemplate={() => game.undoTemplate()}
         onPlayAgain={() => game.playAgain()}
+        onSkipToNextRound={() => game.skipToNextRound()}
         onBackToLobby={handleBack}
         onSetGetCurrentCreation={(getter) => game.setGetCurrentCreation(getter)}
       />

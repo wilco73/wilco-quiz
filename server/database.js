@@ -3532,7 +3532,7 @@ async function addVoteToCreation(creationId, odId, pseudo, voteType, isSuper = f
   else if (voteType === 'down') points = -50;
   // neutral = 0
   
-  if (isSuper) points += 200;
+  if (isSuper) points *= 2;
   
   votes.push({ odId, pseudo, voteType, isSuper });
   

@@ -27,6 +27,7 @@ export default function useMemeGame(socket, currentUser) {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   
   const [allMemes, setAllMemes] = useState([]);
+  const [roundMemes, setRoundMemes] = useState([]); // Memes de la manche en cours/terminée
   const [currentVoteIndex, setCurrentVoteIndex] = useState(0);
   const [hasSuperVote, setHasSuperVote] = useState(true);
   const [hasSuperDownvote, setHasSuperDownvote] = useState(true);
@@ -388,9 +389,9 @@ export default function useMemeGame(socket, currentUser) {
     };
 
     const handleRoundResults = ({ lobby: updatedLobby, creations }) => {
-      console.log('[useMemeGame] roundResults');
+      console.log('[useMemeGame] roundResults, creations:', creations?.length);
       setLobby(updatedLobby);
-      setAllMemes(creations || []);
+      setRoundMemes(creations || []); // Memes de cette manche
       setPhase('round_results');
       updatePlayersFromLobby(updatedLobby);
     };
@@ -406,7 +407,10 @@ export default function useMemeGame(socket, currentUser) {
       setTemplate(null);
       setAssignment(null);
       setVotesReceived({});
+      setHasVoted(false);
+      setCurrentVoteIndex(0);
       pendingCreationRef.current = null;
+      autoSubmitTriggeredRef.current = false; // IMPORTANT: Reset pour la nouvelle manche
       updatePlayersFromLobby(updatedLobby);
       startTimer(serverTime || 120);
     };
@@ -777,13 +781,24 @@ export default function useMemeGame(socket, currentUser) {
   const canRotate = rotationsUsed < maxRotations;
   const canUndo = (assignment?.templates_history?.length > 1) && (undosUsed < maxUndos);
 
+  // Passer à la manche suivante (pour le créateur)
+  const skipToNextRound = useCallback(() => {
+    if (!socket || !lobby || !isCreator) return Promise.resolve(false);
+    
+    return new Promise((resolve) => {
+      socket.emit('meme:nextRound', { lobbyId: lobby.id }, (response) => {
+        resolve(response?.success || false);
+      });
+    });
+  }, [socket, lobby, isCreator]);
+
   return {
     lobby, phase, currentRound, timeRemaining, template, assignment, hasSubmitted,
-    allMemes, currentMeme, currentVoteIndex, hasSuperVote, hasSuperDownvote, hasVoted, votesCount,
+    allMemes, roundMemes, currentMeme, currentVoteIndex, hasSuperVote, hasSuperDownvote, hasVoted, votesCount,
     totalVoters, players, loading, error, isOwnMeme, isCreator, canUndo, canRotate,
     rotationsUsed, undosUsed, maxRotations, maxUndos, isUploading,
     createLobby, joinLobby, joinLobbyByCode, leaveLobby, updateSettings, startGame,
     rotateTemplate, undoTemplate, submitCreation, cancelSubmission, vote, playAgain, 
-    backToLobbyList, setError, setGetCurrentCreation,
+    skipToNextRound, backToLobbyList, setError, setGetCurrentCreation,
   };
 }

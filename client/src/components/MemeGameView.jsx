@@ -47,6 +47,7 @@ export default function MemeGameView({
   template,
   currentMeme,
   allMemes = [],
+  roundMemes = [],
   players = [],
   timeRemaining = 0,
   currentVoteIndex = 0,
@@ -54,6 +55,7 @@ export default function MemeGameView({
   hasSuperDownvote = true,
   hasSubmitted = false,
   isUploading = false, // Pendant l'envoi automatique après timer
+  isCreator = false,
   rotationsUsed = 0,
   undosUsed = 0,
   maxRotations = 3,
@@ -70,6 +72,7 @@ export default function MemeGameView({
   onRotateTemplate,
   onUndoTemplate,
   onPlayAgain,
+  onSkipToNextRound,
   onBackToLobby,
   onSetGetCurrentCreation,
 }) {
@@ -307,15 +310,51 @@ export default function MemeGameView({
 
       case PHASES.ROUND_RESULTS:
         return (
-          <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-gray-900 flex items-center justify-center p-4">
-            <div className="text-center max-w-lg">
-              <h2 className="text-3xl font-bold text-white mb-4">
+          <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-gray-900 p-4 overflow-auto">
+            <div className="max-w-4xl mx-auto">
+              <h2 className="text-3xl font-bold text-white text-center mb-6">
                 🎉 Fin de la manche {currentRound} !
               </h2>
               
+              {/* Galerie des memes de la manche */}
+              {roundMemes.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-300 mb-3 text-center">
+                    Les créations de cette manche
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {roundMemes.map((meme, index) => (
+                      <div 
+                        key={meme.id || index}
+                        className="bg-gray-800/50 rounded-xl p-2 text-center"
+                      >
+                        {meme.final_image_base64 ? (
+                          <img
+                            src={meme.final_image_base64}
+                            alt={`Meme de ${meme.player_pseudo}`}
+                            className="w-full h-auto rounded-lg mb-2"
+                          />
+                        ) : (
+                          <div className="w-full aspect-square bg-gray-700 rounded-lg mb-2 flex items-center justify-center">
+                            <span className="text-gray-500">Pas d'image</span>
+                          </div>
+                        )}
+                        <p className="text-white text-sm font-medium">{meme.player_pseudo}</p>
+                        <p className={`text-sm font-bold ${
+                          meme.total_score > 0 ? 'text-green-400' : 
+                          meme.total_score < 0 ? 'text-red-400' : 'text-gray-400'
+                        }`}>
+                          {meme.total_score > 0 ? '+' : ''}{meme.total_score || 0} pts
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
               {/* Classement intermédiaire */}
-              <div className="bg-gray-800/50 rounded-xl p-4 mb-6">
-                <h3 className="text-lg font-semibold text-gray-300 mb-3">
+              <div className="bg-gray-800/50 rounded-xl p-4 mb-6 max-w-lg mx-auto">
+                <h3 className="text-lg font-semibold text-gray-300 mb-3 text-center">
                   Classement actuel
                 </h3>
                 <div className="space-y-2">
@@ -350,17 +389,27 @@ export default function MemeGameView({
                 </div>
               </div>
 
-              {currentRound < totalRounds ? (
-                <div className="flex items-center justify-center gap-2 text-purple-300">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Prochaine manche dans quelques secondes...</span>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-2 text-green-300">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Calcul des résultats finaux...</span>
-                </div>
-              )}
+              {/* Actions */}
+              <div className="text-center">
+                {isCreator && currentRound < totalRounds ? (
+                  <button
+                    onClick={onSkipToNextRound}
+                    className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold transition-colors"
+                  >
+                    Passer à la manche suivante →
+                  </button>
+                ) : currentRound < totalRounds ? (
+                  <div className="flex items-center justify-center gap-2 text-purple-300">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>En attente de l'hôte...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 text-green-300">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Calcul des résultats finaux...</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         );

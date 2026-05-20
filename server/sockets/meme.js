@@ -635,7 +635,15 @@ module.exports = function(io, socket, db) {
     try {
       const { lobbyId } = data;
       
-      const lobby = await db.advanceToNextRound(lobbyId);
+      let lobby = await db.advanceToNextRound(lobbyId);
+      
+      // IMPORTANT: Reset hasSubmitted pour tous les participants
+      const resetParticipants = (lobby.participants || []).map(p => ({
+        ...p,
+        hasSubmitted: false
+      }));
+      await db.updateMemeLobbyParticipants(lobbyId, resetParticipants);
+      lobby = { ...lobby, participants: resetParticipants };
       
       if (lobby.phase === 'final') {
         const allCreations = await db.getMemeCreationsByLobby(lobbyId);
