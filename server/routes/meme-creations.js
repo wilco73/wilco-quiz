@@ -231,6 +231,13 @@ async function advanceVote(lobbyId) {
     }
     
     console.log(`[MEME TIMER] Advancing vote for ${lobbyId}`);
+
+    // Verrouiller les supers du meme courant avant d'avancer
+    const creationsNow = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
+    const currentCreation = creationsNow[lobby.current_vote_index];
+    if (currentCreation) {
+      await db.finalizeSuperVotesForCreation(lobbyId, currentCreation.id);
+    }
     
     const result = await db.advanceToNextVote(lobbyId);
     
@@ -323,7 +330,9 @@ async function advanceToNextRoundOrFinish(lobbyId) {
       // IMPORTANT: Reset hasSubmitted pour tous les participants
       const resetParticipants = (updatedLobby.participants || []).map(p => ({
         ...p,
-        hasSubmitted: false
+        hasSubmitted: false,
+        superVoteUsedThisRound: false,
+        superDownvoteUsedThisRound: false
       }));
       await db.updateMemeLobbyParticipants(lobbyId, resetParticipants);
       updatedLobby = { ...updatedLobby, participants: resetParticipants };

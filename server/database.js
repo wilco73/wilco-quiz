@@ -3522,39 +3522,65 @@ async function createMemeCreation(lobbyId, roundNumber, playerId, playerPseudo, 
   return data;
 }
 
-async function addVoteToCreation(creationId, odId, pseudo, voteType, isSuper = false) {
-  const creation = await getMemeCreationById(creationId);
-  if (!creation) throw new Error('Création non trouvée');
-  
-  // Vérifier si déjà voté
-  const votes = creation.votes || [];
-  if (votes.some(v => v.odId === odId)) {
-    throw new Error('Déjà voté');
-  }
-  
-  // Calculer les points
+function pointsForVote(voteType, isSuper) {
   let points = 0;
   if (voteType === 'up') points = 100;
   else if (voteType === 'down') points = -50;
   // neutral = 0
-  
   if (isSuper) points *= 2;
-  
-  votes.push({ odId, pseudo, voteType, isSuper });
-  
+  return points;
+}
+
+// Enregistre OU remplace le vote d'un joueur, puis recalcule le score total.
+// Le super n'est PAS verrouillé ici (voir finalizeSuperVotesForCreation).
+async function addVoteToCreation(creationId, odId, pseudo, voteType, isSuper = false) {
+  const creation = await getMemeCreationById(creationId);
+  if (!creation) throw new Error('Création non trouvée');
+
+  // Retirer l'ancien vote du joueur s'il existe, puis ajouter le nouveau
+  let votes = (creation.votes || []).filter(v => v.odId !== odId);
+  votes.push({ odId, pseudo, voteType, isSuper: !!isSuper });
+
+  // Recalculer le score à partir de TOUS les votes (cohérent même après changement)
+  const total_score = votes.reduce((sum, v) => sum + pointsForVote(v.voteType, v.isSuper), 0);
+
   const { data, error } = await supabase
     .from('meme_creations')
-    .update({
-      votes,
-      total_score: creation.total_score + points
-    })
+    .update({ votes, total_score })
     .eq('id', creationId)
     .select()
     .single();
-  
+
   if (error) throw error;
-  
-  return { creation: data, points };
+  return { creation: data, points: pointsForVote(voteType, isSuper) };
+}
+
+// Verrouille (décompte) les supers réellement utilisés sur un meme.
+// À appeler quand le vote sur ce meme est terminé.
+async function finalizeSuperVotesForCreation(lobbyId, creationId) {
+  const lobby = await getMemeLobbyById(lobbyId);
+  if (!lobby) return null;
+  const creation = await getMemeCreationById(creationId);
+  if (!creation) return lobby;
+
+  const votes = creation.votes || [];
+  let changed = false;
+  const participants = (lobby.participants || []).map(p => {
+    const v = votes.find(vote => vote.odId === p.odId && vote.isSuper);
+    if (!v) return p;
+    if (v.voteType === 'up' && !p.superVoteUsedThisRound) {
+      changed = true;
+      return { ...p, superVoteUsedThisRound: true };
+    }
+    if (v.voteType === 'down' && !p.superDownvoteUsedThisRound) {
+      changed = true;
+      return { ...p, superDownvoteUsedThisRound: true };
+    }
+    return p;
+  });
+
+  if (!changed) return lobby;
+  return await updateMemeLobbyParticipants(lobbyId, participants);
 }
 
 
@@ -4110,6 +4136,7 @@ module.exports = {
   getMemeCreationById,
   createMemeCreation,
   addVoteToCreation,
+  finalizeSuperVotesForCreation,
 
   // Meme Assignments
   getMemeAssignment,

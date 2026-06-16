@@ -150,13 +150,6 @@ module.exports = function(io, socket, db) {
         allRevealed: result.allRevealed
       });
       
-      // Si toutes les cases sont révélées, terminer automatiquement
-      if (result.allRevealed) {
-        const finishedLobby = await db.finishMysteryLobby(lobbyId);
-        io.to(`mystery:${lobbyId}`).emit('mystery:gameFinished', finishedLobby);
-        io.emit('mystery:lobbyUpdated', finishedLobby);
-      }
-      
       if (callback) callback({ success: true, result });
     } catch (error) {
       console.error('[MYSTERY] Erreur reveal cell:', error);

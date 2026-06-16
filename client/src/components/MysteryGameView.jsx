@@ -181,11 +181,6 @@ const MysteryGameView = ({
           audioRef.current.play().catch(() => {});
         }
         
-        if (allRevealed) {
-          setTimeout(() => {
-            toast.success('Toutes les cases ont été révélées !');
-          }, 2000);
-        }
       }, 500);
     };
     
