@@ -3299,10 +3299,12 @@ async function startVotingPhase(lobbyId) {
 async function advanceToNextVote(lobbyId) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
-  
+
   const nextIndex = lobby.current_vote_index + 1;
-  const totalCreations = (lobby.participants || []).length;
-  
+  // Se baser sur le nombre réel de créations (un joueur déconnecté peut ne pas avoir soumis)
+  const creations = await getMemeCreationsByLobby(lobbyId, lobby.current_round);
+  const totalCreations = creations.length;
+
   if (nextIndex >= totalCreations) {
     // Fin du vote, afficher résultats de la manche
     const { data, error } = await supabase
@@ -3443,11 +3445,15 @@ async function markSuperVoteUsed(lobbyId, odId) {
 }
 
 async function deleteMemeLobby(lobbyId) {
+  // Supprimer d'abord les enregistrements liés (sinon échec sur clé étrangère)
+  await supabase.from('meme_creations').delete().eq('lobby_id', lobbyId);
+  await supabase.from('meme_assignments').delete().eq('lobby_id', lobbyId);
+
   const { error } = await supabase
     .from('meme_lobbies')
     .delete()
     .eq('id', lobbyId);
-  
+
   if (error) throw error;
   return { success: true };
 }
@@ -3610,25 +3616,28 @@ async function rotateMemeAssignment(lobbyId, roundNumber, playerId, newTemplateI
 async function undoMemeAssignment(lobbyId, roundNumber, playerId) {
   const assignment = await getMemeAssignment(lobbyId, roundNumber, playerId);
   if (!assignment) throw new Error('Assignation non trouvée');
-  
-  const history = assignment.templates_history || [];
+
+  const history = [...(assignment.templates_history || [])];
   if (history.length < 2) {
     throw new Error('Pas d\'image précédente');
   }
-  
-  // Revenir à l'avant-dernière image
-  const previousTemplateId = history[history.length - 2];
-  
+
+  // On quitte le template courant (dernier de l'historique) -> retour au précédent
+  history.pop();
+  const previousTemplateId = history[history.length - 1];
+
   const { data, error } = await supabase
     .from('meme_assignments')
     .update({
       template_id: previousTemplateId,
-      undos_used: assignment.undos_used + 1
+      templates_history: history,                                   // historique nettoyé
+      rotations_used: Math.max(0, (assignment.rotations_used || 0) - 1), // on rend la rotation
+      undos_used: (assignment.undos_used || 0) + 1
     })
     .eq('id', assignment.id)
     .select('*, template:meme_templates(*)')
     .single();
-  
+
   if (error) throw error;
   return data;
 }
