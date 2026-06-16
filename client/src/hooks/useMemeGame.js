@@ -753,7 +753,8 @@ export default function useMemeGame(socket, currentUser) {
     actionLockRef.current = true;
 
     return new Promise((resolve) => {
-      socket.emit('meme:playAgain', { lobbyId: lobby.id }, (response) => {
+      socket.emit('meme:playAgain', { lobbyId: lobby.id, odId: currentUser?.id }, (response) => {
+        actionLockRef.current = false;
         if (response?.success) {
           console.log('[useMemeGame] playAgain success');
         } else {

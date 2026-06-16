@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { 
-  Trophy, Medal, Crown, ThumbsUp, ThumbsDown, Star, 
+import {
+  Trophy, Medal, Crown, ThumbsUp, ThumbsDown, Star,
   Download, Home, RotateCcw, ChevronLeft, ChevronRight,
   ImageIcon
 } from 'lucide-react';
@@ -22,8 +22,21 @@ export default function MemeResultsView({
   currentUser,
   onPlayAgain,
   onBackToLobby,
+  isCreator = false,
 }) {
   const [selectedMemeIndex, setSelectedMemeIndex] = useState(0);
+  const [replaying, setReplaying] = useState(false);
+
+  // Rejouer = action lente (broadcast à tous) -> verrou anti double-clic
+  const handlePlayAgain = async () => {
+    if (replaying) return;
+    setReplaying(true);
+    try {
+      await onPlayAgain?.();
+    } finally {
+      setReplaying(false);
+    }
+  };
 
   // Enrichir les players avec leurs memes
   const playersWithMemes = players.map(player => ({
@@ -33,7 +46,7 @@ export default function MemeResultsView({
 
   // Trier par score décroissant
   const sortedPlayers = [...playersWithMemes].sort((a, b) => b.totalScore - a.totalScore);
-  
+
   // Podium (top 3)
   const winner = sortedPlayers[0];
   const second = sortedPlayers[1];
@@ -57,24 +70,24 @@ export default function MemeResultsView({
     try {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
-      
+
       for (let i = 0; i < allMemes.length; i++) {
         const meme = allMemes[i];
         if (!meme.final_image_base64) continue;
-        
+
         // Convertir base64 en blob
         const base64Data = meme.final_image_base64.split(',')[1];
         const filename = `meme_${i + 1}_${meme.player_pseudo || 'joueur'}.jpg`;
         zip.file(filename, base64Data, { base64: true });
       }
-      
+
       const blob = await zip.generateAsync({ type: 'blob' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `memes_${new Date().toISOString().slice(0, 10)}.zip`;
       link.click();
       URL.revokeObjectURL(link.href);
-      
+
     } catch (err) {
       console.warn('JSZip non disponible, téléchargement individuel:', err);
       // Fallback: téléchargement individuel avec délai
@@ -191,19 +204,17 @@ export default function MemeResultsView({
             {sortedPlayers.map((player, index) => (
               <div
                 key={player.odId}
-                className={`flex items-center justify-between p-3 rounded-lg ${
-                  player.odId === currentUser?.id
-                    ? 'bg-purple-600/30 border border-purple-500'
-                    : 'bg-gray-700/50'
-                }`}
+                className={`flex items-center justify-between p-3 rounded-lg ${player.odId === currentUser?.id
+                  ? 'bg-purple-600/30 border border-purple-500'
+                  : 'bg-gray-700/50'
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <span className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm ${
-                    index === 0 ? 'bg-yellow-500 text-black' :
+                  <span className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm ${index === 0 ? 'bg-yellow-500 text-black' :
                     index === 1 ? 'bg-gray-400 text-black' :
-                    index === 2 ? 'bg-orange-500 text-white' :
-                    'bg-gray-600 text-white'
-                  }`}>
+                      index === 2 ? 'bg-orange-500 text-white' :
+                        'bg-gray-600 text-white'
+                    }`}>
                     {index + 1}
                   </span>
                   <Avatar avatarId={player.avatar || 'default'} size="sm" />
@@ -285,9 +296,8 @@ export default function MemeResultsView({
                   <button
                     key={index}
                     onClick={() => setSelectedMemeIndex(index)}
-                    className={`w-2 h-2 rounded-full transition-colors ${
-                      index === selectedMemeIndex ? 'bg-purple-500' : 'bg-gray-600'
-                    }`}
+                    className={`w-2 h-2 rounded-full transition-colors ${index === selectedMemeIndex ? 'bg-purple-500' : 'bg-gray-600'
+                      }`}
                   />
                 ))}
               </div>
@@ -316,22 +326,33 @@ export default function MemeResultsView({
 
         {/* Actions */}
         <div className="flex gap-3">
+          {/* Retour au menu : action individuelle (ne concerne que ce joueur) */}
           <button
             onClick={onBackToLobby}
-            className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
+            className={`${isCreator ? 'flex-1' : 'flex-1 max-w-sm mx-auto'} py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors`}
           >
             <Home className="w-5 h-5" />
             Retour au menu
           </button>
-          
-          <button
-            onClick={onPlayAgain}
-            className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
-          >
-            <RotateCcw className="w-5 h-5" />
-            Rejouer
-          </button>
+
+          {/* Rejouer : réservé au créateur (ramène tout le monde au lobby) */}
+          {isCreator && (
+            <button
+              onClick={handlePlayAgain}
+              disabled={replaying}
+              className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-wait text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
+            >
+              <RotateCcw className="w-5 h-5" />
+              {replaying ? 'Relance...' : 'Rejouer'}
+            </button>
+          )}
         </div>
+
+        {!isCreator && (
+          <p className="text-center text-gray-500 text-sm mt-3">
+            Seul l'hôte peut relancer une partie. Prenez le temps de télécharger les memes !
+          </p>
+        )}
       </div>
     </div>
   );

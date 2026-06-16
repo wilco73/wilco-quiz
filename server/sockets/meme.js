@@ -621,7 +621,7 @@ module.exports = function (io, socket, db) {
         const current = creationsNow[before.current_vote_index];
         if (current) await db.finalizeSuperVotesForCreation(lobbyId, current.id);
       }
-      
+
       if (lobby.phase === 'results') {
         const creations = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
         io.to(`meme:${lobbyId}`).emit('meme:roundResults', { lobby, creations });
@@ -791,7 +791,7 @@ module.exports = function (io, socket, db) {
   // Rejouer avec les mêmes joueurs
   socket.on('meme:playAgain', async (data, callback) => {
     try {
-      const { lobbyId } = data;
+      const { lobbyId, odId } = data;
 
       console.log(`[MEME] Play again requested for ${lobbyId}`);
 
@@ -800,12 +800,18 @@ module.exports = function (io, socket, db) {
         return callback?.({ success: false, message: 'Lobby non trouvé' });
       }
 
+      // Seul le créateur peut relancer (sinon tout le monde serait ramené de force)
+      if (lobby.creator_id !== odId) {
+        return callback?.({ success: false, message: 'Seul l\'hôte peut relancer la partie' });
+      }
+
       // Réinitialiser les scores des participants
       const participants = (lobby.participants || []).map(p => ({
         ...p,
         score: 0,
         hasSubmitted: false,
-        superVoteUsedThisRound: false
+        superVoteUsedThisRound: false,
+        superDownvoteUsedThisRound: false
       }));
 
       // Reset le lobby
