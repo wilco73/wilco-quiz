@@ -612,7 +612,10 @@ module.exports = function (io, socket, db) {
       const { lobbyId } = data;
 
       // Verrouiller les supers du meme courant avant d'avancer
-      const before = await db.getMemeLobbyById(lobbyId);
+      const lobby = await db.advanceToNextVote(lobbyId);
+      if (lobby._alreadyAdvanced) {
+        return callback?.({ success: true, lobby, alreadyAdvanced: true });
+      }
       if (before) {
         const creationsNow = await db.getMemeCreationsByLobby(lobbyId, before.current_round);
         const current = creationsNow[before.current_vote_index];
@@ -646,6 +649,10 @@ module.exports = function (io, socket, db) {
       const { lobbyId } = data;
 
       let lobby = await db.advanceToNextRound(lobbyId);
+      if (lobby._alreadyAdvanced) {
+        // Double-clic / course : ne rien refaire
+        return callback?.({ success: true, lobby, alreadyAdvanced: true });
+      }
 
       // IMPORTANT: Reset hasSubmitted pour tous les participants
       const resetParticipants = (lobby.participants || []).map(p => ({
@@ -695,9 +702,46 @@ module.exports = function (io, socket, db) {
         }
       }
 
+      // Démarrer le timer création (sécurité si un joueur ne valide jamais)
+      try {
+        const memeCreations = require('../routes/meme-creations');
+        if (memeCreations.signalGameStarted) {
+          memeCreations.signalGameStarted(lobbyId, creationTime);
+        }
+      } catch (e) {
+        console.error('[MEME] Could not signal creation timer:', e.message);
+      }
+
       if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MEME] Erreur next round:', error);
+      if (callback) callback({ success: false, message: error.message });
+    }
+  });
+
+  // Forcer le passage à l'étape suivante (créateur ou admin)
+  socket.on('meme:forceAdvance', async (data, callback) => {
+    try {
+      const { lobbyId, odId, role } = data;
+      const lobby = await db.getMemeLobbyById(lobbyId);
+      if (!lobby) return callback?.({ success: false, message: 'Lobby non trouvé' });
+
+      const isCreator = lobby.creator_id === odId;
+      const isAdmin = role === 'admin' || role === 'superadmin';
+      if (!isCreator && !isAdmin) {
+        return callback?.({ success: false, message: 'Action réservée au créateur / admin' });
+      }
+
+      console.log(`[MEME] forceAdvance by ${odId} (phase: ${lobby.phase})`);
+
+      const memeCreations = require('../routes/meme-creations');
+      if (memeCreations.forceAdvance) {
+        await memeCreations.forceAdvance(lobbyId);
+      }
+
+      if (callback) callback({ success: true });
+    } catch (error) {
+      console.error('[MEME] Erreur forceAdvance:', error);
       if (callback) callback({ success: false, message: error.message });
     }
   });

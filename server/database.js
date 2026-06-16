@@ -68,10 +68,10 @@ async function initDatabase() {
     const { data, error } = await supabase.from('admins').select('count').limit(1);
     if (error) throw error;
     console.log('[OK] Connexion Supabase établie');
-    
+
     // Créer l'admin par défaut si nécessaire
     await seedDefaultAdmin();
-    
+
     return supabase;
   } catch (error) {
     console.error('[ERREUR] Connexion Supabase:', error.message);
@@ -108,17 +108,17 @@ function hashPasswordSync(password) {
 
 function verifyPasswordSync(password, hash) {
   if (!hash) return false;
-  
+
   if (hash.startsWith('$2')) {
     return bcrypt.compareSync(password, hash);
   }
-  
+
   // Ancien mot de passe en clair (migration)
   if (password === hash) {
     console.log('[WARNING] Mot de passe non-hashé détecté');
     return true;
   }
-  
+
   return false;
 }
 
@@ -145,7 +145,7 @@ async function seedDefaultAdmin() {
     .select('id')
     .eq('username', 'admin')
     .single();
-  
+
   if (!existing) {
     const passwordHash = hashPasswordSync('admin123');
     await supabase.from('admins').insert({
@@ -163,16 +163,16 @@ async function verifyAdmin(username, password) {
     .select('*')
     .eq('username', username)
     .single();
-  
+
   if (!admin) return null;
-  
+
   if (verifyPasswordSync(password, admin.password_hash)) {
     // Mettre à jour last_login
     await supabase
       .from('admins')
       .update({ last_login: Date.now() })
       .eq('id', admin.id);
-    
+
     return { id: admin.id, username: admin.username, role: admin.role };
   }
   return null;
@@ -187,14 +187,14 @@ async function getAllTeams() {
       .from('teams')
       .select('id, name, validated_score, scores_by_category, created_at')
       .order('name');
-    
+
     if (error) throw error;
-    
+
     return data.map(t => {
       const scoresByCategory = t.scores_by_category || {};
       // Le score validé est maintenant calculé comme la somme des scores par catégorie
       const calculatedScore = Object.values(scoresByCategory).reduce((sum, score) => sum + (score || 0), 0);
-      
+
       return {
         id: t.id,
         name: t.name,
@@ -213,12 +213,12 @@ async function getTeamByName(name) {
     .select('id, name, validated_score, scores_by_category, created_at')
     .ilike('name', normalizedName)
     .single();
-  
+
   if (!data) return null;
-  
+
   const scoresByCategory = data.scores_by_category || {};
   const calculatedScore = Object.values(scoresByCategory).reduce((sum, score) => sum + (score || 0), 0);
-  
+
   return {
     id: data.id,
     name: data.name,
@@ -234,12 +234,12 @@ async function getTeamById(id) {
     .select('id, name, validated_score, scores_by_category, created_at')
     .eq('id', id)
     .single();
-  
+
   if (!data) return null;
-  
+
   const scoresByCategory = data.scores_by_category || {};
   const calculatedScore = Object.values(scoresByCategory).reduce((sum, score) => sum + (score || 0), 0);
-  
+
   return {
     id: data.id,
     name: data.name,
@@ -253,7 +253,7 @@ async function createTeam(name) {
   const normalizedName = normalizeTeamName(name);
   const existing = await getTeamByName(normalizedName);
   if (existing) return existing;
-  
+
   // Utiliser upsert pour éviter les conflits de clé primaire
   // On insère par nom (unique), pas par ID
   const { data, error } = await supabase
@@ -264,7 +264,7 @@ async function createTeam(name) {
     )
     .select()
     .single();
-  
+
   // Si erreur de conflit, réessayer de récupérer l'équipe existante
   if (error) {
     // Vérifier si c'est une erreur de duplication
@@ -275,10 +275,10 @@ async function createTeam(name) {
     }
     throw error;
   }
-  
+
   // Invalider le cache des équipes
   cache.invalidate(cache.KEYS.ALL_TEAMS);
-  
+
   return {
     id: data.id,
     name: data.name,
@@ -298,24 +298,24 @@ async function updateTeamScore(teamId, score) {
 async function addTeamScoreByCategory(teamId, category, points) {
   const team = await getTeamById(teamId);
   if (!team) return;
-  
+
   const categoryKey = category || 'Sans catégorie';
   const currentScores = team.scoresByCategory || {};
   const currentCategoryScore = currentScores[categoryKey] || 0;
-  
+
   const updatedScores = {
     ...currentScores,
     [categoryKey]: currentCategoryScore + points
   };
-  
+
   await supabase
     .from('teams')
     .update({ scores_by_category: updatedScores })
     .eq('id', teamId);
-  
+
   // Invalider le cache des équipes
   cache.invalidate(cache.KEYS.ALL_TEAMS);
-  
+
   console.log(`[SCORE] +${points} point(s) pour équipe id=${teamId} dans catégorie "${categoryKey}"`);
 }
 
@@ -323,20 +323,20 @@ async function addTeamScoreByCategory(teamId, category, points) {
 async function setTeamScoreByCategory(teamId, category, score) {
   const team = await getTeamById(teamId);
   if (!team) return;
-  
+
   const categoryKey = category || 'Sans catégorie';
   const currentScores = team.scoresByCategory || {};
-  
+
   const updatedScores = {
     ...currentScores,
     [categoryKey]: score
   };
-  
+
   await supabase
     .from('teams')
     .update({ scores_by_category: updatedScores })
     .eq('id', teamId);
-  
+
   // Invalider le cache des équipes
   cache.invalidate(cache.KEYS.ALL_TEAMS);
 }
@@ -345,15 +345,15 @@ async function setTeamScoreByCategory(teamId, category, score) {
 async function deleteTeamScoreCategory(teamId, category) {
   const team = await getTeamById(teamId);
   if (!team) return;
-  
+
   const currentScores = { ...team.scoresByCategory };
   delete currentScores[category];
-  
+
   await supabase
     .from('teams')
     .update({ scores_by_category: currentScores })
     .eq('id', teamId);
-  
+
   // Invalider le cache des équipes
   cache.invalidate(cache.KEYS.ALL_TEAMS);
 }
@@ -370,7 +370,7 @@ async function resetAllTeamScores() {
     .from('teams')
     .update({ scores_by_category: {} })
     .neq('id', 0);
-  
+
   // Invalider le cache des équipes
   cache.invalidate(cache.KEYS.ALL_TEAMS);
 }
@@ -387,17 +387,17 @@ async function saveAllTeams(teams) {
     if (existing) {
       await supabase
         .from('teams')
-        .update({ 
-          name: team.name, 
-          scores_by_category: team.scoresByCategory || {} 
+        .update({
+          name: team.name,
+          scores_by_category: team.scoresByCategory || {}
         })
         .eq('id', team.id);
     } else {
       await supabase
         .from('teams')
-        .insert({ 
-          name: team.name, 
-          scores_by_category: team.scoresByCategory || {} 
+        .insert({
+          name: team.name,
+          scores_by_category: team.scoresByCategory || {}
         });
     }
   }
@@ -415,9 +415,9 @@ async function getAllParticipants() {
         teams (name)
       `)
       .order('pseudo');
-    
+
     if (error) throw error;
-    
+
     return data.map(p => ({
       id: p.id,
       pseudo: p.pseudo,
@@ -441,9 +441,9 @@ async function getParticipantByPseudo(pseudo) {
     `)
     .ilike('pseudo', pseudo)
     .single();
-  
+
   if (!data) return null;
-  
+
   return {
     id: data.id,
     pseudo: data.pseudo,
@@ -465,9 +465,9 @@ async function getParticipantById(id) {
     `)
     .eq('id', id)
     .single();
-  
+
   if (!data) return null;
-  
+
   return {
     id: data.id,
     pseudo: data.pseudo,
@@ -482,7 +482,7 @@ async function getParticipantById(id) {
 
 async function createParticipant(id, pseudo, password, teamId, avatar = 'default', role = 'user') {
   const passwordHash = hashPasswordSync(password);
-  
+
   const { error } = await supabase
     .from('participants')
     .insert({
@@ -493,12 +493,12 @@ async function createParticipant(id, pseudo, password, teamId, avatar = 'default
       avatar,
       role
     });
-  
+
   if (error) throw error;
-  
+
   // Invalider le cache des participants
   cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
-  
+
   return getParticipantById(id);
 }
 
@@ -507,7 +507,7 @@ async function updateParticipantTeam(participantId, teamId) {
     .from('participants')
     .update({ team_id: teamId })
     .eq('id', participantId);
-  
+
   // Invalider le cache des participants
   cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
 }
@@ -517,10 +517,10 @@ async function updateParticipantAvatar(participantId, avatar) {
     .from('participants')
     .update({ avatar })
     .eq('id', participantId);
-  
+
   // Invalider le cache des participants
   cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
-  
+
   return getParticipantById(participantId);
 }
 
@@ -531,12 +531,12 @@ async function verifyParticipantPassword(pseudo, password) {
     .select('password_hash')
     .ilike('pseudo', pseudo)
     .single();
-  
+
   if (!data) {
     console.log(`[AUTH] Participant "${pseudo}" non trouvé`);
     return false;
   }
-  
+
   const result = verifyPasswordSync(password, data.password_hash);
   console.log(`[AUTH] Vérification mot de passe pour "${pseudo}": ${result ? 'OK' : 'ECHEC'}`);
   return result;
@@ -556,7 +556,7 @@ async function updateParticipantPseudo(participantId, newPseudo) {
     .from('participants')
     .update({ pseudo: newPseudo })
     .eq('id', participantId);
-  
+
   // Invalider le cache des participants
   cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
 }
@@ -568,7 +568,7 @@ async function deleteParticipant(participantId) {
   await supabase.from('drawing_lobby_participants').delete().eq('participant_id', participantId);
   // Puis supprimer le participant
   await supabase.from('participants').delete().eq('id', participantId);
-  
+
   // Invalider le cache des participants
   cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
 }
@@ -579,12 +579,12 @@ async function updateParticipantRole(participantId, role) {
   if (!Object.values(ROLES).includes(role)) {
     throw new Error(`Rôle invalide: ${role}`);
   }
-  
+
   await supabase
     .from('participants')
     .update({ role })
     .eq('id', participantId);
-  
+
   return getParticipantById(participantId);
 }
 
@@ -597,9 +597,9 @@ async function getParticipantsByRole(role) {
     `)
     .eq('role', role)
     .order('pseudo');
-  
+
   if (error) throw error;
-  
+
   return data.map(p => ({
     id: p.id,
     pseudo: p.pseudo,
@@ -621,9 +621,9 @@ async function getAdminParticipants() {
     `)
     .in('role', ['admin', 'superadmin'])
     .order('pseudo');
-  
+
   if (error) throw error;
-  
+
   return data.map(p => ({
     id: p.id,
     pseudo: p.pseudo,
@@ -665,11 +665,11 @@ async function getAllQuestions() {
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(0, 9999); // Récupérer jusqu'à 10000 questions
-    
+
     if (error) throw error;
-    
+
     console.log(`[DB] getAllQuestions: ${data?.length || 0} questions récupérées (total en base: ${count})`);
-    
+
     return (data || []).map(q => ({
       id: q.id,
       text: q.text,
@@ -695,9 +695,9 @@ async function getQuestionById(id) {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (!data) return null;
-  
+
   return {
     id: data.id,
     text: data.text,
@@ -718,7 +718,7 @@ async function getQuestionById(id) {
 
 async function createQuestion(question) {
   const id = question.id || `q${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  
+
   const { error } = await supabase
     .from('questions')
     .insert({
@@ -736,12 +736,12 @@ async function createQuestion(question) {
       silhouette_rotation: question.silhouetteRotation || false,
       choices: question.choices ? JSON.stringify(question.choices) : null
     });
-  
+
   if (error) throw error;
-  
+
   // Invalider le cache des questions
   cache.invalidate(cache.KEYS.ALL_QUESTIONS);
-  
+
   return getQuestionById(id);
 }
 
@@ -763,12 +763,12 @@ async function updateQuestion(id, question) {
       choices: question.choices ? JSON.stringify(question.choices) : null
     })
     .eq('id', id);
-  
+
   if (error) throw error;
-  
+
   // Invalider le cache des questions
   cache.invalidate(cache.KEYS.ALL_QUESTIONS);
-  
+
   return getQuestionById(id);
 }
 
@@ -781,7 +781,7 @@ async function deleteQuestion(id) {
 async function saveAllQuestions(questions) {
   // Supprimer toutes les questions
   await supabase.from('questions').delete().neq('id', '');
-  
+
   // Insérer les nouvelles
   for (const q of questions) {
     await createQuestion(q);
@@ -791,7 +791,7 @@ async function saveAllQuestions(questions) {
 async function mergeQuestions(questions, mode = 'update') {
   let added = 0;
   let updated = 0;
-  
+
   if (mode === 'replace') {
     await supabase.from('questions').delete().neq('id', '');
     for (const q of questions) {
@@ -803,12 +803,12 @@ async function mergeQuestions(questions, mode = 'update') {
     const { data: existingQuestions } = await supabase
       .from('questions')
       .select('id');
-    
+
     const existingIds = new Set(existingQuestions?.map(q => q.id) || []);
-    
+
     for (const q of questions) {
       const exists = q.id && existingIds.has(q.id);
-      
+
       if (exists) {
         if (mode === 'update') {
           await updateQuestion(q.id, q);
@@ -821,7 +821,7 @@ async function mergeQuestions(questions, mode = 'update') {
       }
     }
   }
-  
+
   return { added, updated };
 }
 
@@ -834,9 +834,9 @@ async function getAllQuizCategories() {
     .select('group_name')
     .not('group_name', 'is', null)
     .order('group_name');
-  
+
   if (error) throw error;
-  
+
   // Extraire les catégories uniques
   const categories = [...new Set(data.map(q => q.group_name).filter(Boolean))];
   return categories;
@@ -851,10 +851,10 @@ async function getAllQuizzes() {
       .select('*')
       .order('group_name', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false });
-    
+
     if (quizzesError) throw quizzesError;
     if (!quizzesData || quizzesData.length === 0) return [];
-    
+
     // Récupérer TOUTES les associations quiz_questions en une seule requête
     const quizIds = quizzesData.map(q => q.id);
     const { data: allQuizQuestions, error: qqError } = await supabase
@@ -866,9 +866,9 @@ async function getAllQuizzes() {
       `)
       .in('quiz_id', quizIds)
       .order('position');
-    
+
     if (qqError) throw qqError;
-    
+
     // Grouper les questions par quiz_id
     const questionsByQuiz = {};
     for (const qq of (allQuizQuestions || [])) {
@@ -895,7 +895,7 @@ async function getAllQuizzes() {
         });
       }
     }
-    
+
     // Construire le résultat final
     return quizzesData.map(quiz => ({
       id: quiz.id,
@@ -914,11 +914,11 @@ async function getQuizById(id) {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (!data) return null;
-  
+
   const questions = await getQuizQuestions(id);
-  
+
   return {
     id: data.id,
     title: data.title,
@@ -938,9 +938,9 @@ async function getQuizQuestions(quizId) {
     `)
     .eq('quiz_id', quizId)
     .order('position');
-  
+
   if (error) throw error;
-  
+
   return data.map(row => ({
     id: row.questions.id,
     text: row.questions.text,
@@ -959,7 +959,7 @@ async function getQuizQuestions(quizId) {
 
 async function createQuiz(quiz) {
   const id = quiz.id || Date.now().toString();
-  
+
   const { error } = await supabase
     .from('quizzes')
     .insert({
@@ -968,16 +968,16 @@ async function createQuiz(quiz) {
       description: quiz.description || null,
       group_name: quiz.groupName || null
     });
-  
+
   if (error) throw error;
-  
+
   if (quiz.questions && quiz.questions.length > 0) {
     await setQuizQuestions(id, quiz.questions);
   }
-  
+
   // Invalider le cache des quizzes
   cache.invalidate(cache.KEYS.ALL_QUIZZES);
-  
+
   return getQuizById(id);
 }
 
@@ -990,34 +990,34 @@ async function updateQuiz(id, quiz) {
       group_name: quiz.groupName || null
     })
     .eq('id', id);
-  
+
   if (error) throw error;
-  
+
   if (quiz.questions) {
     await setQuizQuestions(id, quiz.questions);
   }
-  
+
   // Invalider le cache des quizzes
   cache.invalidate(cache.KEYS.ALL_QUIZZES);
-  
+
   return getQuizById(id);
 }
 
 async function setQuizQuestions(quizId, questions) {
   // Supprimer les anciennes liaisons
   await supabase.from('quiz_questions').delete().eq('quiz_id', quizId);
-  
+
   // Insérer les nouvelles
   const inserts = questions.map((q, index) => ({
     quiz_id: quizId,
     question_id: q.id,
     position: index
   }));
-  
+
   if (inserts.length > 0) {
     await supabase.from('quiz_questions').insert(inserts);
   }
-  
+
   // Invalider le cache des quizzes (les questions ont changé)
   cache.invalidate(cache.KEYS.ALL_QUIZZES);
 }
@@ -1047,12 +1047,12 @@ async function getAllLobbies() {
     .from('lobbies')
     .select('*')
     .order('created_at', { ascending: false });
-  
+
   if (error) throw error;
   if (!data || data.length === 0) return [];
-  
+
   const lobbyIds = data.map(l => l.id);
-  
+
   // Requête 2: Récupérer TOUS les participants de tous les lobbies en une seule requête
   const { data: allParticipants } = await supabase
     .from('lobby_participants')
@@ -1066,13 +1066,13 @@ async function getAllLobbies() {
       participants (pseudo)
     `)
     .in('lobby_id', lobbyIds);
-  
+
   // Requête 3: Récupérer TOUTES les réponses de tous les lobbies
   const { data: allAnswers } = await supabase
     .from('lobby_answers')
     .select('lobby_id, participant_id, question_id, answer, validation, qcm_team_scored, has_pasted')
     .in('lobby_id', lobbyIds);
-  
+
   // Indexer les réponses par lobby_id + participant_id
   const answersIndex = {};
   (allAnswers || []).forEach(a => {
@@ -1080,26 +1080,26 @@ async function getAllLobbies() {
     if (!answersIndex[key]) answersIndex[key] = [];
     answersIndex[key].push(a);
   });
-  
+
   // Indexer les participants par lobby_id
   const participantsByLobby = {};
   (allParticipants || []).forEach(p => {
     if (!participantsByLobby[p.lobby_id]) participantsByLobby[p.lobby_id] = [];
-    
+
     const answers = answersIndex[`${p.lobby_id}:${p.participant_id}`] || [];
-    
+
     const answersByQuestionId = {};
     const validationsByQuestionId = {};
     const qcmTeamScored = {};
     const pastedByQuestionId = {};
-    
+
     answers.forEach(a => {
       if (a.answer !== null) answersByQuestionId[a.question_id] = a.answer;
       if (a.validation !== null) validationsByQuestionId[a.question_id] = a.validation === 1;
       if (a.qcm_team_scored) qcmTeamScored[a.question_id] = true;
       if (a.has_pasted) pastedByQuestionId[a.question_id] = true;
     });
-    
+
     participantsByLobby[p.lobby_id].push({
       participantId: p.participant_id,
       pseudo: p.participants?.pseudo,
@@ -1113,7 +1113,7 @@ async function getAllLobbies() {
       pastedByQuestionId
     });
   });
-  
+
   // Construire le résultat
   return data.map(lobby => {
     const participants = participantsByLobby[lobby.id] || [];
@@ -1122,7 +1122,7 @@ async function getAllLobbies() {
       startTime: lobby.start_time,
       status: lobby.status === 'finished' ? 'finished' : undefined
     } : null;
-    
+
     return {
       id: lobby.id,
       quizId: lobby.quiz_id,
@@ -1146,11 +1146,11 @@ async function getLobbyById(id) {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (!lobby) return null;
-  
+
   const participants = await getLobbyParticipants(id);
-  
+
   return {
     id: lobby.id,
     quizId: lobby.quiz_id,
@@ -1184,9 +1184,9 @@ async function getLobbyParticipants(lobbyId) {
       participants (pseudo)
     `)
     .eq('lobby_id', lobbyId);
-  
+
   if (!participants || participants.length === 0) return [];
-  
+
   // Requête 2: Récupérer TOUTES les réponses du lobby en une seule requête
   const participantIds = participants.map(p => p.participant_id);
   const { data: allAnswers } = await supabase
@@ -1194,7 +1194,7 @@ async function getLobbyParticipants(lobbyId) {
     .select('participant_id, question_id, answer, validation, qcm_team_scored, has_pasted')
     .eq('lobby_id', lobbyId)
     .in('participant_id', participantIds);
-  
+
   // Indexer les réponses par participant_id pour accès O(1)
   const answersByParticipant = {};
   (allAnswers || []).forEach(a => {
@@ -1203,23 +1203,23 @@ async function getLobbyParticipants(lobbyId) {
     }
     answersByParticipant[a.participant_id].push(a);
   });
-  
+
   // Construire le résultat
   return participants.map(p => {
     const answers = answersByParticipant[p.participant_id] || [];
-    
+
     const answersByQuestionId = {};
     const validationsByQuestionId = {};
     const qcmTeamScored = {};
     const pastedByQuestionId = {};
-    
+
     answers.forEach(a => {
       if (a.answer !== null) answersByQuestionId[a.question_id] = a.answer;
       if (a.validation !== null) validationsByQuestionId[a.question_id] = a.validation === 1;
       if (a.qcm_team_scored) qcmTeamScored[a.question_id] = true;
       if (a.has_pasted) pastedByQuestionId[a.question_id] = true;
     });
-    
+
     return {
       participantId: p.participant_id,
       pseudo: p.participants?.pseudo,
@@ -1238,13 +1238,13 @@ async function getLobbyParticipants(lobbyId) {
 async function createLobby(quizId, shuffle = false, trainingMode = false) {
   const id = Date.now().toString();
   const quiz = await getQuizById(quizId);
-  
+
   let shuffledQuestions = null;
   if (shuffle && quiz && quiz.questions) {
     const shuffled = [...quiz.questions].sort(() => Math.random() - 0.5);
     shuffledQuestions = JSON.stringify(shuffled);
   }
-  
+
   await supabase.from('lobbies').insert({
     id,
     quiz_id: quizId,
@@ -1252,20 +1252,20 @@ async function createLobby(quizId, shuffle = false, trainingMode = false) {
     shuffled_questions: shuffledQuestions,
     training_mode: trainingMode ? 1 : 0
   });
-  
+
   return getLobbyById(id);
 }
 
 async function joinLobby(lobbyId, participantId, pseudo, teamName) {
   const normalizedTeamName = normalizeTeamName(teamName);
-  
+
   const { data: existing } = await supabase
     .from('lobby_participants')
     .select('id')
     .eq('lobby_id', lobbyId)
     .eq('participant_id', participantId)
     .single();
-  
+
   if (!existing) {
     await supabase.from('lobby_participants').insert({
       lobby_id: lobbyId,
@@ -1273,14 +1273,14 @@ async function joinLobby(lobbyId, participantId, pseudo, teamName) {
       team_name: normalizedTeamName
     });
   }
-  
+
   return getLobbyById(lobbyId);
 }
 
 async function leaveLobby(lobbyId, participantId) {
   // Récupérer le lobby pour vérifier son statut
   const lobby = await getLobbyById(lobbyId);
-  
+
   if (lobby && lobby.status === 'waiting') {
     // Si le quiz n'a pas commencé, on peut supprimer le participant
     await supabase
@@ -1288,7 +1288,7 @@ async function leaveLobby(lobbyId, participantId) {
       .delete()
       .eq('lobby_id', lobbyId)
       .eq('participant_id', participantId);
-    
+
     // Si le lobby est vide, le supprimer
     const updatedLobby = await getLobbyById(lobbyId);
     if (updatedLobby && updatedLobby.participants.length === 0) {
@@ -1311,7 +1311,7 @@ async function startLobby(lobbyId) {
       start_time: Date.now()
     })
     .eq('id', lobbyId);
-  
+
   return getLobbyById(lobbyId);
 }
 
@@ -1320,7 +1320,7 @@ async function updateLobbyQuestionIndex(lobbyId, index) {
     .from('lobbies')
     .update({ current_question_index: index })
     .eq('id', lobbyId);
-  
+
   await supabase
     .from('lobby_participants')
     .update({ has_answered: 0, current_answer: '', draft_answer: '' })
@@ -1343,12 +1343,12 @@ async function resetLobby(lobbyId) {
       start_time: null
     })
     .eq('id', lobbyId);
-  
+
   await supabase
     .from('lobby_participants')
     .update({ has_answered: 0, current_answer: '', draft_answer: '' })
     .eq('lobby_id', lobbyId);
-  
+
   await supabase
     .from('lobby_answers')
     .delete()
@@ -1360,7 +1360,7 @@ async function archiveLobby(lobbyId, archived = true) {
     .from('lobbies')
     .update({ archived: archived ? 1 : 0 })
     .eq('id', lobbyId);
-  
+
   return getLobbyById(lobbyId);
 }
 
@@ -1378,12 +1378,12 @@ async function autoSaveAnswer(lobbyId, participantId, answer) {
     .eq('lobby_id', lobbyId)
     .eq('participant_id', participantId)
     .single();
-  
+
   const updates = { draft_answer: answer };
   if (lp && !lp.has_answered) {
     updates.current_answer = answer;
   }
-  
+
   await supabase
     .from('lobby_participants')
     .update(updates)
@@ -1397,7 +1397,7 @@ async function submitAnswer(lobbyId, participantId, questionId, answer) {
     .update({ has_answered: 1, current_answer: answer })
     .eq('lobby_id', lobbyId)
     .eq('participant_id', participantId);
-  
+
   // Upsert la réponse
   const { data: existing } = await supabase
     .from('lobby_answers')
@@ -1406,7 +1406,7 @@ async function submitAnswer(lobbyId, participantId, questionId, answer) {
     .eq('participant_id', participantId)
     .eq('question_id', questionId)
     .single();
-  
+
   if (existing) {
     await supabase
       .from('lobby_answers')
@@ -1431,15 +1431,15 @@ async function markTimeExpired(lobbyId, participantId, questionId) {
     .eq('lobby_id', lobbyId)
     .eq('participant_id', participantId)
     .single();
-  
+
   const finalAnswer = lp?.draft_answer || '';
-  
+
   await supabase
     .from('lobby_participants')
     .update({ has_answered: 1, current_answer: finalAnswer })
     .eq('lobby_id', lobbyId)
     .eq('participant_id', participantId);
-  
+
   // Upsert la réponse
   const { data: existing } = await supabase
     .from('lobby_answers')
@@ -1448,7 +1448,7 @@ async function markTimeExpired(lobbyId, participantId, questionId) {
     .eq('participant_id', participantId)
     .eq('question_id', questionId)
     .single();
-  
+
   if (existing) {
     await supabase
       .from('lobby_answers')
@@ -1464,7 +1464,7 @@ async function markTimeExpired(lobbyId, participantId, questionId) {
         answer: finalAnswer
       });
   }
-  
+
   return finalAnswer;
 }
 
@@ -1476,7 +1476,7 @@ async function validateAnswer(lobbyId, participantId, questionId, isCorrect) {
     .eq('participant_id', participantId)
     .eq('question_id', questionId)
     .single();
-  
+
   if (existing) {
     await supabase
       .from('lobby_answers')
@@ -1514,11 +1514,11 @@ async function hasTeamScoredForQuestion(lobbyId, teamName, questionId) {
     .select('participant_id')
     .eq('lobby_id', lobbyId)
     .eq('team_name', teamName);
-  
+
   if (!teamParticipants || teamParticipants.length === 0) return false;
-  
+
   const participantIds = teamParticipants.map(p => p.participant_id);
-  
+
   // Vérifier si l'un d'eux a déjà une validation correcte pour cette question
   const { data: validations } = await supabase
     .from('lobby_answers')
@@ -1527,7 +1527,7 @@ async function hasTeamScoredForQuestion(lobbyId, teamName, questionId) {
     .eq('question_id', questionId)
     .in('participant_id', participantIds)
     .eq('validation', 1);
-  
+
   return validations && validations.length > 0;
 }
 
@@ -1539,7 +1539,7 @@ async function markAnswerPasted(lobbyId, participantId, questionId) {
     .eq('participant_id', participantId)
     .eq('question_id', questionId)
     .single();
-  
+
   if (existing) {
     await supabase
       .from('lobby_answers')
@@ -1565,9 +1565,9 @@ async function getParticipantValidation(lobbyId, participantId, questionId) {
     .eq('participant_id', participantId)
     .eq('question_id', questionId)
     .single();
-  
+
   if (!data) return null;
-  
+
   return {
     validation: data.validation,
     qcm_team_scored: data.qcm_team_scored,
@@ -1592,9 +1592,9 @@ async function getAllDrawingWords() {
     .select('*')
     .order('category')
     .order('word');
-  
+
   if (error) throw error;
-  
+
   return data.map(w => ({
     id: w.id,
     word: w.word,
@@ -1611,9 +1611,9 @@ async function getDrawingWordById(id) {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (!data) return null;
-  
+
   return {
     id: data.id,
     word: data.word,
@@ -1626,7 +1626,7 @@ async function getDrawingWordById(id) {
 
 async function createDrawingWord(wordData) {
   const id = wordData.id || Date.now().toString();
-  
+
   await supabase.from('drawing_words').insert({
     id,
     word: wordData.word,
@@ -1634,7 +1634,7 @@ async function createDrawingWord(wordData) {
     difficulty: wordData.difficulty || 'moyen',
     tags: wordData.tags ? JSON.stringify(wordData.tags) : null
   });
-  
+
   return getDrawingWordById(id);
 }
 
@@ -1648,7 +1648,7 @@ async function updateDrawingWord(id, wordData) {
       tags: wordData.tags ? JSON.stringify(wordData.tags) : null
     })
     .eq('id', id);
-  
+
   return getDrawingWordById(id);
 }
 
@@ -1658,24 +1658,24 @@ async function deleteDrawingWord(id) {
 
 async function mergeDrawingWords(words, mode = 'add') {
   const results = { added: 0, updated: 0, skipped: 0, errors: [] };
-  
+
   if (mode === 'replace') {
     await supabase.from('drawing_words').delete().neq('id', '');
   }
-  
+
   for (const wordData of words) {
     try {
       if (!wordData.word || !wordData.word.trim()) {
         results.skipped++;
         continue;
       }
-      
+
       const { data: existing } = await supabase
         .from('drawing_words')
         .select('id')
         .ilike('word', wordData.word.trim())
         .single();
-      
+
       if (existing) {
         if (mode === 'update' || mode === 'replace') {
           await updateDrawingWord(existing.id, wordData);
@@ -1691,18 +1691,18 @@ async function mergeDrawingWords(words, mode = 'add') {
       results.errors.push({ word: wordData.word, error: error.message });
     }
   }
-  
+
   return results;
 }
 
 async function getRandomDrawingWords(count, category = null, difficulty = null) {
   let query = supabase.from('drawing_words').select('*');
-  
+
   if (category) query = query.eq('category', category);
   if (difficulty) query = query.eq('difficulty', difficulty);
-  
+
   const { data } = await query;
-  
+
   // Mélanger et prendre les premiers
   const shuffled = (data || []).sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count).map(w => ({
@@ -1722,9 +1722,9 @@ async function getAllDrawingReferences() {
     .select('*')
     .order('category')
     .order('name');
-  
+
   if (error) throw error;
-  
+
   return data.map(r => ({
     id: r.id,
     name: r.name,
@@ -1741,9 +1741,9 @@ async function getDrawingReferenceById(id) {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (!data) return null;
-  
+
   return {
     id: data.id,
     name: data.name,
@@ -1756,7 +1756,7 @@ async function getDrawingReferenceById(id) {
 
 async function createDrawingReference(refData) {
   const id = refData.id || Date.now().toString();
-  
+
   await supabase.from('drawing_references').insert({
     id,
     name: refData.name,
@@ -1764,7 +1764,7 @@ async function createDrawingReference(refData) {
     category: refData.category || null,
     tags: refData.tags ? JSON.stringify(refData.tags) : null
   });
-  
+
   return getDrawingReferenceById(id);
 }
 
@@ -1778,7 +1778,7 @@ async function updateDrawingReference(id, refData) {
       tags: refData.tags ? JSON.stringify(refData.tags) : null
     })
     .eq('id', id);
-  
+
   return getDrawingReferenceById(id);
 }
 
@@ -1788,24 +1788,24 @@ async function deleteDrawingReference(id) {
 
 async function mergeDrawingReferences(references, mode = 'add') {
   const results = { added: 0, updated: 0, skipped: 0, errors: [] };
-  
+
   if (mode === 'replace') {
     await supabase.from('drawing_references').delete().neq('id', '');
   }
-  
+
   for (const refData of references) {
     try {
       if (!refData.name || !refData.name.trim()) {
         results.skipped++;
         continue;
       }
-      
+
       const { data: existing } = await supabase
         .from('drawing_references')
         .select('id')
         .ilike('name', refData.name.trim())
         .single();
-      
+
       if (existing) {
         if (mode === 'update' || mode === 'replace') {
           await updateDrawingReference(existing.id, refData);
@@ -1821,17 +1821,17 @@ async function mergeDrawingReferences(references, mode = 'add') {
       results.errors.push({ name: refData.name, error: error.message });
     }
   }
-  
+
   return results;
 }
 
 async function getRandomDrawingReferences(count, category = null) {
   let query = supabase.from('drawing_references').select('*');
-  
+
   if (category) query = query.eq('category', category);
-  
+
   const { data } = await query;
-  
+
   const shuffled = (data || []).sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count).map(r => ({
     id: r.id,
@@ -1849,9 +1849,9 @@ async function getAllDrawingGames() {
     .from('drawing_games')
     .select('*')
     .order('created_at', { ascending: false });
-  
+
   if (error) throw error;
-  
+
   return data.map(g => ({
     id: g.id,
     title: g.title,
@@ -1867,9 +1867,9 @@ async function getDrawingGameById(id) {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (!data) return null;
-  
+
   return {
     id: data.id,
     title: data.title,
@@ -1881,14 +1881,14 @@ async function getDrawingGameById(id) {
 
 async function createDrawingGame(gameData) {
   const id = gameData.id || Date.now().toString();
-  
+
   await supabase.from('drawing_games').insert({
     id,
     title: gameData.title,
     game_type: gameData.gameType,
     config: JSON.stringify(gameData.config || {})
   });
-  
+
   return getDrawingGameById(id);
 }
 
@@ -1901,7 +1901,7 @@ async function updateDrawingGame(id, gameData) {
       config: JSON.stringify(gameData.config || {})
     })
     .eq('id', id);
-  
+
   return getDrawingGameById(id);
 }
 
@@ -1919,9 +1919,9 @@ async function getAllDrawingLobbies() {
       drawing_games (title, game_type)
     `)
     .order('created_at', { ascending: false });
-  
+
   if (error) throw error;
-  
+
   const lobbies = [];
   for (const lobby of data) {
     const participants = await getDrawingLobbyParticipants(lobby.id);
@@ -1935,7 +1935,7 @@ async function getAllDrawingLobbies() {
       participants
     });
   }
-  
+
   return lobbies;
 }
 
@@ -1948,11 +1948,11 @@ async function getDrawingLobbyById(id) {
     `)
     .eq('id', id)
     .single();
-  
+
   if (!lobby) return null;
-  
+
   const participants = await getDrawingLobbyParticipants(id);
-  
+
   return {
     ...lobby,
     game_title: lobby.drawing_games?.title,
@@ -1966,7 +1966,7 @@ async function getDrawingLobbyById(id) {
 
 async function createDrawingLobby(data) {
   const id = data.id || `drawing-lobby-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  
+
   await supabase.from('drawing_lobbies').insert({
     id,
     game_id: data.game_id || null,
@@ -1976,7 +1976,7 @@ async function createDrawingLobby(data) {
     creator_type: data.creator_type || 'admin',
     custom_words: JSON.stringify(data.custom_words || [])
   });
-  
+
   return getDrawingLobbyById(id);
 }
 
@@ -1988,7 +1988,7 @@ async function getDrawingLobbyParticipants(lobbyId) {
       participants (pseudo, avatar)
     `)
     .eq('lobby_id', lobbyId);
-  
+
   return (data || []).map(p => ({
     ...p,
     pseudo: p.participants?.pseudo,
@@ -2003,7 +2003,7 @@ async function joinDrawingLobby(lobbyId, participantId, teamName) {
     .eq('lobby_id', lobbyId)
     .eq('participant_id', participantId)
     .single();
-  
+
   if (existing) {
     await supabase
       .from('drawing_lobby_participants')
@@ -2017,7 +2017,7 @@ async function joinDrawingLobby(lobbyId, participantId, teamName) {
       team_name: teamName
     });
   }
-  
+
   return getDrawingLobbyById(lobbyId);
 }
 
@@ -2025,38 +2025,38 @@ async function leaveDrawingLobby(lobbyId, participantId) {
   // Récupérer le lobby avant de retirer le participant
   const lobby = await getDrawingLobbyById(lobbyId);
   if (!lobby) return null;
-  
+
   // Retirer le participant
   await supabase
     .from('drawing_lobby_participants')
     .delete()
     .eq('lobby_id', lobbyId)
     .eq('participant_id', participantId);
-  
+
   // Récupérer le lobby mis à jour
   const updatedLobby = await getDrawingLobbyById(lobbyId);
-  
+
   // Si le lobby est vide et en attente → le supprimer
-  if (updatedLobby && updatedLobby.status === 'waiting' && 
-      (!updatedLobby.participants || updatedLobby.participants.length === 0)) {
+  if (updatedLobby && updatedLobby.status === 'waiting' &&
+    (!updatedLobby.participants || updatedLobby.participants.length === 0)) {
     console.log(`[DRAWING] Lobby ${lobbyId} vide et en attente → suppression automatique`);
     await deleteDrawingLobby(lobbyId);
     return null; // Retourner null pour indiquer que le lobby a été supprimé
   }
-  
+
   // Si le créateur est parti mais il reste des participants → transférer la propriété
-  if (updatedLobby && updatedLobby.creator_id === participantId && 
-      updatedLobby.participants && updatedLobby.participants.length > 0) {
+  if (updatedLobby && updatedLobby.creator_id === participantId &&
+    updatedLobby.participants && updatedLobby.participants.length > 0) {
     const newCreator = updatedLobby.participants[0];
     console.log(`[DRAWING] Transfert de propriété du lobby ${lobbyId} à ${newCreator.odId}`);
     await supabase
       .from('drawing_lobbies')
       .update({ creator_id: newCreator.odId })
       .eq('id', lobbyId);
-    
+
     return getDrawingLobbyById(lobbyId);
   }
-  
+
   return updatedLobby;
 }
 
@@ -2073,7 +2073,7 @@ async function startDrawingLobby(lobbyId, gameState) {
       config: JSON.stringify(gameState.config || {})
     })
     .eq('id', lobbyId);
-  
+
   return getDrawingLobbyById(lobbyId);
 }
 
@@ -2082,26 +2082,26 @@ async function updateDrawingLobbyCustomWords(lobbyId, customWords) {
     .from('drawing_lobbies')
     .update({ custom_words: JSON.stringify(customWords) })
     .eq('id', lobbyId);
-  
+
   return getDrawingLobbyById(lobbyId);
 }
 
 async function updateDrawingLobbyState(lobbyId, updates) {
   const updateData = {};
-  
+
   if (updates.status !== undefined) updateData.status = updates.status;
   if (updates.currentRound !== undefined) updateData.current_round = updates.currentRound;
   if (updates.currentWord !== undefined) updateData.current_word = updates.currentWord;
   if (updates.currentDrawerIndex !== undefined) updateData.current_drawer_index = updates.currentDrawerIndex;
   if (updates.roundStartTime !== undefined) updateData.round_start_time = updates.roundStartTime;
-  
+
   if (Object.keys(updateData).length > 0) {
     await supabase
       .from('drawing_lobbies')
       .update(updateData)
       .eq('id', lobbyId);
   }
-  
+
   return getDrawingLobbyById(lobbyId);
 }
 
@@ -2110,7 +2110,7 @@ async function finishDrawingLobby(lobbyId) {
     .from('drawing_lobbies')
     .update({ status: 'finished' })
     .eq('id', lobbyId);
-  
+
   return getDrawingLobbyById(lobbyId);
 }
 
@@ -2136,7 +2136,7 @@ async function archiveDrawingLobby(lobbyId) {
     .from('drawing_lobbies')
     .update({ status: 'archived' })
     .eq('id', lobbyId);
-  
+
   return getDrawingLobbyById(lobbyId);
 }
 
@@ -2144,7 +2144,7 @@ async function archiveDrawingLobby(lobbyId) {
 
 async function saveDrawing(lobbyId, round, teamName, word, imageData) {
   const id = `drawing-${lobbyId}-${round}-${Date.now()}`;
-  
+
   await supabase.from('drawings').insert({
     id,
     lobby_id: lobbyId,
@@ -2153,7 +2153,7 @@ async function saveDrawing(lobbyId, round, teamName, word, imageData) {
     word_or_reference: word,
     image_data: imageData
   });
-  
+
   return id;
 }
 
@@ -2163,7 +2163,7 @@ async function getDrawingsByLobby(lobbyId) {
     .select('*')
     .eq('lobby_id', lobbyId)
     .order('round');
-  
+
   return (data || []).map(d => ({
     id: d.id,
     lobby_id: d.lobby_id,
@@ -2181,9 +2181,9 @@ async function getDrawingById(id) {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (!data) return null;
-  
+
   return {
     id: data.id,
     lobby_id: data.lobby_id,
@@ -2200,7 +2200,7 @@ async function getDrawingScoresByLobby(lobbyId) {
     .from('drawing_scores')
     .select('*')
     .eq('lobby_id', lobbyId);
-  
+
   // Agréger par équipe
   const scoresByTeam = {};
   (data || []).forEach(s => {
@@ -2210,7 +2210,7 @@ async function getDrawingScoresByLobby(lobbyId) {
     scoresByTeam[s.team_name].total_points += s.points;
     scoresByTeam[s.team_name].details.push(`${s.round}:${s.points}:${s.reason}`);
   });
-  
+
   return Object.entries(scoresByTeam)
     .map(([team_name, info]) => ({
       team_name,
@@ -2223,16 +2223,16 @@ async function getDrawingScoresByLobby(lobbyId) {
 async function getDrawingLobbyResults(lobbyId) {
   const lobby = await getDrawingLobbyById(lobbyId);
   if (!lobby) return null;
-  
+
   const drawings = await getDrawingsByLobby(lobbyId);
   const scores = await getDrawingScoresByLobby(lobbyId);
-  
+
   const ranking = scores.map((s, idx) => ({
     rank: idx + 1,
     team: s.team_name,
     score: s.total_points || 0
   }));
-  
+
   return { lobby, drawings, scores, ranking };
 }
 
@@ -2244,15 +2244,15 @@ async function getAllMysteryGrids() {
     .from('mystery_grids')
     .select('*')
     .order('created_at', { ascending: false });
-  
+
   // Si erreur (table n'existe pas), retourner tableau vide
   if (error) {
     console.error('[DB] Erreur getAllMysteryGrids:', error.message);
     return [];
   }
-  
+
   if (!data || data.length === 0) return [];
-  
+
   // Récupérer les types pour chaque grille
   const grids = await Promise.all(data.map(async (grid) => {
     const types = await getMysteryGridTypes(grid.id);
@@ -2270,7 +2270,7 @@ async function getAllMysteryGrids() {
       updatedAt: grid.updated_at
     };
   }));
-  
+
   return grids;
 }
 
@@ -2281,12 +2281,12 @@ async function getMysteryGridById(gridId) {
     .select('*')
     .eq('id', gridId)
     .single();
-  
+
   if (error) return null;
-  
+
   const types = await getMysteryGridTypes(gridId);
   const totalOccurrences = types.reduce((sum, t) => sum + t.occurrence, 0);
-  
+
   return {
     id: data.id,
     title: data.title,
@@ -2313,9 +2313,9 @@ async function createMysteryGrid(gridData) {
     })
     .select()
     .single();
-  
+
   if (error) throw error;
-  
+
   return {
     id: data.id,
     title: data.title,
@@ -2336,16 +2336,16 @@ async function updateMysteryGrid(gridId, gridData) {
   if (gridData.gridSize !== undefined) updateData.grid_size = gridData.gridSize;
   if (gridData.defaultSoundUrl !== undefined) updateData.default_sound_url = gridData.defaultSoundUrl;
   if (gridData.thumbnailDefault !== undefined) updateData.thumbnail_default = gridData.thumbnailDefault;
-  
+
   const { data, error } = await supabase
     .from('mystery_grids')
     .update(updateData)
     .eq('id', gridId)
     .select()
     .single();
-  
+
   if (error) throw error;
-  
+
   return getMysteryGridById(gridId);
 }
 
@@ -2355,7 +2355,7 @@ async function deleteMysteryGrid(gridId) {
     .from('mystery_grids')
     .delete()
     .eq('id', gridId);
-  
+
   if (error) throw error;
   return true;
 }
@@ -2367,15 +2367,15 @@ async function getMysteryGridTypes(gridId) {
     .select('*')
     .eq('grid_id', gridId)
     .order('created_at');
-  
+
   // Si erreur, retourner tableau vide
   if (error) {
     console.error('[DB] Erreur getMysteryGridTypes:', error.message);
     return [];
   }
-  
+
   if (!data) return [];
-  
+
   return data.map(t => ({
     id: t.id,
     gridId: t.grid_id,
@@ -2402,9 +2402,9 @@ async function createMysteryGridType(gridId, typeData) {
     })
     .select()
     .single();
-  
+
   if (error) throw error;
-  
+
   return {
     id: data.id,
     gridId: data.grid_id,
@@ -2425,16 +2425,16 @@ async function updateMysteryGridType(typeId, typeData) {
   if (typeData.thumbnailUrl !== undefined) updateData.thumbnail_url = typeData.thumbnailUrl;
   if (typeData.soundUrl !== undefined) updateData.sound_url = typeData.soundUrl;
   if (typeData.occurrence !== undefined) updateData.occurrence = typeData.occurrence;
-  
+
   const { data, error } = await supabase
     .from('mystery_grid_types')
     .update(updateData)
     .eq('id', typeId)
     .select()
     .single();
-  
+
   if (error) throw error;
-  
+
   return {
     id: data.id,
     gridId: data.grid_id,
@@ -2453,7 +2453,7 @@ async function deleteMysteryGridType(typeId) {
     .from('mystery_grid_types')
     .delete()
     .eq('id', typeId);
-  
+
   if (error) throw error;
   return true;
 }
@@ -2466,15 +2466,15 @@ async function getAllMysteryLobbies() {
     .from('mystery_lobbies')
     .select('*, mystery_grids(title)')
     .order('created_at', { ascending: false });
-  
+
   // Si erreur (table n'existe pas), retourner tableau vide
   if (error) {
     console.error('[DB] Erreur getAllMysteryLobbies:', error.message);
     return [];
   }
-  
+
   if (!data) return [];
-  
+
   return data.map(l => ({
     id: l.id,
     gridId: l.grid_id,
@@ -2497,12 +2497,12 @@ async function getMysteryLobbyById(lobbyId) {
     .select('*, mystery_grids(*)')
     .eq('id', lobbyId)
     .single();
-  
+
   if (error) return null;
-  
+
   // Récupérer les types de la grille
   const types = data.mystery_grids ? await getMysteryGridTypes(data.grid_id) : [];
-  
+
   return {
     id: data.id,
     gridId: data.grid_id,
@@ -2530,7 +2530,7 @@ async function createMysteryLobby(gridId, createdBy = null) {
   const grid = await getMysteryGridById(gridId);
   if (!grid) throw new Error('Grille non trouvée');
   if (!grid.isValid) throw new Error('La grille n\'est pas valide (nombre de cases incorrect)');
-  
+
   // Générer l'état initial du jeu avec les cases mélangées
   const cells = [];
   grid.types.forEach(type => {
@@ -2541,22 +2541,22 @@ async function createMysteryLobby(gridId, createdBy = null) {
       });
     }
   });
-  
+
   // Mélanger les cases (Fisher-Yates)
   for (let i = cells.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [cells[i], cells[j]] = [cells[j], cells[i]];
   }
-  
+
   // Ajouter les index
   const gameState = {
     cells: cells.map((cell, index) => ({ ...cell, index })),
     revealedCount: 0,
     totalCells: cells.length
   };
-  
+
   const lobbyId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  
+
   const { data, error } = await supabase
     .from('mystery_lobbies')
     .insert({
@@ -2570,9 +2570,9 @@ async function createMysteryLobby(gridId, createdBy = null) {
     })
     .select()
     .single();
-  
+
   if (error) throw error;
-  
+
   return getMysteryLobbyById(lobbyId);
 }
 
@@ -2580,25 +2580,25 @@ async function createMysteryLobby(gridId, createdBy = null) {
 async function joinMysteryLobby(lobbyId, odId, pseudo, teamName) {
   const lobby = await getMysteryLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
-  
+
   // Vérifier si déjà participant
   const existing = lobby.participants.find(p => p.odId === odId);
   if (existing) return lobby;
-  
+
   const participants = [...lobby.participants, {
     odId,
     pseudo,
     teamName,
     joinedAt: new Date().toISOString()
   }];
-  
+
   const { error } = await supabase
     .from('mystery_lobbies')
     .update({ participants })
     .eq('id', lobbyId);
-  
+
   if (error) throw error;
-  
+
   return getMysteryLobbyById(lobbyId);
 }
 
@@ -2606,16 +2606,16 @@ async function joinMysteryLobby(lobbyId, odId, pseudo, teamName) {
 async function leaveMysteryLobby(lobbyId, odId) {
   const lobby = await getMysteryLobbyById(lobbyId);
   if (!lobby) return null;
-  
+
   const participants = lobby.participants.filter(p => p.odId !== odId);
-  
+
   const { error } = await supabase
     .from('mystery_lobbies')
     .update({ participants })
     .eq('id', lobbyId);
-  
+
   if (error) throw error;
-  
+
   return getMysteryLobbyById(lobbyId);
 }
 
@@ -2627,9 +2627,9 @@ async function startMysteryLobby(lobbyId) {
     .eq('id', lobbyId)
     .select()
     .single();
-  
+
   if (error) throw error;
-  
+
   return getMysteryLobbyById(lobbyId);
 }
 
@@ -2638,21 +2638,21 @@ async function revealMysteryCell(lobbyId, cellIndex) {
   const lobby = await getMysteryLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
   if (lobby.status !== 'playing') throw new Error('Le jeu n\'est pas en cours');
-  
+
   const gameState = lobby.gameState;
   const cell = gameState.cells.find(c => c.index === cellIndex);
-  
+
   if (!cell) throw new Error('Case non trouvée');
   if (cell.revealed) throw new Error('Case déjà révélée');
-  
+
   // Trouver le type de la case
   const cellType = lobby.grid.types.find(t => t.id === cell.typeId);
   if (!cellType) throw new Error('Type de case non trouvé');
-  
+
   // Marquer comme révélée
   cell.revealed = true;
   gameState.revealedCount++;
-  
+
   // Préparer les infos de révélation
   const currentReveal = {
     index: cellIndex,
@@ -2662,17 +2662,17 @@ async function revealMysteryCell(lobbyId, cellIndex) {
     thumbnailUrl: cellType.thumbnailUrl || cellType.imageUrl || lobby.grid.thumbnailDefault,
     soundUrl: cellType.soundUrl || lobby.grid.defaultSoundUrl
   };
-  
+
   const { error } = await supabase
     .from('mystery_lobbies')
-    .update({ 
+    .update({
       game_state: gameState,
       current_reveal: currentReveal
     })
     .eq('id', lobbyId);
-  
+
   if (error) throw error;
-  
+
   return {
     lobby: await getMysteryLobbyById(lobbyId),
     reveal: currentReveal,
@@ -2686,9 +2686,9 @@ async function closeMysteryReveal(lobbyId) {
     .from('mystery_lobbies')
     .update({ current_reveal: null })
     .eq('id', lobbyId);
-  
+
   if (error) throw error;
-  
+
   return getMysteryLobbyById(lobbyId);
 }
 
@@ -2696,16 +2696,16 @@ async function closeMysteryReveal(lobbyId) {
 async function toggleMysteryMute(lobbyId, odId, muted) {
   const lobby = await getMysteryLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
-  
+
   const mutedParticipants = { ...lobby.mutedParticipants, [odId]: muted };
-  
+
   const { error } = await supabase
     .from('mystery_lobbies')
     .update({ muted_participants: mutedParticipants })
     .eq('id', lobbyId);
-  
+
   if (error) throw error;
-  
+
   return getMysteryLobbyById(lobbyId);
 }
 
@@ -2713,15 +2713,15 @@ async function toggleMysteryMute(lobbyId, odId, muted) {
 async function finishMysteryLobby(lobbyId) {
   const { error } = await supabase
     .from('mystery_lobbies')
-    .update({ 
+    .update({
       status: 'finished',
       current_reveal: null,
       finished_at: new Date().toISOString()
     })
     .eq('id', lobbyId);
-  
+
   if (error) throw error;
-  
+
   return getMysteryLobbyById(lobbyId);
 }
 
@@ -2731,7 +2731,7 @@ async function deleteMysteryLobby(lobbyId) {
     .from('mystery_lobbies')
     .delete()
     .eq('id', lobbyId);
-  
+
   if (error) throw error;
   return true;
 }
@@ -2743,25 +2743,25 @@ async function searchMedia(searchTerm = '', mediaType = '', tag = '', limit = 20
   let query = supabase
     .from('media_library')
     .select('*', { count: 'exact' });
-  
+
   if (searchTerm) {
     query = query.or(`name.ilike.%${searchTerm}%,tags.cs.["${searchTerm}"]`);
   }
-  
+
   if (mediaType) {
     query = query.eq('type', mediaType);
   }
-  
+
   if (tag) {
     query = query.contains('tags', [tag]);
   }
-  
+
   const { data, error, count } = await query
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
-  
+
   if (error) throw error;
-  
+
   return {
     media: data || [],
     total: count || 0
@@ -2775,7 +2775,7 @@ async function getMediaById(id) {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (error && error.code !== 'PGRST116') throw error;
   return data;
 }
@@ -2798,7 +2798,7 @@ async function createMedia({ name, type, url, thumbnailUrl, tags, durationSecond
     })
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -2811,14 +2811,14 @@ async function updateMedia(id, { name, tags, thumbnailUrl, autoplay, defaultVolu
   if (thumbnailUrl !== undefined) updates.thumbnail_url = thumbnailUrl;
   if (autoplay !== undefined) updates.autoplay = autoplay;
   if (defaultVolume !== undefined) updates.default_volume = defaultVolume;
-  
+
   const { data, error } = await supabase
     .from('media_library')
     .update(updates)
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -2829,7 +2829,7 @@ async function deleteMedia(id) {
     .from('media_library')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
   return true;
 }
@@ -2847,9 +2847,9 @@ async function getGridMedia(gridId) {
     `)
     .eq('grid_id', gridId)
     .order('sort_order', { ascending: true });
-  
+
   if (error) throw error;
-  
+
   // Aplatir la structure
   return (data || []).map(item => ({
     linkId: item.id,
@@ -2869,7 +2869,7 @@ async function addMediaToGrid(gridId, mediaId, sortOrder = 0) {
     })
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -2881,7 +2881,7 @@ async function removeMediaFromGrid(gridId, mediaId) {
     .delete()
     .eq('grid_id', gridId)
     .eq('media_id', mediaId);
-  
+
   if (error) throw error;
   return true;
 }
@@ -2901,7 +2901,7 @@ async function saveBroadcast({ lobbyId, lobbyType, senderId, senderPseudo, messa
     })
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -2919,7 +2919,7 @@ async function getBroadcastHistory(lobbyId, limit = 20) {
     .eq('lobby_id', lobbyId)
     .order('created_at', { ascending: false })
     .limit(limit);
-  
+
   if (error) throw error;
   return data || [];
 }
@@ -2929,7 +2929,7 @@ async function getAllGameSettings() {
     .from('game_settings')
     .select('*')
     .order('sort_order', { ascending: true });
-  
+
   if (error) throw error;
   return data || [];
 }
@@ -2940,7 +2940,7 @@ async function getEnabledGameSettings() {
     .select('*')
     .eq('is_enabled', true)
     .order('sort_order', { ascending: true });
-  
+
   if (error) throw error;
   return data || [];
 }
@@ -2951,7 +2951,7 @@ async function getGameSettingById(id) {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (error && error.code !== 'PGRST116') throw error;
   return data;
 }
@@ -2963,7 +2963,7 @@ async function updateGameSetting(id, updates) {
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -2974,41 +2974,41 @@ async function updateGameSettingsOrder(orderedIds) {
     id,
     sort_order: index + 1
   }));
-  
+
   for (const update of updates) {
     const { error } = await supabase
       .from('game_settings')
       .update({ sort_order: update.sort_order })
       .eq('id', update.id);
-    
+
     if (error) throw error;
   }
-  
+
   return await getAllGameSettings();
 }
 
 // Vérifie si un utilisateur peut créer un lobby pour un jeu donné
 async function canCreateGameLobby(gameId, userRole) {
   const game = await getGameSettingById(gameId);
-  
+
   if (!game || !game.is_enabled) {
     return { allowed: false, reason: 'Jeu non disponible' };
   }
-  
+
   const roleHierarchy = { 'user': 1, 'admin': 2, 'superadmin': 3 };
   const permissionLevel = {
     'all': 1,
     'admin': 2,
     'superadmin': 3
   };
-  
+
   const userLevel = roleHierarchy[userRole] || 1;
   const requiredLevel = permissionLevel[game.create_permission] || 1;
-  
+
   if (userLevel < requiredLevel) {
     return { allowed: false, reason: 'Permissions insuffisantes' };
   }
-  
+
   return { allowed: true };
 }
 
@@ -3023,7 +3023,7 @@ async function getAllMemeLobbies() {
     .from('meme_lobbies')
     .select('*')
     .order('created_at', { ascending: false });
-  
+
   if (error) throw error;
   return data || [];
 }
@@ -3035,7 +3035,7 @@ async function getActiveMemeLobbies() {
     .in('status', ['waiting', 'playing'])
     .or('is_private.eq.false,is_private.is.null')
     .order('created_at', { ascending: false });
-  
+
   if (error) throw error;
   return data || [];
 }
@@ -3046,7 +3046,7 @@ async function getMemeLobbyById(lobbyId) {
     .select('*')
     .eq('id', lobbyId)
     .single();
-  
+
   if (error && error.code !== 'PGRST116') throw error;
   return data;
 }
@@ -3054,10 +3054,10 @@ async function getMemeLobbyById(lobbyId) {
 async function createMemeLobby(creatorId, creatorPseudo, creatorAvatar = null, settings = {}) {
   const code = await generateUniqueCode();
   const isPrivate = settings.isPrivate || false;
-  
+
   // Séparer isPrivate des autres settings
   const { isPrivate: _, ...otherSettings } = settings;
-  
+
   const { data, error } = await supabase
     .from('meme_lobbies')
     .insert({
@@ -3072,7 +3072,7 @@ async function createMemeLobby(creatorId, creatorPseudo, creatorAvatar = null, s
     })
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3083,7 +3083,7 @@ async function getMemeLobbyByCode(code) {
     .select('*')
     .eq('code', code.toUpperCase())
     .single();
-  
+
   if (error && error.code !== 'PGRST116') throw error;
   return data || null;
 }
@@ -3092,19 +3092,19 @@ async function getMemeLobbyByCode(code) {
 async function joinMemeLobby(lobbyId, odId, pseudo, avatar = null) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
-  
+
   const participants = lobby.participants || [];
-  
+
   // Si déjà participant, permettre la reconnexion même si le jeu est en cours
   if (participants.some(p => p.odId === odId)) {
     return lobby; // Reconnexion OK
   }
-  
+
   // Si pas encore participant, vérifier que le lobby est en attente
   if (lobby.status !== 'waiting') {
     throw new Error('La partie a déjà commencé');
   }
-  
+
   participants.push({
     odId,
     pseudo,
@@ -3112,14 +3112,14 @@ async function joinMemeLobby(lobbyId, odId, pseudo, avatar = null) {
     score: 0,
     superVoteUsedThisRound: false
   });
-  
+
   const { data, error } = await supabase
     .from('meme_lobbies')
     .update({ participants })
     .eq('id', lobbyId)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3127,29 +3127,29 @@ async function joinMemeLobby(lobbyId, odId, pseudo, avatar = null) {
 async function leaveMemeLobby(lobbyId, odId) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) return null;
-  
+
   const participants = (lobby.participants || []).filter(p => p.odId !== odId);
-  
+
   // Si plus personne, on supprime le lobby
   if (participants.length === 0) {
     await deleteMemeLobby(lobbyId);
     return null;
   }
-  
+
   // Si le créateur part, le premier participant devient créateur
   let updates = { participants };
   if (lobby.creator_id === odId && participants.length > 0) {
     updates.creator_id = participants[0].odId;
     updates.creator_pseudo = participants[0].pseudo;
   }
-  
+
   const { data, error } = await supabase
     .from('meme_lobbies')
     .update(updates)
     .eq('id', lobbyId)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3158,31 +3158,31 @@ async function updateMemeLobbySettings(lobbyId, settings) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
   if (lobby.status !== 'waiting') throw new Error('Impossible de modifier les settings en cours de partie');
-  
+
   const isPrivate = settings.isPrivate;
   const { isPrivate: _, ...otherSettings } = settings;
-  
+
   const updateData = {};
-  
+
   if (isPrivate !== undefined) {
     updateData.is_private = isPrivate;
   }
-  
+
   if (Object.keys(otherSettings).length > 0) {
     updateData.settings = { ...(lobby.settings || {}), ...otherSettings };
   }
-  
+
   if (Object.keys(updateData).length === 0) {
     return lobby;
   }
-  
+
   const { data, error } = await supabase
     .from('meme_lobbies')
     .update(updateData)
     .eq('id', lobbyId)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3192,7 +3192,7 @@ async function startMemeLobby(lobbyId) {
   if (!lobby) throw new Error('Lobby non trouvé');
   if (lobby.status !== 'waiting') throw new Error('La partie a déjà commencé');
   if ((lobby.participants || []).length < 2) throw new Error('Il faut au moins 2 joueurs');
-  
+
   const { data, error } = await supabase
     .from('meme_lobbies')
     .update({
@@ -3204,7 +3204,7 @@ async function startMemeLobby(lobbyId) {
     .eq('id', lobbyId)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3214,14 +3214,14 @@ async function updateMemeLobbyPhase(lobbyId, phase, phaseEndTime = null) {
   if (phaseEndTime) {
     updates.phase_end_time = phaseEndTime;
   }
-  
+
   const { data, error } = await supabase
     .from('meme_lobbies')
     .update(updates)
     .eq('id', lobbyId)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3229,57 +3229,50 @@ async function updateMemeLobbyPhase(lobbyId, phase, phaseEndTime = null) {
 async function advanceToNextRound(lobbyId) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
-  
+
+  // Idempotence : on n'avance QUE depuis la phase 'results'
+  if (lobby.phase !== 'results') {
+    return { ...lobby, _alreadyAdvanced: true };
+  }
+
   const nextRound = lobby.current_round + 1;
   const maxRounds = lobby.settings.rounds;
-  
-  // Reset superVoteUsedThisRound pour tous les participants
+
+  // Reset des compteurs de manche pour tous les participants
   const participants = (lobby.participants || []).map(p => ({
     ...p,
-    superVoteUsedThisRound: false
+    hasSubmitted: false,
+    superVoteUsedThisRound: false,
+    superDownvoteUsedThisRound: false
   }));
-  
-  if (nextRound > maxRounds) {
-    // Fin de la partie
-    const { data, error } = await supabase
-      .from('meme_lobbies')
-      .update({
-        status: 'finished',
-        phase: 'final',
-        current_round: maxRounds,
-        participants,
-        finished_at: new Date().toISOString()
-      })
-      .eq('id', lobbyId)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
-  }
-  
-  // Manche suivante
+
+  const update = (nextRound > maxRounds)
+    ? { status: 'finished', phase: 'final', current_round: maxRounds, participants, finished_at: new Date().toISOString() }
+    : { current_round: nextRound, phase: 'creation', current_vote_index: 0, participants, phase_end_time: new Date(Date.now() + lobby.settings.creationTime * 1000).toISOString() };
+
   const { data, error } = await supabase
     .from('meme_lobbies')
-    .update({
-      current_round: nextRound,
-      phase: 'creation',
-      current_vote_index: 0,
-      participants,
-      phase_end_time: new Date(Date.now() + lobby.settings.creationTime * 1000).toISOString()
-    })
+    .update(update)
     .eq('id', lobbyId)
-    .select()
-    .single();
-  
+    .eq('phase', 'results')   // garde anti-course : n'agit que si toujours en 'results'
+    .select();
+
   if (error) throw error;
-  return data;
+  if (!data || data.length === 0) {
+    const fresh = await getMemeLobbyById(lobbyId);
+    return { ...fresh, _alreadyAdvanced: true };
+  }
+  return data[0];
 }
 
 async function startVotingPhase(lobbyId) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
-  
+
+  if (lobby.phase !== 'creation') {
+    return { ...lobby, _alreadyAdvanced: true };
+  }
+
   const { data, error } = await supabase
     .from('meme_lobbies')
     .update({
@@ -3289,71 +3282,70 @@ async function startVotingPhase(lobbyId) {
       phase_end_time: new Date(Date.now() + lobby.settings.voteTime * 1000).toISOString()
     })
     .eq('id', lobbyId)
-    .select()
-    .single();
-  
+    .eq('phase', 'creation')
+    .select();
+
   if (error) throw error;
-  return data;
+  if (!data || data.length === 0) {
+    const fresh = await getMemeLobbyById(lobbyId);
+    return { ...fresh, _alreadyAdvanced: true };
+  }
+  return data[0];
 }
 
 async function advanceToNextVote(lobbyId) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
 
-  const nextIndex = lobby.current_vote_index + 1;
+  // Idempotence : on n'avance QUE pendant le vote
+  if (lobby.phase !== 'voting') {
+    return { ...lobby, _alreadyAdvanced: true };
+  }
+
+  const currentIndex = lobby.current_vote_index;
+  const nextIndex = currentIndex + 1;
   // Se baser sur le nombre réel de créations (un joueur déconnecté peut ne pas avoir soumis)
   const creations = await getMemeCreationsByLobby(lobbyId, lobby.current_round);
   const totalCreations = creations.length;
 
-  if (nextIndex >= totalCreations) {
-    // Fin du vote, afficher résultats de la manche
-    const { data, error } = await supabase
-      .from('meme_lobbies')
-      .update({
-        phase: 'results',
-        phase_end_time: new Date(Date.now() + 10000).toISOString() // 10s pour voir les résultats
-      })
-      .eq('id', lobbyId)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
-  }
-  
-  // Vote suivant
+  const update = (nextIndex >= totalCreations)
+    ? { phase: 'results', phase_end_time: new Date(Date.now() + 10000).toISOString() }
+    : { current_vote_index: nextIndex, phase_end_time: new Date(Date.now() + lobby.settings.voteTime * 1000).toISOString() };
+
   const { data, error } = await supabase
     .from('meme_lobbies')
-    .update({
-      current_vote_index: nextIndex,
-      phase_end_time: new Date(Date.now() + lobby.settings.voteTime * 1000).toISOString()
-    })
+    .update(update)
     .eq('id', lobbyId)
-    .select()
-    .single();
-  
+    .eq('phase', 'voting')
+    .eq('current_vote_index', currentIndex)   // garde anti-course sur l'index
+    .select();
+
   if (error) throw error;
-  return data;
+  if (!data || data.length === 0) {
+    const fresh = await getMemeLobbyById(lobbyId);
+    return { ...fresh, _alreadyAdvanced: true };
+  }
+  return data[0];
 }
 
 async function updateParticipantScore(lobbyId, odId, scoreChange) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
-  
+
   const participants = (lobby.participants || []).map(p => {
     if (p.odId === odId) {
       return { ...p, score: (p.score || 0) + scoreChange };
     }
     return p;
   });
-  
+
   const { data, error } = await supabase
     .from('meme_lobbies')
     .update({ participants })
     .eq('id', lobbyId)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3417,7 +3409,7 @@ async function deleteMemeCreationByPlayer(lobbyId, roundNumber, playerId) {
     .eq('round_number', roundNumber)
     .eq('player_id', playerId)
     .select();
-  
+
   if (error) throw error;
   return data && data.length > 0;
 }
@@ -3425,21 +3417,21 @@ async function deleteMemeCreationByPlayer(lobbyId, roundNumber, playerId) {
 async function markSuperVoteUsed(lobbyId, odId) {
   const lobby = await getMemeLobbyById(lobbyId);
   if (!lobby) throw new Error('Lobby non trouvé');
-  
+
   const participants = (lobby.participants || []).map(p => {
     if (p.odId === odId) {
       return { ...p, superVoteUsedThisRound: true };
     }
     return p;
   });
-  
+
   const { data, error } = await supabase
     .from('meme_lobbies')
     .update({ participants })
     .eq('id', lobbyId)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3460,14 +3452,14 @@ async function deleteMemeLobby(lobbyId) {
 
 async function cleanupOldMemeLobbies(hoursOld = 24) {
   const cutoffDate = new Date(Date.now() - hoursOld * 60 * 60 * 1000).toISOString();
-  
+
   const { data, error } = await supabase
     .from('meme_lobbies')
     .delete()
     .not('finished_at', 'is', null)
     .lt('finished_at', cutoffDate)
     .select();
-  
+
   if (error) throw error;
   return (data || []).length;
 }
@@ -3480,11 +3472,11 @@ async function getMemeCreationsByLobby(lobbyId, roundNumber = null) {
     .from('meme_creations')
     .select('*')
     .eq('lobby_id', lobbyId);
-  
+
   if (roundNumber !== null) {
     query = query.eq('round_number', roundNumber);
   }
-  
+
   const { data, error } = await query.order('created_at', { ascending: true });
   if (error) throw error;
   return data || [];
@@ -3496,7 +3488,7 @@ async function getMemeCreationById(id) {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (error && error.code !== 'PGRST116') throw error;
   return data;
 }
@@ -3517,7 +3509,7 @@ async function createMemeCreation(lobbyId, roundNumber, playerId, playerPseudo, 
     })
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3594,7 +3586,7 @@ async function getMemeAssignment(lobbyId, roundNumber, playerId) {
     .eq('round_number', roundNumber)
     .eq('player_id', playerId)
     .single();
-  
+
   if (error && error.code !== 'PGRST116') throw error;
   return data;
 }
@@ -3613,7 +3605,7 @@ async function createMemeAssignment(lobbyId, roundNumber, playerId, templateId) 
     })
     .select('*, template:meme_templates(*)')
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3621,9 +3613,9 @@ async function createMemeAssignment(lobbyId, roundNumber, playerId, templateId) 
 async function rotateMemeAssignment(lobbyId, roundNumber, playerId, newTemplateId) {
   const assignment = await getMemeAssignment(lobbyId, roundNumber, playerId);
   if (!assignment) throw new Error('Assignation non trouvée');
-  
+
   const templatesHistory = [...(assignment.templates_history || []), newTemplateId];
-  
+
   const { data, error } = await supabase
     .from('meme_assignments')
     .update({
@@ -3634,7 +3626,7 @@ async function rotateMemeAssignment(lobbyId, roundNumber, playerId, newTemplateI
     .eq('id', assignment.id)
     .select('*, template:meme_templates(*)')
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3674,7 +3666,7 @@ async function getAllAssignmentsForRound(lobbyId, roundNumber) {
     .select('*')
     .eq('lobby_id', lobbyId)
     .eq('round_number', roundNumber);
-  
+
   if (error) throw error;
   return data || [];
 }
@@ -3686,11 +3678,11 @@ async function getAllMemeTemplates(includeInactive = false) {
     .from('meme_templates')
     .select('*')
     .order('created_at', { ascending: false });
-  
+
   if (!includeInactive) {
     query = query.eq('is_active', true);
   }
-  
+
   const { data, error } = await query;
   if (error) throw error;
   return data || [];
@@ -3702,7 +3694,7 @@ async function getMemeTemplateById(id) {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (error && error.code !== 'PGRST116') throw error;
   return data;
 }
@@ -3711,7 +3703,7 @@ async function getMemeTemplatesByTags(tags) {
   if (!tags || tags.length === 0) {
     return await getAllMemeTemplates();
   }
-  
+
   // Utilise l'opérateur && pour vérifier si au moins un tag correspond
   const { data, error } = await supabase
     .from('meme_templates')
@@ -3719,7 +3711,7 @@ async function getMemeTemplatesByTags(tags) {
     .eq('is_active', true)
     .overlaps('tags', tags)
     .order('created_at', { ascending: false });
-  
+
   if (error) throw error;
   return data || [];
 }
@@ -3729,21 +3721,21 @@ async function getAllMemeTags() {
     .from('meme_templates')
     .select('tags')
     .eq('is_active', true);
-  
+
   if (error) throw error;
-  
+
   // Extraire tous les tags uniques
   const allTags = new Set();
   (data || []).forEach(template => {
     (template.tags || []).forEach(tag => allTags.add(tag));
   });
-  
+
   return Array.from(allTags).sort();
 }
 
 async function createMemeTemplate(templateData) {
   const { title, image_url, tags, preset_zones, width, height } = templateData;
-  
+
   const { data, error } = await supabase
     .from('meme_templates')
     .insert({
@@ -3757,7 +3749,7 @@ async function createMemeTemplate(templateData) {
     })
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3765,20 +3757,20 @@ async function createMemeTemplate(templateData) {
 async function updateMemeTemplate(id, updates) {
   const allowedFields = ['title', 'image_url', 'tags', 'preset_zones', 'width', 'height', 'is_active'];
   const filteredUpdates = {};
-  
+
   for (const field of allowedFields) {
     if (updates[field] !== undefined) {
       filteredUpdates[field] = updates[field];
     }
   }
-  
+
   const { data, error } = await supabase
     .from('meme_templates')
     .update(filteredUpdates)
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -3790,7 +3782,7 @@ async function deleteMemeTemplate(id) {
     .from('meme_templates')
     .update({ is_active: false })
     .eq('id', id);
-  
+
   if (error) throw error;
   return { success: true };
 }
@@ -3801,7 +3793,7 @@ async function hardDeleteMemeTemplate(id) {
     .from('meme_templates')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
   return { success: true };
 }
@@ -3812,18 +3804,18 @@ async function getRandomMemeTemplates(count, excludeIds = [], tags = []) {
     .from('meme_templates')
     .select('*')
     .eq('is_active', true);
-  
+
   if (excludeIds.length > 0) {
     query = query.not('id', 'in', `(${excludeIds.join(',')})`);
   }
-  
+
   if (tags.length > 0) {
     query = query.overlaps('tags', tags);
   }
-  
+
   const { data, error } = await query;
   if (error) throw error;
-  
+
   // Mélanger et prendre les N premiers
   const shuffled = (data || []).sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
@@ -3835,30 +3827,30 @@ async function getRandomMemeTemplate(excludeIds = [], requiredTags = [], exclude
     .from('meme_templates')
     .select('*')
     .eq('is_active', true);
-  
+
   if (excludeIds.length > 0) {
     query = query.not('id', 'in', `(${excludeIds.join(',')})`);
   }
-  
+
   const { data: templates, error } = await query;
   if (error) throw error;
-  
+
   let filtered = templates;
-  
+
   // Filtrer par tags inclus (si au moins un tag requis, le template doit avoir au moins un de ces tags)
   if (requiredTags.length > 0) {
-    filtered = filtered.filter(t => 
+    filtered = filtered.filter(t =>
       requiredTags.some(tag => (t.tags || []).includes(tag))
     );
   }
-  
+
   // Filtrer par tags exclus (le template ne doit avoir AUCUN des tags exclus)
   if (excludedTags.length > 0) {
-    filtered = filtered.filter(t => 
+    filtered = filtered.filter(t =>
       !excludedTags.some(tag => (t.tags || []).includes(tag))
     );
   }
-  
+
   if (filtered.length === 0) return null;
   return filtered[Math.floor(Math.random() * filtered.length)];
 }
@@ -3883,25 +3875,25 @@ async function generateUniqueCode() {
   let code;
   let exists = true;
   let attempts = 0;
-  
+
   while (exists && attempts < 10) {
     code = generateShortCode();
-    
+
     const { data, error } = await supabase
       .from('meme_lobbies')
       .select('id')
       .eq('code', code)
       .limit(1);
-    
+
     if (error) throw error;
     exists = data && data.length > 0;
     attempts++;
   }
-  
+
   if (exists) {
     throw new Error('Impossible de générer un code unique après 10 tentatives');
   }
-  
+
   return code;
 }
 
@@ -3917,10 +3909,10 @@ module.exports = {
   verifyPasswordSync,
   normalizeTeamName,
   areTeamNamesEqual,
-  
+
   // Admins
   verifyAdmin,
-  
+
   // Teams
   getAllTeams,
   getTeamByName,
@@ -3934,7 +3926,7 @@ module.exports = {
   resetAllTeamScores,
   deleteTeam,
   saveAllTeams,
-  
+
   // Participants
   getAllParticipants,
   getParticipantByPseudo,
@@ -3947,7 +3939,7 @@ module.exports = {
   deleteParticipant,
   verifyParticipantPassword,
   saveAllParticipants,
-  
+
   // Questions
   getAllQuestions,
   getQuestionById,
@@ -3956,7 +3948,7 @@ module.exports = {
   deleteQuestion,
   saveAllQuestions,
   mergeQuestions,
-  
+
   // Quizzes
   getAllQuizzes,
   getAllQuizCategories,
@@ -3966,7 +3958,7 @@ module.exports = {
   updateQuiz,
   deleteQuiz,
   saveAllQuizzes,
-  
+
   // Lobbies
   getAllLobbies,
   getLobbyById,
@@ -3980,7 +3972,7 @@ module.exports = {
   resetLobby,
   archiveLobby,
   deleteLobby,
-  
+
   // Lobby Answers
   autoSaveAnswer,
   submitAnswer,
@@ -3991,7 +3983,7 @@ module.exports = {
   getParticipantValidation,
   hasTeamScoredForQuestion,
   updateLobbyParticipantTeam,
-  
+
   // Drawing Words (Pictionary)
   getAllDrawingWords,
   getDrawingWordById,
@@ -4000,7 +3992,7 @@ module.exports = {
   deleteDrawingWord,
   mergeDrawingWords,
   getRandomDrawingWords,
-  
+
   // Drawing References (Passe moi le relais)
   getAllDrawingReferences,
   getDrawingReferenceById,
@@ -4009,14 +4001,14 @@ module.exports = {
   deleteDrawingReference,
   mergeDrawingReferences,
   getRandomDrawingReferences,
-  
+
   // Drawing Games
   getAllDrawingGames,
   getDrawingGameById,
   createDrawingGame,
   updateDrawingGame,
   deleteDrawingGame,
-  
+
   // Drawing Lobbies (Pictionary/Téléphone)
   getAllDrawingLobbies,
   getDrawingLobbyById,
@@ -4032,13 +4024,13 @@ module.exports = {
   addDrawingScore,
   archiveDrawingLobby,
   getDrawingLobbyResults,
-  
+
   // Drawings (Dessins sauvegardés)
   saveDrawing,
   getDrawingsByLobby,
   getDrawingById,
   getDrawingScoresByLobby,
-  
+
   // Roles
   ROLES,
   hasRole,
@@ -4047,7 +4039,7 @@ module.exports = {
   updateParticipantRole,
   getParticipantsByRole,
   getAdminParticipants,
-  
+
   // Mystery Grids (Case Mystère)
   getAllMysteryGrids,
   getMysteryGridById,
@@ -4058,7 +4050,7 @@ module.exports = {
   createMysteryGridType,
   updateMysteryGridType,
   deleteMysteryGridType,
-  
+
   // Mystery Lobbies
   getAllMysteryLobbies,
   getMysteryLobbyById,
@@ -4071,7 +4063,7 @@ module.exports = {
   toggleMysteryMute,
   finishMysteryLobby,
   deleteMysteryLobby,
-  
+
   // Media Library
   searchMedia,
   getMediaById,
@@ -4084,7 +4076,7 @@ module.exports = {
   saveBroadcast,
   getBroadcastHistory,
 
-    // Game Settings
+  // Game Settings
   getAllGameSettings,
   getEnabledGameSettings,
   getGameSettingById,

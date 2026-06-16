@@ -167,6 +167,7 @@ export default function MemeGameContainer({
         hasSubmitted={game.hasSubmitted}
         isUploading={game.isUploading}
         isCreator={game.isCreator}
+        canForceAdvance={game.canForceAdvance}
         rotationsUsed={game.rotationsUsed}
         undosUsed={game.undosUsed}
         maxRotations={game.maxRotations}
@@ -183,6 +184,7 @@ export default function MemeGameContainer({
         onUndoTemplate={() => game.undoTemplate()}
         onPlayAgain={() => game.playAgain()}
         onSkipToNextRound={() => game.skipToNextRound()}
+        onForceAdvance={() => game.forceAdvance()}
         onBackToLobby={handleBack}
         onSetGetCurrentCreation={(getter) => game.setGetCurrentCreation(getter)}
       />

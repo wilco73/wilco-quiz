@@ -27,7 +27,7 @@ const memeEvents = new EventEmitter();
 function init(socketIO) {
   io = socketIO;
   console.log('[MEME API] io initialized');
-  
+
   // Écouter l'événement interne "tous ont voté"
   memeEvents.on('allVoted', async (lobbyId) => {
     console.log(`[MEME API] All voted signal received for ${lobbyId}`);
@@ -37,31 +37,31 @@ function init(socketIO) {
     }
     setTimeout(() => advanceVote(lobbyId), 1500);
   });
-  
+
   // Écouter quand une partie démarre pour lancer le timer création
   memeEvents.on('gameStarted', async (lobbyId, creationTime) => {
     console.log(`[MEME API] Game started signal for ${lobbyId}, creation time: ${creationTime}s`);
     startCreationTimer(lobbyId, creationTime);
   });
-  
+
   // Écouter quand tous les joueurs sont prêts (submitNow envoyé)
   memeEvents.on('allReady', async (lobbyId, expectedCount) => {
     console.log(`[MEME API] All ready signal received for ${lobbyId}, expecting ${expectedCount} creations`);
-    
+
     // Annuler le timer création
     if (creationTimers.has(lobbyId)) {
       clearTimeout(creationTimers.get(lobbyId));
       creationTimers.delete(lobbyId);
     }
-    
+
     // Configurer l'attente des créations
     setupPendingSubmits(lobbyId, expectedCount);
   });
-  
+
   // Écouter quand le timer création expire
   memeEvents.on('creationTimeout', async (lobbyId, expectedCount) => {
     console.log(`[MEME API] Creation timeout for ${lobbyId}, expecting ${expectedCount} creations`);
-    
+
     // Configurer l'attente des créations (max 5s après submitNow)
     setupPendingSubmits(lobbyId, expectedCount);
   });
@@ -87,36 +87,36 @@ function setupPendingSubmits(lobbyId, expectedCount) {
     const existing = pendingSubmits.get(lobbyId);
     if (existing.timeout) clearTimeout(existing.timeout);
   }
-  
+
   // Timeout de sécurité : 5s max pour recevoir les créations
   const timeout = setTimeout(async () => {
     console.log(`[MEME API] Pending timeout for ${lobbyId}, starting vote with what we have`);
     pendingSubmits.delete(lobbyId);
     await startVotingPhaseNow(lobbyId);
   }, 5000);
-  
+
   pendingSubmits.set(lobbyId, {
     expected: expectedCount,
     received: 0,
     timeout
   });
-  
+
   console.log(`[MEME API] Setup pending: expecting ${expectedCount} creations, 5s timeout`);
 }
 
 function onCreationReceived(lobbyId) {
   if (!pendingSubmits.has(lobbyId)) return;
-  
+
   const pending = pendingSubmits.get(lobbyId);
   pending.received++;
-  
+
   console.log(`[MEME API] Creation received: ${pending.received}/${pending.expected}`);
-  
+
   if (pending.received >= pending.expected) {
     console.log(`[MEME API] All creations received, starting vote`);
     clearTimeout(pending.timeout);
     pendingSubmits.delete(lobbyId);
-    
+
     // Petit délai pour s'assurer que la BDD a bien enregistré
     setTimeout(() => startVotingPhaseNow(lobbyId), 500);
   }
@@ -129,20 +129,25 @@ async function startVotingPhaseNow(lobbyId) {
       console.log(`[MEME API] Lobby not in creation phase, skipping`);
       return;
     }
-    
+
     const currentRound = lobby.current_round;
     const allCreations = await db.getMemeCreationsByLobby(lobbyId, currentRound);
-    
+
     console.log(`[MEME API] Starting vote with ${allCreations.length} creations`);
-    
+
     if (allCreations.length === 0) {
       console.log(`[MEME API] No creations, skipping to results`);
-      const updatedLobby = await db.updateMemeLobbyPhase(lobbyId, 'results');
-      
+      const updatedLobby = await db.startVotingPhase(lobbyId);
+      if (updatedLobby._alreadyAdvanced) {
+        console.log(`[MEME API] Vote déjà démarré, on ignore`);
+        return;
+      }
+      const voteTime = updatedLobby.settings?.voteTime || 30;
+
       // Vérifier si c'est la dernière manche
       const totalRounds = updatedLobby.settings?.rounds || 3;
       const isLastRound = updatedLobby.current_round >= totalRounds;
-      
+
       io.to(`meme:${lobbyId}`).emit('meme:roundResults', {
         lobby: updatedLobby,
         creations: []
@@ -151,19 +156,19 @@ async function startVotingPhaseNow(lobbyId) {
       startResultsTimer(lobbyId, 5, isLastRound);
       return;
     }
-    
+
     const updatedLobby = await db.startVotingPhase(lobbyId);
     const voteTime = updatedLobby.settings?.voteTime || 30;
-    
+
     io.to(`meme:${lobbyId}`).emit('meme:votingStarted', {
       lobby: updatedLobby,
       creations: allCreations,
       currentIndex: 0,
       timeRemaining: voteTime
     });
-    
+
     startVoteTimer(lobbyId, voteTime);
-    
+
   } catch (error) {
     console.error(`[MEME API] startVotingPhaseNow error:`, error);
   }
@@ -173,13 +178,13 @@ async function startVotingPhaseNow(lobbyId) {
 
 function startCreationTimer(lobbyId, creationTime) {
   if (creationTimers.has(lobbyId)) clearTimeout(creationTimers.get(lobbyId));
-  
+
   console.log(`[MEME TIMER] Creation timer: ${creationTime}s for ${lobbyId}`);
-  
+
   const timerId = setTimeout(async () => {
     await handleCreationTimeout(lobbyId);
   }, creationTime * 1000);
-  
+
   creationTimers.set(lobbyId, timerId);
 }
 
@@ -187,22 +192,22 @@ async function handleCreationTimeout(lobbyId) {
   try {
     console.log(`[MEME TIMER] Creation timeout for ${lobbyId}`);
     creationTimers.delete(lobbyId);
-    
+
     const lobby = await db.getMemeLobbyById(lobbyId);
     if (!lobby || lobby.phase !== 'creation') {
       console.log(`[MEME TIMER] Lobby not in creation phase, skipping`);
       return;
     }
-    
+
     const participants = lobby.participants || [];
-    
+
     // Émettre submitNow pour que les clients envoient leurs créations
     console.log(`[MEME TIMER] Emitting submitNow to ${participants.length} players`);
     io.to(`meme:${lobbyId}`).emit('meme:submitNow');
-    
+
     // Configurer l'attente (on attend tous les participants)
     memeEvents.emit('creationTimeout', lobbyId, participants.length);
-    
+
   } catch (error) {
     console.error(`[MEME TIMER] handleCreationTimeout error:`, error);
   }
@@ -212,24 +217,24 @@ async function handleCreationTimeout(lobbyId) {
 
 function startVoteTimer(lobbyId, voteTime) {
   if (voteTimers.has(lobbyId)) clearTimeout(voteTimers.get(lobbyId));
-  
+
   console.log(`[MEME TIMER] Vote timer: ${voteTime}s for ${lobbyId}`);
-  
+
   const timerId = setTimeout(async () => {
     await advanceVote(lobbyId);
   }, voteTime * 1000);
-  
+
   voteTimers.set(lobbyId, timerId);
 }
 
 async function advanceVote(lobbyId) {
   try {
     const lobby = await db.getMemeLobbyById(lobbyId);
-    if (!lobby) {
+    if (!lobby || lobby.phase !== 'voting') {
       voteTimers.delete(lobbyId);
       return;
     }
-    
+
     console.log(`[MEME TIMER] Advancing vote for ${lobbyId}`);
 
     // Verrouiller les supers du meme courant avant d'avancer
@@ -238,26 +243,30 @@ async function advanceVote(lobbyId) {
     if (currentCreation) {
       await db.finalizeSuperVotesForCreation(lobbyId, currentCreation.id);
     }
-    
+
     const result = await db.advanceToNextVote(lobbyId);
-    
+    if (result._alreadyAdvanced) {
+      voteTimers.delete(lobbyId);
+      return;
+    }
+
     if (result.phase === 'results') {
       console.log(`[MEME TIMER] All votes done, showing results`);
-      
+
       const creations = await db.getMemeCreationsByLobby(lobbyId, result.current_round);
       await updatePlayerScores(lobbyId, creations);
-      
+
       const updatedLobby = await db.getMemeLobbyById(lobbyId);
-      
+
       // Vérifier si c'est la dernière manche
       const totalRounds = updatedLobby.settings?.rounds || 3;
       const isLastRound = updatedLobby.current_round >= totalRounds;
-      
+
       io.to(`meme:${lobbyId}`).emit('meme:roundResults', {
         lobby: updatedLobby,
         creations
       });
-      
+
       // Auto-advance seulement pour la dernière manche (vers finale)
       startResultsTimer(lobbyId, 5, isLastRound);
     } else {
@@ -267,10 +276,10 @@ async function advanceVote(lobbyId) {
         currentIndex: result.current_vote_index,
         timeRemaining: voteTime
       });
-      
+
       startVoteTimer(lobbyId, voteTime);
     }
-    
+
   } catch (error) {
     console.error(`[MEME TIMER] advanceVote error:`, error);
     voteTimers.delete(lobbyId);
@@ -281,19 +290,19 @@ async function advanceVote(lobbyId) {
 
 function startResultsTimer(lobbyId, delaySeconds, autoAdvance = false) {
   if (resultsTimers.has(lobbyId)) clearTimeout(resultsTimers.get(lobbyId));
-  
+
   // Si autoAdvance est false, ne pas démarrer de timer (le créateur décidera)
   if (!autoAdvance) {
     console.log(`[MEME TIMER] Results screen for ${lobbyId} - waiting for creator to advance`);
     return;
   }
-  
+
   console.log(`[MEME TIMER] Results timer: ${delaySeconds}s for ${lobbyId}`);
-  
+
   const timerId = setTimeout(async () => {
     await advanceToNextRoundOrFinish(lobbyId);
   }, delaySeconds * 1000);
-  
+
   resultsTimers.set(lobbyId, timerId);
 }
 
@@ -304,29 +313,34 @@ async function advanceToNextRoundOrFinish(lobbyId) {
       resultsTimers.delete(lobbyId);
       return;
     }
-    
+    if (lobby.phase !== 'results') {
+      // Déjà avancé / terminé
+      resultsTimers.delete(lobbyId);
+      return;
+    }
+
     const totalRounds = lobby.settings?.rounds || 3;
     const currentRound = lobby.current_round || 1;
-    
+
     console.log(`[MEME TIMER] Round ${currentRound}/${totalRounds}`);
-    
+
     if (currentRound >= totalRounds) {
       console.log(`[MEME TIMER] Game finished!`);
-      
+
       const allCreations = await db.getMemeCreationsByLobby(lobbyId);
       console.log(`[MEME TIMER] All creations for lobby ${lobbyId}:`, allCreations?.length);
-      
+
       const updatedLobby = await db.updateMemeLobbyPhase(lobbyId, 'final');
-      
+
       io.to(`meme:${lobbyId}`).emit('meme:gameFinished', {
         lobby: updatedLobby,
         allCreations
       });
     } else {
       console.log(`[MEME TIMER] Starting round ${currentRound + 1}`);
-      
+
       let updatedLobby = await db.advanceToNextRound(lobbyId);
-      
+
       // IMPORTANT: Reset hasSubmitted pour tous les participants
       const resetParticipants = (updatedLobby.participants || []).map(p => ({
         ...p,
@@ -336,12 +350,12 @@ async function advanceToNextRoundOrFinish(lobbyId) {
       }));
       await db.updateMemeLobbyParticipants(lobbyId, resetParticipants);
       updatedLobby = { ...updatedLobby, participants: resetParticipants };
-      
+
       const tags = updatedLobby.settings?.tags || [];
       const excludedTags = updatedLobby.settings?.excludedTags || [];
       const participants = updatedLobby.participants || [];
       const assignedTemplateIds = [];
-      
+
       for (const participant of participants) {
         const template = await db.getRandomMemeTemplate(assignedTemplateIds, tags, excludedTags);
         if (template) {
@@ -349,15 +363,15 @@ async function advanceToNextRoundOrFinish(lobbyId) {
           assignedTemplateIds.push(template.id);
         }
       }
-      
+
       const creationTime = updatedLobby.settings?.creationTime || 120;
-      
+
       io.to(`meme:${lobbyId}`).emit('meme:newRoundStarted', {
         lobby: updatedLobby,
         roundNumber: updatedLobby.current_round,
         timeRemaining: creationTime
       });
-      
+
       for (const participant of participants) {
         const assignment = await db.getMemeAssignment(lobbyId, updatedLobby.current_round, participant.odId);
         if (assignment) {
@@ -367,15 +381,34 @@ async function advanceToNextRoundOrFinish(lobbyId) {
           });
         }
       }
-      
+
       // Démarrer le timer création pour la nouvelle manche
       startCreationTimer(lobbyId, creationTime);
     }
-    
+
     resultsTimers.delete(lobbyId);
   } catch (error) {
     console.error(`[MEME TIMER] advanceToNextRoundOrFinish error:`, error);
     resultsTimers.delete(lobbyId);
+  }
+}
+
+// Forcer manuellement le passage à l'étape suivante (créateur / admin)
+async function forceAdvance(lobbyId) {
+  const lobby = await db.getMemeLobbyById(lobbyId);
+  if (!lobby) return;
+
+  if (lobby.phase === 'creation') {
+    if (creationTimers.has(lobbyId)) { clearTimeout(creationTimers.get(lobbyId)); creationTimers.delete(lobbyId); }
+    // Demander aux clients d'envoyer leur création, puis lancer le vote dès réception
+    io.to(`meme:${lobbyId}`).emit('meme:submitNow');
+    setupPendingSubmits(lobbyId, (lobby.participants || []).length);
+  } else if (lobby.phase === 'voting') {
+    if (voteTimers.has(lobbyId)) { clearTimeout(voteTimers.get(lobbyId)); voteTimers.delete(lobbyId); }
+    await advanceVote(lobbyId);
+  } else if (lobby.phase === 'results') {
+    if (resultsTimers.has(lobbyId)) { clearTimeout(resultsTimers.get(lobbyId)); resultsTimers.delete(lobbyId); }
+    await advanceToNextRoundOrFinish(lobbyId);
   }
 }
 
@@ -385,18 +418,18 @@ async function updatePlayerScores(lobbyId, creations) {
   try {
     const lobby = await db.getMemeLobbyById(lobbyId);
     if (!lobby) return;
-    
+
     const participants = [...(lobby.participants || [])];
-    
+
     for (const creation of creations) {
       const playerIndex = participants.findIndex(p => p.odId === creation.player_id);
       if (playerIndex !== -1) {
         participants[playerIndex].score = (participants[playerIndex].score || 0) + (creation.total_score || 0);
       }
     }
-    
+
     await db.updateMemeLobbyParticipants(lobbyId, participants);
-    
+
     console.log(`[MEME API] Scores updated for ${participants.length} players`);
   } catch (error) {
     console.error(`[MEME API] updatePlayerScores error:`, error);
@@ -408,38 +441,39 @@ async function updatePlayerScores(lobbyId, creations) {
 router.post('/', async (req, res) => {
   try {
     const { lobbyId, roundNumber, odId, pseudo, templateId, textLayers, finalImageBase64 } = req.body;
-    
+
     console.log(`[MEME API] POST from ${pseudo}`);
-    
+
     if (!lobbyId || !odId || !pseudo || !templateId) {
       return res.status(400).json({ success: false, message: 'Paramètres manquants' });
     }
-    
+
     const lobby = await db.getMemeLobbyById(lobbyId);
     if (!lobby) return res.status(404).json({ success: false, message: 'Lobby non trouvé' });
     if (lobby.phase !== 'creation') return res.status(400).json({ success: false, message: 'Phase terminée' });
-    
+
     const isParticipant = (lobby.participants || []).some(p => p.odId === odId);
     if (!isParticipant) return res.status(403).json({ success: false, message: 'Non participant' });
-    
+
     const currentRound = roundNumber || lobby.current_round;
-    
+
     // Vérifier si déjà soumis
     const existingCreations = await db.getMemeCreationsByLobby(lobbyId, currentRound);
     if (existingCreations.some(c => c.player_id === odId)) {
       console.log(`[MEME API] ${pseudo} already submitted, ignoring`);
+      onCreationReceived(lobbyId);  // compte quand même pour débloquer le passage au vote
       return res.json({ success: true, message: 'Déjà soumis', alreadySubmitted: true });
     }
-    
+
     const creation = await db.createMemeCreation(
       lobbyId, currentRound, odId, pseudo, templateId, textLayers || [], finalImageBase64
     );
-    
+
     console.log(`[MEME API] Creation saved: ${creation.id}`);
-    
+
     // Signaler qu'une création a été reçue (pour le tracking pending)
     onCreationReceived(lobbyId);
-    
+
     res.json({ success: true, creation });
   } catch (error) {
     console.error('[MEME API] Error:', error);
@@ -470,4 +504,5 @@ router.init = init;
 router.signalAllVoted = signalAllVoted;
 router.signalGameStarted = signalGameStarted;
 router.signalAllReady = signalAllReady;
+router.forceAdvance = forceAdvance;
 module.exports = router;

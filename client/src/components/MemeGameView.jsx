@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Clock, Hash, Users, Loader2 } from 'lucide-react';
+import { Clock, Hash, Users, Loader2, FastForward } from 'lucide-react';
 import MemeEditor from './MemeEditor';
 import MemeVoteView from './MemeVoteView';
 import MemeResultsView from './MemeResultsView';
@@ -7,30 +7,13 @@ import MemeResultsView from './MemeResultsView';
 /**
  * MemeGameView - Composant principal du jeu Make It Meme
  * Gère les différentes phases : création, vote, résultats
- * 
- * Props:
- * - lobby: { id, settings, participants, current_round, phase, ... }
- * - currentUser: { odId, pseudo, role }
- * - template: { id, image_url, width, height, preset_zones } (template assigné au joueur)
- * - currentMeme: { id, player_id, pseudo, final_image_base64 } (meme en cours de vote)
- * - allMemes: [{ ... }] (tous les memes du round pour le vote)
- * - players: [{ odId, pseudo, totalScore, memes }] (pour les résultats)
- * - timeRemaining: number
- * - currentVoteIndex: number
- * - hasSuperVote: boolean
- * - rotationsUsed: number
- * - undosUsed: number
- * - canUndo: boolean
- * - templatesHistory: array
- * - onSubmitCreation: (textLayers, finalImageBase64) => void
- * - onVote: (voteType, isSuper) => void
- * - onRotateTemplate: () => void
- * - onUndoTemplate: () => void
- * - onPlayAgain: () => void
- * - onBackToLobby: () => void
+ *
+ * v3 :
+ * - Anti-spam : les boutons d'action affichent un état "en cours" et sont désactivés
+ *   pendant la requête serveur (évite le double-clic qui déclenchait l'action 2x).
+ * - Bouton "Forcer l'étape" pour le créateur / admin (débloque une phase coincée).
  */
 
-// Phases du jeu
 const PHASES = {
   WAITING: 'waiting',
   CREATING: 'creating',
@@ -43,7 +26,7 @@ const PHASES = {
 export default function MemeGameView({
   lobby,
   currentUser,
-  gamePhase, // Phase passée par le hook (creating, voting, etc.)
+  gamePhase,
   template,
   currentMeme,
   allMemes = [],
@@ -54,8 +37,9 @@ export default function MemeGameView({
   hasSuperVote = true,
   hasSuperDownvote = true,
   hasSubmitted = false,
-  isUploading = false, // Pendant l'envoi automatique après timer
+  isUploading = false,
   isCreator = false,
+  canForceAdvance = false,
   rotationsUsed = 0,
   undosUsed = 0,
   maxRotations = 3,
@@ -73,30 +57,27 @@ export default function MemeGameView({
   onUndoTemplate,
   onPlayAgain,
   onSkipToNextRound,
+  onForceAdvance,
   onBackToLobby,
   onSetGetCurrentCreation,
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
 
-  // Utiliser gamePhase (du hook) en priorité, sinon fallback sur lobby.phase
   const phase = gamePhase || lobby?.phase || PHASES.WAITING;
   const currentRound = lobby?.current_round || 1;
   const totalRounds = lobby?.settings?.rounds || 3;
   const settings = lobby?.settings || {};
 
-  // Reset isSubmitting au changement de round
   useEffect(() => {
     setIsSubmitting(false);
   }, [currentRound]);
 
-  // Gérer la soumission de création
   const handleSubmitCreation = async (textLayers, finalImageBase64) => {
     if (hasSubmitted || isSubmitting) return;
-    
     setIsSubmitting(true);
     try {
       await onSubmitCreation(textLayers, finalImageBase64);
-      // hasSubmitted est maintenant géré par le hook
     } catch (error) {
       console.error('Erreur soumission:', error);
       alert('Erreur lors de l\'envoi du meme');
@@ -105,10 +86,8 @@ export default function MemeGameView({
     }
   };
 
-  // Gérer l'annulation
   const handleCancelSubmission = async () => {
     if (!hasSubmitted || isSubmitting) return;
-    
     setIsSubmitting(true);
     try {
       await onCancelSubmission();
@@ -119,13 +98,30 @@ export default function MemeGameView({
     }
   };
 
-  // Vérifier si c'est le propre meme du joueur
-  const isOwnMeme = currentMeme?.player_id === currentUser?.id;
+  // Anti-spam : on verrouille pendant que le serveur traite la transition
+  const handleSkipNext = async () => {
+    if (advancing) return;
+    setAdvancing(true);
+    try {
+      await onSkipToNextRound?.();
+    } finally {
+      setAdvancing(false);
+    }
+  };
 
-  // Timer critique
+  const handleForce = async () => {
+    if (advancing) return;
+    setAdvancing(true);
+    try {
+      await onForceAdvance?.();
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
+  const isOwnMeme = currentMeme?.player_id === currentUser?.id;
   const isCritical = timeRemaining <= 10;
 
-  // Rendu selon la phase
   const renderPhaseContent = () => {
     switch (phase) {
       case PHASES.WAITING:
@@ -146,7 +142,6 @@ export default function MemeGameView({
       case PHASES.CREATING:
         return (
           <div className="h-screen flex flex-col">
-            {/* Header de création */}
             <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 text-white">
@@ -160,8 +155,7 @@ export default function MemeGameView({
                   </span>
                 </div>
               </div>
-              
-              {/* Timer */}
+
               <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
                 isCritical ? 'bg-red-600 animate-pulse' : 'bg-gray-700'
               }`}>
@@ -174,11 +168,9 @@ export default function MemeGameView({
               </div>
             </div>
 
-            {/* Zone principale */}
             <div className="flex-1 relative">
               {template ? (
                 <>
-                  {/* Éditeur - désactivé si hasSubmitted */}
                   <div className={hasSubmitted ? 'pointer-events-none opacity-60' : ''}>
                     <MemeEditor
                       template={template}
@@ -196,8 +188,7 @@ export default function MemeGameView({
                       onRegisterGetter={onSetGetCurrentCreation}
                     />
                   </div>
-                  
-                  {/* Overlay "Envoi en cours" quand le timer expire */}
+
                   {isUploading && !hasSubmitted && (
                     <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/70">
                       <div className="bg-gray-900/95 rounded-2xl p-8 text-center shadow-2xl border border-yellow-500/30">
@@ -211,8 +202,7 @@ export default function MemeGameView({
                       </div>
                     </div>
                   )}
-                  
-                  {/* Overlay "En attente" si hasSubmitted */}
+
                   {hasSubmitted && (
                     <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
                       <div className="bg-gray-900/90 rounded-2xl p-8 text-center shadow-2xl border border-green-500/30 pointer-events-auto">
@@ -315,8 +305,7 @@ export default function MemeGameView({
               <h2 className="text-3xl font-bold text-white text-center mb-6">
                 🎉 Fin de la manche {currentRound} !
               </h2>
-              
-              {/* Galerie des memes de la manche */}
+
               {roundMemes.length > 0 && (
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold text-gray-300 mb-3 text-center">
@@ -324,7 +313,7 @@ export default function MemeGameView({
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {roundMemes.map((meme, index) => (
-                      <div 
+                      <div
                         key={meme.id || index}
                         className="bg-gray-800/50 rounded-xl p-2 text-center"
                       >
@@ -341,7 +330,7 @@ export default function MemeGameView({
                         )}
                         <p className="text-white text-sm font-medium">{meme.player_pseudo}</p>
                         <p className={`text-sm font-bold ${
-                          meme.total_score > 0 ? 'text-green-400' : 
+                          meme.total_score > 0 ? 'text-green-400' :
                           meme.total_score < 0 ? 'text-red-400' : 'text-gray-400'
                         }`}>
                           {meme.total_score > 0 ? '+' : ''}{meme.total_score || 0} pts
@@ -351,8 +340,7 @@ export default function MemeGameView({
                   </div>
                 </div>
               )}
-              
-              {/* Classement intermédiaire */}
+
               <div className="bg-gray-800/50 rounded-xl p-4 mb-6 max-w-lg mx-auto">
                 <h3 className="text-lg font-semibold text-gray-300 mb-3 text-center">
                   Classement actuel
@@ -389,20 +377,25 @@ export default function MemeGameView({
                 </div>
               </div>
 
-              {/* Actions */}
+              {/* Actions (anti double-clic) */}
               <div className="text-center">
-                {isCreator && currentRound < totalRounds ? (
-                  <button
-                    onClick={onSkipToNextRound}
-                    className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold transition-colors"
-                  >
-                    Passer à la manche suivante →
-                  </button>
-                ) : currentRound < totalRounds ? (
-                  <div className="flex items-center justify-center gap-2 text-purple-300">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>En attente de l'hôte...</span>
-                  </div>
+                {currentRound < totalRounds ? (
+                  (isCreator || canForceAdvance) ? (
+                    <button
+                      onClick={isCreator ? handleSkipNext : handleForce}
+                      disabled={advancing}
+                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-wait text-white rounded-xl font-semibold transition-colors inline-flex items-center gap-2"
+                    >
+                      {advancing ? (
+                        <><Loader2 className="w-5 h-5 animate-spin" /> Passage en cours...</>
+                      ) : 'Passer à la manche suivante →'}
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-center gap-2 text-purple-300">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>En attente de l'hôte...</span>
+                    </div>
+                  )
                 ) : (
                   <div className="flex items-center justify-center gap-2 text-green-300">
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -422,6 +415,7 @@ export default function MemeGameView({
             currentUser={currentUser}
             onPlayAgain={onPlayAgain}
             onBackToLobby={onBackToLobby}
+            isCreator={isCreator}
             lobbyId={lobby?.id}
           />
         );
@@ -435,5 +429,22 @@ export default function MemeGameView({
     }
   };
 
-  return renderPhaseContent();
+  return (
+    <>
+      {renderPhaseContent()}
+
+      {/* Bouton "Forcer l'étape" : créateur / admin, pendant création et vote */}
+      {canForceAdvance && (phase === PHASES.CREATING || phase === PHASES.VOTING) && (
+        <button
+          onClick={handleForce}
+          disabled={advancing}
+          className="fixed bottom-4 right-4 z-50 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-600 disabled:cursor-wait text-white rounded-lg font-semibold shadow-lg flex items-center gap-2 text-sm"
+          title="Forcer le passage à l'étape suivante (créateur / admin)"
+        >
+          {advancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FastForward className="w-4 h-4" />}
+          Forcer l'étape
+        </button>
+      )}
+    </>
+  );
 }
