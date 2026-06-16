@@ -3,22 +3,26 @@ import { ThumbsUp, Minus, ThumbsDown, Star, Clock, Users, Hash, Loader2 } from '
 
 /**
  * MemeVoteView - Interface de vote pour un meme
- * 
+ *
+ * v2 - Vote au clic (plus de bouton "Valider") :
+ * - Cliquer sur un bouton enregistre/met à jour le vote immédiatement.
+ * - Le joueur peut changer son vote tant que la phase de vote sur ce meme dure.
+ * - Les boutons Super Vote / Super Downvote sont affichés à côté des autres,
+ *   mais uniquement si le super correspondant est encore disponible.
+ * - Le super n'est réellement décompté que côté serveur, quand le vote sur ce meme
+ *   est terminé (voir finalizeSuperVotesForCreation).
+ *
  * Props:
  * - meme: { id, player_id, pseudo, final_image_base64 }
- * - currentUser: { odId, pseudo }
+ * - currentUser: { id, pseudo }
  * - timeRemaining: number (secondes)
- * - currentIndex: number (index du meme actuel)
- * - totalMemes: number
+ * - currentIndex / totalMemes
  * - canVote: boolean (false si c'est son propre meme)
- * - hasSuperVote: boolean (si le joueur peut encore utiliser son super vote)
- * - hasSuperDownvote: boolean (si le joueur peut encore utiliser son super downvote)
+ * - hasSuperVote / hasSuperDownvote: boolean (super encore dispo cette manche)
  * - onVote: (voteType: 'up' | 'neutral' | 'down', isSuper: boolean) => void
- * - roundNumber: number
- * - totalRounds: number
- * - votesCount: number (nombre de votes reçus)
- * - totalVoters: number (nombre total de votants)
- * - hasVoted: boolean (si le joueur actuel a déjà voté - géré par le parent)
+ * - roundNumber / totalRounds
+ * - votesCount / totalVoters
+ * - hasVoted: boolean (le joueur a déjà émis un vote sur ce meme)
  */
 export default function MemeVoteView({
   meme,
@@ -36,59 +40,32 @@ export default function MemeVoteView({
   totalVoters = 0,
   hasVoted: hasVotedProp = false,
 }) {
-  const [selectedVote, setSelectedVote] = useState(null);
-  const [isSuper, setIsSuper] = useState(false);
-  const [isSuperDown, setIsSuperDown] = useState(false);
+  // Vote sélectionné localement : { type: 'up'|'neutral'|'down', isSuper: boolean } | null
+  const [selected, setSelected] = useState(null);
   const [hasVotedLocal, setHasVotedLocal] = useState(false);
 
-  // Le vote est considéré fait si le parent dit qu'on a voté OU si on a voté localement
   const hasVoted = hasVotedProp || hasVotedLocal;
 
   // Reset quand on change de meme
   useEffect(() => {
-    setSelectedVote(null);
-    setIsSuper(false);
-    setIsSuperDown(false);
+    setSelected(null);
     setHasVotedLocal(false);
   }, [meme?.id]);
 
   const isOwnMeme = meme?.player_id === currentUser?.id;
 
-  const handleVote = (voteType) => {
-    if (hasVoted || isOwnMeme) return;
-    setSelectedVote(voteType);
-    // Reset les super si on change de type de vote
-    if (voteType !== 'up') setIsSuper(false);
-    if (voteType !== 'down') setIsSuperDown(false);
-  };
-
-  const handleSuperToggle = () => {
-    if (!hasSuperVote || !selectedVote || selectedVote !== 'up') return;
-    setIsSuper(!isSuper);
-  };
-
-  const handleSuperDownToggle = () => {
-    if (!hasSuperDownvote || !selectedVote || selectedVote !== 'down') return;
-    setIsSuperDown(!isSuperDown);
-  };
-
-  const submitVote = () => {
-    if (!selectedVote || hasVoted) return;
-    // Passer isSuper pour up, isSuperDown pour down
-    const superVote = selectedVote === 'up' ? isSuper : (selectedVote === 'down' ? isSuperDown : false);
-    onVote(selectedVote, superVote);
+  // Émettre / changer le vote immédiatement au clic
+  const castVote = (type, isSuper = false) => {
+    if (isOwnMeme) return;
+    setSelected({ type, isSuper });
     setHasVotedLocal(true);
+    onVote(type, isSuper);
   };
 
-  // Timer critique
+  const isActive = (type, isSuper = false) =>
+    selected?.type === type && !!selected?.isSuper === !!isSuper;
+
   const isCritical = timeRemaining <= 5;
-
-  // Points par type de vote
-  const votePoints = {
-    up: isSuper ? '+200' : '+100',
-    neutral: '0',
-    down: isSuperDown ? '-100' : '-50',
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-gray-900 to-gray-900 p-4 flex flex-col">
@@ -107,7 +84,6 @@ export default function MemeVoteView({
               Meme {currentIndex + 1}/{totalMemes}
             </span>
           </div>
-          {/* Indicateur de votes */}
           {totalVoters > 0 && (
             <div className={`rounded-lg px-3 py-1 flex items-center gap-2 ${
               votesCount >= totalVoters ? 'bg-green-600/70' : 'bg-gray-800/70'
@@ -118,7 +94,7 @@ export default function MemeVoteView({
             </div>
           )}
         </div>
-        
+
         {/* Timer */}
         <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
           isCritical ? 'bg-red-600 animate-pulse' : 'bg-gray-800/70'
@@ -132,7 +108,6 @@ export default function MemeVoteView({
         </div>
       </div>
 
-      {/* Auteur du meme - caché pendant le vote sauf si c'est le sien */}
       {isOwnMeme && (
         <div className="text-center mb-2">
           <span className="text-purple-400 font-bold">Votre création</span>
@@ -147,8 +122,6 @@ export default function MemeVoteView({
             alt="Meme"
             className="w-full rounded-xl shadow-2xl"
           />
-          
-          {/* Badge si propre meme */}
           {isOwnMeme && (
             <div className="absolute top-4 right-4 bg-purple-600/90 text-white px-3 py-1 rounded-lg text-sm font-semibold">
               Votre création
@@ -159,132 +132,103 @@ export default function MemeVoteView({
 
       {/* Zone de vote */}
       {canVote && !isOwnMeme ? (
-        <div className="max-w-lg mx-auto w-full">
-          {/* Boutons de vote */}
-          <div className="flex gap-3 mb-4">
+        <div className="max-w-2xl mx-auto w-full">
+          {/* Rangée de boutons : Super👎 | 👎 | 😐 | 👍 | Super👍
+              Les boutons super ne sont affichés que si le super correspondant est dispo. */}
+          <div className="flex gap-2 sm:gap-3 mb-4 items-stretch justify-center">
+            {/* Super Downvote */}
+            {hasSuperDownvote && (
+              <button
+                onClick={() => castVote('down', true)}
+                className={`flex-1 py-4 rounded-xl font-bold flex flex-col items-center gap-1 transition-all ${
+                  isActive('down', true)
+                    ? 'bg-orange-600 text-white scale-105 ring-2 ring-orange-400'
+                    : 'bg-gray-800 text-orange-300 border border-orange-500/40 hover:bg-gray-700'
+                }`}
+                title="Super Downvote (-100 pts)"
+              >
+                <ThumbsDown className="w-7 h-7 fill-current" />
+                <span className="text-xs">-100</span>
+              </button>
+            )}
+
             {/* Downvote */}
             <button
-              onClick={() => handleVote('down')}
-              disabled={hasVoted}
-              className={`flex-1 py-4 rounded-xl font-bold text-lg flex flex-col items-center gap-1 transition-all ${
-                selectedVote === 'down'
-                  ? isSuperDown
-                    ? 'bg-orange-600 text-white scale-105 ring-2 ring-orange-400'
-                    : 'bg-red-600 text-white scale-105 ring-2 ring-red-400'
+              onClick={() => castVote('down', false)}
+              className={`flex-1 py-4 rounded-xl font-bold flex flex-col items-center gap-1 transition-all ${
+                isActive('down', false)
+                  ? 'bg-red-600 text-white scale-105 ring-2 ring-red-400'
                   : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              } ${hasVoted ? 'opacity-50 cursor-not-allowed' : ''}`}
+              }`}
             >
-              <ThumbsDown className={`w-8 h-8 ${isSuperDown && selectedVote === 'down' ? 'fill-current' : ''}`} />
-              <span className="text-sm">{votePoints.down}</span>
+              <ThumbsDown className="w-7 h-7" />
+              <span className="text-xs">-50</span>
             </button>
 
             {/* Neutral */}
             <button
-              onClick={() => handleVote('neutral')}
-              disabled={hasVoted}
-              className={`flex-1 py-4 rounded-xl font-bold text-lg flex flex-col items-center gap-1 transition-all ${
-                selectedVote === 'neutral'
+              onClick={() => castVote('neutral', false)}
+              className={`flex-1 py-4 rounded-xl font-bold flex flex-col items-center gap-1 transition-all ${
+                isActive('neutral', false)
                   ? 'bg-gray-600 text-white scale-105 ring-2 ring-gray-400'
                   : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              } ${hasVoted ? 'opacity-50 cursor-not-allowed' : ''}`}
+              }`}
             >
-              <Minus className="w-8 h-8" />
-              <span className="text-sm">{votePoints.neutral}</span>
+              <Minus className="w-7 h-7" />
+              <span className="text-xs">0</span>
             </button>
 
             {/* Upvote */}
             <button
-              onClick={() => handleVote('up')}
-              disabled={hasVoted}
-              className={`flex-1 py-4 rounded-xl font-bold text-lg flex flex-col items-center gap-1 transition-all ${
-                selectedVote === 'up'
-                  ? isSuper 
-                    ? 'bg-yellow-500 text-black scale-105 ring-2 ring-yellow-300'
-                    : 'bg-green-600 text-white scale-105 ring-2 ring-green-400'
+              onClick={() => castVote('up', false)}
+              className={`flex-1 py-4 rounded-xl font-bold flex flex-col items-center gap-1 transition-all ${
+                isActive('up', false)
+                  ? 'bg-green-600 text-white scale-105 ring-2 ring-green-400'
                   : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              } ${hasVoted ? 'opacity-50 cursor-not-allowed' : ''}`}
+              }`}
             >
-              {isSuper ? (
-                <Star className="w-8 h-8 fill-current" />
-              ) : (
-                <ThumbsUp className="w-8 h-8" />
-              )}
-              <span className="text-sm">{votePoints.up}</span>
+              <ThumbsUp className="w-7 h-7" />
+              <span className="text-xs">+100</span>
             </button>
+
+            {/* Super Upvote */}
+            {hasSuperVote && (
+              <button
+                onClick={() => castVote('up', true)}
+                className={`flex-1 py-4 rounded-xl font-bold flex flex-col items-center gap-1 transition-all ${
+                  isActive('up', true)
+                    ? 'bg-yellow-500 text-black scale-105 ring-2 ring-yellow-300'
+                    : 'bg-gray-800 text-yellow-300 border border-yellow-500/40 hover:bg-gray-700'
+                }`}
+                title="Super Vote (+200 pts)"
+              >
+                <Star className="w-7 h-7 fill-current" />
+                <span className="text-xs">+200</span>
+              </button>
+            )}
           </div>
 
-          {/* Super vote toggle */}
-          {selectedVote === 'up' && hasSuperVote && !hasVoted && (
-            <button
-              onClick={handleSuperToggle}
-              className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all mb-4 ${
-                isSuper
-                  ? 'bg-yellow-500 text-black'
-                  : 'bg-gray-800 text-yellow-400 border border-yellow-500/50 hover:bg-gray-700'
-              }`}
-            >
-              <Star className={`w-5 h-5 ${isSuper ? 'fill-current' : ''}`} />
-              {isSuper ? 'Super Vote activé ! (+200 pts)' : 'Activer le Super Vote (+200 pts)'}
-            </button>
-          )}
-
-          {/* Indicateur super vote déjà utilisé */}
-          {selectedVote === 'up' && !hasSuperVote && !hasVoted && (
-            <p className="text-center text-gray-500 text-sm mb-4">
-              Super vote déjà utilisé cette manche
-            </p>
-          )}
-
-          {/* Super downvote toggle */}
-          {selectedVote === 'down' && hasSuperDownvote && !hasVoted && (
-            <button
-              onClick={handleSuperDownToggle}
-              className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all mb-4 ${
-                isSuperDown
-                  ? 'bg-orange-600 text-white'
-                  : 'bg-gray-800 text-orange-400 border border-orange-500/50 hover:bg-gray-700'
-              }`}
-            >
-              <ThumbsDown className={`w-5 h-5 ${isSuperDown ? 'fill-current' : ''}`} />
-              {isSuperDown ? 'Super Downvote activé ! (-100 pts)' : 'Activer le Super Downvote (-100 pts)'}
-            </button>
-          )}
-
-          {/* Indicateur super downvote déjà utilisé */}
-          {selectedVote === 'down' && !hasSuperDownvote && !hasVoted && (
-            <p className="text-center text-gray-500 text-sm mb-4">
-              Super downvote déjà utilisé cette manche
-            </p>
-          )}
-
-          {/* Bouton valider */}
-          <button
-            onClick={submitVote}
-            disabled={!selectedVote || hasVoted}
-            className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${
-              selectedVote && !hasVoted
-                ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            {hasVoted ? '✓ Vote enregistré' : 'Valider mon vote'}
-          </button>
-
-          {/* Message d'attente après avoir voté */}
-          {hasVoted && (
-            <div className="mt-4 flex items-center justify-center gap-2 text-gray-400">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>En attente des autres joueurs... ({votesCount}/{totalVoters})</span>
+          {/* Statut du vote (modifiable) */}
+          {hasVoted ? (
+            <div className="bg-green-900/30 border border-green-500/30 rounded-xl p-3 text-center">
+              <p className="text-green-300 text-sm">
+                ✓ Vote enregistré — vous pouvez encore le changer
+              </p>
+              <div className="mt-2 flex items-center justify-center gap-2 text-gray-400 text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>En attente des autres ({votesCount}/{totalVoters})</span>
+              </div>
             </div>
+          ) : (
+            <p className="text-center text-gray-400 text-sm">
+              Cliquez pour voter (vous pourrez changer d'avis)
+            </p>
           )}
         </div>
       ) : isOwnMeme ? (
-        /* Message pour son propre meme */
         <div className="max-w-lg mx-auto w-full">
           <div className="bg-purple-900/30 border border-purple-500/30 rounded-xl p-6 text-center">
-            <p className="text-purple-300 text-lg">
-              🎨 C'est votre meme !
-            </p>
+            <p className="text-purple-300 text-lg">🎨 C'est votre meme !</p>
             <p className="text-gray-400 text-sm mt-2">
               Vous ne pouvez pas voter pour votre propre création.
             </p>
@@ -295,12 +239,9 @@ export default function MemeVoteView({
           </div>
         </div>
       ) : (
-        /* Vote déjà effectué ou pas autorisé */
         <div className="max-w-lg mx-auto w-full">
           <div className="bg-green-900/30 border border-green-500/30 rounded-xl p-6 text-center">
-            <p className="text-green-300 text-lg">
-              ✓ Vote enregistré !
-            </p>
+            <p className="text-green-300 text-lg">✓ Vote enregistré !</p>
             <div className="mt-3 flex items-center justify-center gap-2 text-gray-400">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span>En attente des autres joueurs... ({votesCount}/{totalVoters})</span>
@@ -311,7 +252,7 @@ export default function MemeVoteView({
 
       {/* Légende des points */}
       <div className="mt-4 text-center text-xs text-gray-500">
-        👍 +100 pts • 😐 0 pts • 👎 -50 pts • ⭐ Super vote +200 pts (1 par manche)
+        👍 +100 • 😐 0 • 👎 -50 • ⭐ Super +200 / -100 (1 par manche, décompté à la fin du vote)
       </div>
     </div>
   );

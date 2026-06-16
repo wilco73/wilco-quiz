@@ -149,7 +149,13 @@ export default function useMemeGame(socket, currentUser) {
       avatar: p.avatar,
       totalScore: p.score || 0,
     })));
-  }, []);
+    // Dispo des supers = source de vérité serveur
+    const me = lobbyData.participants.find(p => p.odId === currentUser?.id);
+    if (me) {
+      setHasSuperVote(!me.superVoteUsedThisRound);
+      setHasSuperDownvote(!me.superDownvoteUsedThisRound);
+    }
+  }, [currentUser]);
 
   // Reconnexion
   useEffect(() => {
@@ -369,10 +375,10 @@ export default function useMemeGame(socket, currentUser) {
     const handleVoteReceived = ({ creationId, odId, voteType, isSuper, totalScore }) => {
       console.log('[useMemeGame] voteReceived:', { creationId, odId, voteType });
       
-      setVotesReceived(prev => ({
-        ...prev,
-        [creationId]: [...(prev[creationId] || []), { odId, voteType, isSuper }]
-      }));
+      setVotesReceived(prev => {
+        const existing = (prev[creationId] || []).filter(v => v.odId !== odId);
+        return { ...prev, [creationId]: [...existing, { odId, voteType, isSuper }] };
+      });
       
       setAllMemes(prev => prev.map(m =>
         m.id === creationId ? { ...m, total_score: totalScore } : m
@@ -716,11 +722,7 @@ export default function useMemeGame(socket, currentUser) {
       }, (response) => {
         if (response?.success) {
           setHasVoted(true);
-          // Consommer le super vote/downvote approprié
-          if (isSuper) {
-            if (voteType === 'up') setHasSuperVote(false);
-            if (voteType === 'down') setHasSuperDownvote(false);
-          }
+          // Le super est décompté côté serveur à la fin du vote, puis resync via lobby.
         }
         resolve(response?.success || false);
       });
