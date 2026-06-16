@@ -349,7 +349,16 @@ const App = () => {
         setIsAdmin(true);
         setAdminUsername(user.pseudo);
       }
-      
+
+      // Reconnexion à une partie Make It Meme (prioritaire sur le quiz)
+      if (savedSession.memeLobbyId) {
+        setCurrentMemeLobby({ id: savedSession.memeLobbyId });
+        setCurrentMemeLobbyCode(null);
+        setView('meme-game');
+        hasReconnected.current = true;
+        return;
+      }
+
       // Attendre que les lobbies soient charges
       if (savedSession.currentLobbyId) {
         if (lobbies.length > 0) {
@@ -690,6 +699,7 @@ const App = () => {
                     setCurrentMemeLobby(data.lobby);
                     setCurrentMemeLobbyCode(null);
                     setView('meme-game');
+                    saveSession({ currentUser, onCreateMemeLobbymemeLobbyId: data.lobby.id });
                   } else {
                     toast.error(data.message || 'Lobby non trouvé');
                   }
@@ -702,6 +712,7 @@ const App = () => {
                 setCurrentMemeLobby(lobbyOrCode);
                 setCurrentMemeLobbyCode(null);
                 setView('meme-game');
+                saveSession({ currentUser, memeLobbyId: lobbyOrCode.id });
               }
             }}
             onCreateMemeLobby={async () => {
@@ -735,6 +746,7 @@ const App = () => {
                   setCurrentMemeLobby(data.lobby);
                   setCurrentMemeLobbyCode(null);
                   setView('meme-game');
+                  saveSession({ currentUser, memeLobbyId: data.lobby.id });
                   toast.success('Lobby Make It Meme créé !');
                 } else {
                   toast.error(data.message || 'Erreur lors de la création');
@@ -786,6 +798,7 @@ const App = () => {
                 setCurrentMemeLobby(null);
                 setCurrentMemeLobbyCode(null);
                 setView('lobby-list');
+                saveSession({ currentUser });
               }}
             />
           );

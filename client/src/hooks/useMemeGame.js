@@ -263,7 +263,9 @@ export default function useMemeGame(socket, currentUser) {
       lobbyIdRef.current = updatedLobby?.id;
       setPhase('creating');
       setCurrentRound(roundNumber);
-      setHasSubmitted(false);
+      // Restaurer l'état de soumission depuis le serveur (reconnexion en cours de manche)
+      const me = (updatedLobby?.participants || []).find(p => p.odId === currentUser?.id);
+      setHasSubmitted(!!me?.hasSubmitted);
       setHasSuperVote(true);
       setHasSuperDownvote(true);
       pendingCreationRef.current = null;
