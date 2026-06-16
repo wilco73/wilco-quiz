@@ -116,6 +116,12 @@ module.exports = function (io, socket, db) {
         }
       }
 
+      // Si la partie est terminée, renvoyer directement l'écran de résultats finaux
+      if (lobby.status === 'finished' || lobby.phase === 'final') {
+        const allCreations = await db.getMemeCreationsByLobby(lobbyId);
+        socket.emit('meme:gameFinished', { lobby, allCreations });
+      }
+
       if (callback) callback({ success: true, lobby });
     } catch (error) {
       console.error('[MEME] Erreur join lobby:', error);

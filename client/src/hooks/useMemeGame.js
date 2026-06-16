@@ -41,7 +41,21 @@ export default function useMemeGame(socket, currentUser) {
 
   const timerRef = useRef(null);
   const lobbyIdRef = useRef(null);
-  const actionLockRef = useRef(false); // anti double-clic sur les transitions
+
+  // Émission socket avec ack garanti : se résout toujours (timeout), donc aucun bouton ne reste figé
+  const emitWithAck = useCallback((event, payload, timeoutMs = 8000) => {
+    return new Promise((resolve) => {
+      if (!socket) return resolve(false);
+      let settled = false;
+      const timer = setTimeout(() => { if (!settled) { settled = true; resolve(false); } }, timeoutMs);
+      socket.emit(event, payload, (response) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(response?.success || false);
+      });
+    });
+  }, [socket]);
 
   // Stockage local de la création en cours (pas encore envoyée en BDD)
   const pendingCreationRef = useRef(null);
@@ -258,13 +272,12 @@ export default function useMemeGame(socket, currentUser) {
       }
     };
 
-    const handleGameStarted = ({ lobby: updatedLobby, roundNumber, timeRemaining: serverTime }) => {
-      console.log('[useMemeGame] gameStarted');
+    const handleGameStarted = ({ lobby: updatedLobby, phase: serverPhase, roundNumber, timeRemaining: serverTime }) => {
+      console.log('[useMemeGame] gameStarted, phase:', serverPhase);
       setLobby(updatedLobby);
       lobbyIdRef.current = updatedLobby?.id;
-      setPhase('creating');
+      setPhase(serverPhase === 'voting' ? 'voting' : 'creating');
       setCurrentRound(roundNumber);
-      // Restaurer l'état de soumission depuis le serveur (reconnexion en cours de manche)
       const me = (updatedLobby?.participants || []).find(p => p.odId === currentUser?.id);
       setHasSubmitted(!!me?.hasSubmitted);
       setHasSuperVote(true);
@@ -608,16 +621,8 @@ export default function useMemeGame(socket, currentUser) {
 
   const startGame = useCallback(() => {
     if (!socket || !lobby) return Promise.resolve(false);
-    if (actionLockRef.current) return Promise.resolve(false);
-    actionLockRef.current = true;
-
-    return new Promise((resolve) => {
-      socket.emit('meme:startGame', { lobbyId: lobby.id }, (response) => {
-        if (!response?.success) setError(response?.message || 'Erreur démarrage');
-        resolve(response?.success || false);
-      });
-    });
-  }, [socket, lobby]);
+    return emitWithAck('meme:startGame', { lobbyId: lobby.id });
+  }, [socket, lobby, emitWithAck]);
 
   const rotateTemplate = useCallback(() => {
     if (!socket || !lobby || !currentUser) return Promise.resolve(null);
@@ -736,34 +741,13 @@ export default function useMemeGame(socket, currentUser) {
 
   const playAgain = useCallback(() => {
     if (!socket || !lobby) {
-      setPhase('lobby');
-      setCurrentRound(1);
-      setTemplate(null);
-      setAssignment(null);
-      setAllMemes([]);
-      setHasSubmitted(false);
-      setHasSuperVote(true);
-      setHasSuperDownvote(true);
-      setHasVoted(false);
-      setVotesReceived({});
-      pendingCreationRef.current = null;
+      setPhase('lobby'); setCurrentRound(1); setTemplate(null); setAssignment(null);
+      setAllMemes([]); setHasSubmitted(false); setHasSuperVote(true); setHasSuperDownvote(true);
+      setHasVoted(false); setVotesReceived({}); pendingCreationRef.current = null;
       return Promise.resolve(false);
     }
-    if (actionLockRef.current) return Promise.resolve(false);
-    actionLockRef.current = true;
-
-    return new Promise((resolve) => {
-      socket.emit('meme:playAgain', { lobbyId: lobby.id, odId: currentUser?.id }, (response) => {
-        actionLockRef.current = false;
-        if (response?.success) {
-          console.log('[useMemeGame] playAgain success');
-        } else {
-          console.error('[useMemeGame] playAgain failed:', response?.message);
-        }
-        resolve(response?.success || false);
-      });
-    });
-  }, [socket, lobby]);
+    return emitWithAck('meme:playAgain', { lobbyId: lobby.id, odId: currentUser?.id });
+  }, [socket, lobby, currentUser, emitWithAck]);
 
   const backToLobbyList = useCallback(() => {
     if (lobby) leaveLobby();
@@ -792,36 +776,17 @@ export default function useMemeGame(socket, currentUser) {
   const canUndo = (assignment?.templates_history?.length > 1) && (undosUsed < maxUndos);
 
   const forceAdvance = useCallback(() => {
-    if (!socket || !lobby) return Promise.resolve(false);
-    if (actionLockRef.current) return Promise.resolve(false);
-    actionLockRef.current = true;
-
-    const role = currentUser?.role
-      || (currentUser?.isSuperAdmin ? 'superadmin' : (currentUser?.isAdmin ? 'admin' : 'player'));
-
-    return new Promise((resolve) => {
-      socket.emit('meme:forceAdvance', { lobbyId: lobby.id, odId: currentUser?.id, role }, (response) => {
-        actionLockRef.current = false;
-        resolve(response?.success || false);
-      });
-    });
-  }, [socket, lobby, currentUser]);
+    if (!socket || !lobby || !isCreator) return Promise.resolve(false);
+    return emitWithAck('meme:forceAdvance', { lobbyId: lobby.id, odId: currentUser?.id, role: 'creator' });
+  }, [socket, lobby, isCreator, currentUser, emitWithAck]);
 
   const canForceAdvance = isCreator || !!currentUser?.isAdmin || !!currentUser?.isSuperAdmin;
 
   // Passer à la manche suivante (pour le créateur)
   const skipToNextRound = useCallback(() => {
     if (!socket || !lobby || !isCreator) return Promise.resolve(false);
-    if (actionLockRef.current) return Promise.resolve(false);
-    actionLockRef.current = true;
-
-    return new Promise((resolve) => {
-      socket.emit('meme:nextRound', { lobbyId: lobby.id }, (response) => {
-        actionLockRef.current = false;
-        resolve(response?.success || false);
-      });
-    });
-  }, [socket, lobby, isCreator]);
+    return emitWithAck('meme:nextRound', { lobbyId: lobby.id });
+  }, [socket, lobby, isCreator, emitWithAck]);
 
   return {
     lobby, phase, currentRound, timeRemaining, template, assignment, hasSubmitted,

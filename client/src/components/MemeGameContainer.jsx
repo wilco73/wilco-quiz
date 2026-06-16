@@ -20,11 +20,11 @@ import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
  * - lobbyCode: string (optionnel, rejoindre par code court)
  * - onBack: () => void
  */
-export default function MemeGameContainer({ 
-  currentUser, 
+export default function MemeGameContainer({
+  currentUser,
   lobby: initialLobby,
   lobbyCode: initialLobbyCode,
-  onBack 
+  onBack
 }) {
   const socketContext = useSocketContext();
   const socket = socketContext.socket;
@@ -56,29 +56,37 @@ export default function MemeGameContainer({
   useEffect(() => {
     const joinInitialLobby = async () => {
       if (!initialLobby || game.lobby || !socket || !currentUser) return;
-      
+
       console.log('[MemeGameContainer] Joining initial lobby via socket:', initialLobby.id);
       const result = await game.joinLobby(initialLobby.id);
       console.log('[MemeGameContainer] Join result:', result);
     };
-    
+
     joinInitialLobby();
   }, [initialLobby, socket, currentUser]); // Ne pas mettre game.lobby pour éviter boucle
 
-  // Si on a un code, rejoindre par code
+  // Rejoindre le lobby initial (création depuis l'accueil OU reconnexion après F5)
   useEffect(() => {
-    const joinByCode = async () => {
-      if (!initialLobbyCode || initialLobby || game.lobby || initialJoinAttempted) return;
-      if (!socket || !currentUser) return;
-      
-      setInitialJoinAttempted(true);
-      console.log('[MemeGameContainer] Joining by code:', initialLobbyCode);
-      const result = await game.joinLobbyByCode(initialLobbyCode);
-      console.log('[MemeGameContainer] Join by code result:', result);
-    };
-    
-    joinByCode();
-  }, [initialLobbyCode, socket, currentUser, initialLobby, initialJoinAttempted]);
+    if (!initialLobby || game.lobby) return;
+    if (!socket || !currentUser) return;        // on attend que tout soit prêt (re-déclenché par les deps)
+    if (initialJoinAttempted) return;
+
+    let cancelled = false;
+    setInitialJoinAttempted(true);
+
+    (async () => {
+      console.log('[MemeGameContainer] Join initial lobby:', initialLobby.id);
+      const result = await game.joinLobby(initialLobby.id);
+      if (cancelled) return;
+      if (!result) {
+        // Lobby introuvable/supprimé -> retour propre (évite le chargement infini)
+        console.warn('[MemeGameContainer] Join échoué, retour accueil');
+        onBack?.();
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [initialLobby, socket, currentUser, game.lobby, initialJoinAttempted]);
 
   // Handlers
   const handleCreateLobby = async () => {
@@ -97,13 +105,13 @@ export default function MemeGameContainer({
     if (!joinLobbyId.trim()) return;
     const input = joinLobbyId.trim().toUpperCase();
     let success;
-    
+
     if (input.length === 6 && !input.includes('-')) {
       success = await game.joinLobbyByCode(input);
     } else {
       success = await game.joinLobby(input);
     }
-    
+
     if (success) {
       setJoinLobbyId('');
       setShowJoinInput(false);
@@ -211,7 +219,13 @@ export default function MemeGameContainer({
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-gray-900 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Connexion au lobby...</p>
+          <p className="text-gray-400 mb-6">Connexion au lobby...</p>
+          <button
+            onClick={handleBack}
+            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors"
+          >
+            Retour à l'accueil
+          </button>
         </div>
       </div>
     );
