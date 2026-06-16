@@ -621,9 +621,7 @@ module.exports = function (io, socket, db) {
         const current = creationsNow[before.current_vote_index];
         if (current) await db.finalizeSuperVotesForCreation(lobbyId, current.id);
       }
-
-      const lobby = await db.advanceToNextVote(lobbyId);
-
+      
       if (lobby.phase === 'results') {
         const creations = await db.getMemeCreationsByLobby(lobbyId, lobby.current_round);
         io.to(`meme:${lobbyId}`).emit('meme:roundResults', { lobby, creations });
