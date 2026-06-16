@@ -156,13 +156,11 @@ export default function MemeGameView({
                 </div>
               </div>
 
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-                isCritical ? 'bg-red-600 animate-pulse' : 'bg-gray-700'
-              }`}>
-                <Clock className={`w-5 h-5 ${isCritical ? 'text-white' : 'text-gray-400'}`} />
-                <span className={`text-xl font-mono font-bold ${
-                  isCritical ? 'text-white' : 'text-yellow-400'
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${isCritical ? 'bg-red-600 animate-pulse' : 'bg-gray-700'
                 }`}>
+                <Clock className={`w-5 h-5 ${isCritical ? 'text-white' : 'text-gray-400'}`} />
+                <span className={`text-xl font-mono font-bold ${isCritical ? 'text-white' : 'text-yellow-400'
+                  }`}>
                   {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}
                 </span>
               </div>
@@ -312,31 +310,32 @@ export default function MemeGameView({
                     Les créations de cette manche
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {roundMemes.map((meme, index) => (
-                      <div
-                        key={meme.id || index}
-                        className="bg-gray-800/50 rounded-xl p-2 text-center"
-                      >
-                        {meme.final_image_base64 ? (
-                          <img
-                            src={meme.final_image_base64}
-                            alt={`Meme de ${meme.player_pseudo}`}
-                            className="w-full h-auto rounded-lg mb-2"
-                          />
-                        ) : (
-                          <div className="w-full aspect-square bg-gray-700 rounded-lg mb-2 flex items-center justify-center">
-                            <span className="text-gray-500">Pas d'image</span>
-                          </div>
-                        )}
-                        <p className="text-white text-sm font-medium">{meme.player_pseudo}</p>
-                        <p className={`text-sm font-bold ${
-                          meme.total_score > 0 ? 'text-green-400' :
-                          meme.total_score < 0 ? 'text-red-400' : 'text-gray-400'
-                        }`}>
-                          {meme.total_score > 0 ? '+' : ''}{meme.total_score || 0} pts
-                        </p>
-                      </div>
-                    ))}
+                    {[...roundMemes]
+                      .sort((a, b) => (b.total_score || 0) - (a.total_score || 0))
+                      .map((meme, index) => (
+                        <div
+                          key={meme.id || index}
+                          className="bg-gray-800/50 rounded-xl p-2 text-center"
+                        >
+                          {meme.final_image_base64 ? (
+                            <img
+                              src={meme.final_image_base64}
+                              alt={`Meme de ${meme.player_pseudo}`}
+                              className="w-full h-auto rounded-lg mb-2"
+                            />
+                          ) : (
+                            <div className="w-full aspect-square bg-gray-700 rounded-lg mb-2 flex items-center justify-center">
+                              <span className="text-gray-500">Pas d'image</span>
+                            </div>
+                          )}
+                          <p className="text-white text-sm font-medium">{meme.player_pseudo}</p>
+                          <p className={`text-sm font-bold ${meme.total_score > 0 ? 'text-green-400' :
+                              meme.total_score < 0 ? 'text-red-400' : 'text-gray-400'
+                            }`}>
+                            {meme.total_score > 0 ? '+' : ''}{meme.total_score || 0} pts
+                          </p>
+                        </div>
+                      ))}
                   </div>
                 </div>
               )}
@@ -352,19 +351,17 @@ export default function MemeGameView({
                     .map((player, index) => (
                       <div
                         key={player.odId}
-                        className={`flex items-center justify-between p-2 rounded-lg ${
-                          player.odId === currentUser?.id
+                        className={`flex items-center justify-between p-2 rounded-lg ${player.odId === currentUser?.id
                             ? 'bg-purple-600/30 border border-purple-500'
                             : 'bg-gray-700/50'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2">
-                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${
-                            index === 0 ? 'bg-yellow-500 text-black' :
-                            index === 1 ? 'bg-gray-400 text-black' :
-                            index === 2 ? 'bg-orange-500 text-white' :
-                            'bg-gray-600 text-white'
-                          }`}>
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${index === 0 ? 'bg-yellow-500 text-black' :
+                              index === 1 ? 'bg-gray-400 text-black' :
+                                index === 2 ? 'bg-orange-500 text-white' :
+                                  'bg-gray-600 text-white'
+                            }`}>
                             {index + 1}
                           </span>
                           <span className="text-white">{player.pseudo}</span>

@@ -588,12 +588,14 @@ module.exports = function (io, socket, db) {
       const updatedCreation = await db.getMemeCreationById(creationId);
       const votes = updatedCreation.votes || [];
       const participants = lobby?.participants || [];
-      // Nombre de votants attendus = tous sauf l'auteur
+      // Votants attendus = tous les participants sauf l'auteur du meme
       const expectedVoters = participants.length - 1;
+      // Votants DISTINCTS : un joueur qui change d'avis ne compte qu'une fois
+      const distinctVoters = new Set(votes.map(v => v.odId)).size;
 
-      console.log(`[MEME] Votes for creation ${creationId}: ${votes.length}/${expectedVoters}`);
+      console.log(`[MEME] Votes for creation ${creationId}: ${distinctVoters}/${expectedVoters}`);
 
-      if (votes.length >= expectedVoters) {
+      if (distinctVoters >= expectedVoters) {
         console.log(`[MEME] All voted! Signaling to advance...`);
         // Signaler à meme-creations.js d'avancer
         try {

@@ -407,6 +407,7 @@ export default function useMemeGame(socket, currentUser) {
       setCurrentVoteIndex(currentIndex);
       setVotesReceived({});
       setHasVoted(false);
+      updatePlayersFromLobby(updatedLobby);   // <-- resync supers (superVoteUsedThisRound, etc.)
       startTimer(serverTime || 30);
     };
 
