@@ -559,6 +559,9 @@ module.exports = function (io, socket, db) {
         return callback?.({ success: false, message: 'Impossible de voter pour soi-même' });
       }
 
+      // Avait-il déjà voté sur ce meme ? (changement de vote vs nouveau vote)
+      const hadVoted = (creation.votes || []).some(v => v.odId === odId);
+
       // Vérifier la dispo du super SANS le consommer (décompté à la fin du vote)
       const lobby = await db.getMemeLobbyById(lobbyId);
       if (isSuper) {
@@ -586,25 +589,25 @@ module.exports = function (io, socket, db) {
 
       // Vérifier si tous ont voté pour cette création
       const updatedCreation = await db.getMemeCreationById(creationId);
-      const votes = updatedCreation.votes || [];
-      const participants = lobby?.participants || [];
-      // Votants attendus = tous les participants sauf l'auteur du meme
-      const expectedVoters = participants.length - 1;
-      // Votants DISTINCTS : un joueur qui change d'avis ne compte qu'une fois
-      const distinctVoters = new Set(votes.map(v => v.odId)).size;
+      // Ne déclencher l'avance auto QUE pour un nouveau votant (un changement de vote ne doit pas la relancer)
+      if (!hadVoted) {
+        const votes = updatedCreation.votes || [];
+        const participants = lobby?.participants || [];
+        const expectedVoters = participants.length - 1;
+        const distinctVoters = new Set(votes.map(v => v.odId)).size;
 
-      console.log(`[MEME] Votes for creation ${creationId}: ${distinctVoters}/${expectedVoters}`);
+        console.log(`[MEME] Votes for creation ${creationId}: ${distinctVoters}/${expectedVoters}`);
 
-      if (distinctVoters >= expectedVoters) {
-        console.log(`[MEME] All voted! Signaling to advance...`);
-        // Signaler à meme-creations.js d'avancer
-        try {
-          const memeCreations = require('../routes/meme-creations');
-          if (memeCreations.signalAllVoted) {
-            memeCreations.signalAllVoted(lobbyId);
+        if (distinctVoters >= expectedVoters) {
+          console.log(`[MEME] All voted! Signaling to advance...`);
+          try {
+            const memeCreations = require('../routes/meme-creations');
+            if (memeCreations.signalAllVoted) {
+              memeCreations.signalAllVoted(lobbyId);
+            }
+          } catch (e) {
+            console.error('[MEME] Could not signal allVoted:', e.message);
           }
-        } catch (e) {
-          console.error('[MEME] Could not signal allVoted:', e.message);
         }
       }
 

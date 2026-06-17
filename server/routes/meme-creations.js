@@ -19,7 +19,8 @@ const resultsTimers = new Map();
 const creationTimers = new Map();
 
 // Tracking des créations attendues après submitNow
-const pendingSubmits = new Map(); // lobbyId -> { expected: number, received: number, timeout: NodeJS.Timeout }
+const pendingSubmits = new Map();
+const pendingVoteAdvance = new Set(); // lobbyId pour lesquels une avance de vote est déjà programmée
 
 const EventEmitter = require('events');
 const memeEvents = new EventEmitter();
@@ -31,11 +32,23 @@ function init(socketIO) {
   // Écouter l'événement interne "tous ont voté"
   memeEvents.on('allVoted', async (lobbyId) => {
     console.log(`[MEME API] All voted signal received for ${lobbyId}`);
+    if (pendingVoteAdvance.has(lobbyId)) {
+      console.log(`[MEME API] Avance déjà programmée pour ${lobbyId}, on ignore`);
+      return;
+    }
+    pendingVoteAdvance.add(lobbyId);
+
     if (voteTimers.has(lobbyId)) {
       clearTimeout(voteTimers.get(lobbyId));
       voteTimers.delete(lobbyId);
     }
-    setTimeout(() => advanceVote(lobbyId), 1500);
+    setTimeout(async () => {
+      try {
+        await advanceVote(lobbyId);
+      } finally {
+        pendingVoteAdvance.delete(lobbyId);
+      }
+    }, 1500);
   });
 
   // Écouter quand une partie démarre pour lancer le timer création

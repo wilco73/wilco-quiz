@@ -538,12 +538,24 @@ export default function useMemeGame(socket, currentUser) {
     setError(null);
 
     return new Promise((resolve) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        setLoading(false);
+        console.warn('[useMemeGame] joinLobby: pas de réponse serveur (timeout)');
+        resolve(null); // échec géré par le container (retour accueil)
+      }, 8000);
+
       socket.emit('meme:joinLobby', {
         lobbyId,
         odId: currentUser.id,
         pseudo: currentUser.pseudo,
         avatar: currentUser.avatar,
       }, (response) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         setLoading(false);
         if (response?.success) {
           setLobby(response.lobby);
@@ -565,12 +577,25 @@ export default function useMemeGame(socket, currentUser) {
     setError(null);
 
     return new Promise((resolve) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        setLoading(false);
+        console.warn('[useMemeGame] joinLobby: pas de réponse serveur (timeout)');
+        resolve(null); // échec géré par le container (retour accueil)
+      }, 8000);
+
+
       socket.emit('meme:joinLobbyByCode', {
         code: code.toUpperCase(),
         odId: currentUser.id,
         pseudo: currentUser.pseudo,
         avatar: currentUser.avatar,
       }, (response) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         setLoading(false);
         if (response?.success) {
           setLobby(response.lobby);
