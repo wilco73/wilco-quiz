@@ -208,7 +208,7 @@ export default function MemeGameView({
                           <span className="text-3xl">✓</span>
                         </div>
                         <h3 className="text-xl font-bold text-white mb-2">
-                          Meme envoyé !
+                          Oeuvre chef envoyé !
                         </h3>
                         <p className="text-gray-400 mb-4">
                           En attente des autres joueurs...
@@ -249,7 +249,7 @@ export default function MemeGameView({
                     <span className="text-4xl">✓</span>
                   </div>
                   <h2 className="text-2xl font-bold text-white mb-2">
-                    Meme envoyé !
+                    Oeuvre chef envoyé !
                   </h2>
                   <p className="text-gray-400">
                     En attente des autres joueurs...

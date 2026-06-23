@@ -47,7 +47,7 @@ const DEFAULT_TEXT = {
   fontSize: 32,
   fontFamily: 'Impact, Haettenschweiler, sans-serif',
   fontColor: '#FFFFFF',
-  fontWeight: 'bold',
+  fontWeight: 'normal',
   fontStyle: 'normal',
   textDecoration: 'none',
   textAlign: 'center',
