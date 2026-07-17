@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Eye, Check, Clock, SkipForward, Users, Trophy, EyeOff, Image as ImageIcon, Video as VideoIcon, Music, StopCircle, Clipboard } from 'lucide-react';
+import ImageOrderDisplay from './ImageOrderDisplay';
 
 const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }) => {
   const activeLobby = lobbies.find(l => l.status === 'playing');
@@ -355,7 +356,11 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
           {showAnswers ? (
             <div className="mt-3 pt-3 border-t border-purple-200 dark:border-purple-700">
               <p className="text-xs text-gray-600 dark:text-gray-400">Réponse attendue :</p>
-              <p className="font-bold text-green-700 dark:text-green-400 text-sm sm:text-base">{currentQuestion?.answer}</p>
+              {currentQuestion?.type === 'image_order' ? (
+                <ImageOrderDisplay images={currentQuestion.choices || []} />
+              ) : (
+                <p className="font-bold text-green-700 dark:text-green-400 text-sm sm:text-base">{currentQuestion?.answer}</p>
+              )}
             </div>
           ) : (
             <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 rounded p-2">
@@ -409,9 +414,13 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
                           </span>
                         )}
                       </div>
-                      <p className="font-bold text-green-700 dark:text-green-400 break-words text-xs sm:text-sm">
-                        {p.currentAnswer || '(vide)'}
-                      </p>
+                      {currentQuestion?.type === 'image_order' ? (
+                        <ImageOrderDisplay images={currentQuestion.choices || []} answer={p.currentAnswer} size="xs" />
+                      ) : (
+                        <p className="font-bold text-green-700 dark:text-green-400 break-words text-xs sm:text-sm">
+                          {p.currentAnswer || '(vide)'}
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <div className="bg-orange-50 dark:bg-orange-900/20 rounded p-2 border border-orange-300 dark:border-orange-600">

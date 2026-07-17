@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Trophy, Check, XCircle, Users, ChevronDown, ChevronUp, AlertCircle, RotateCcw, ChevronLeft, ChevronRight, Image as ImageIcon, Video as VideoIcon, Music, Archive, Clipboard } from 'lucide-react';
+import ImageOrderDisplay from './ImageOrderDisplay';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -274,7 +275,10 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                           <MediaPreview question={question} />
                           
                           <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2 sm:mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
-                            <strong>Réponse attendue :</strong> <span className="break-all">{question.answer}</span>
+                            <strong>Réponse attendue :</strong>{' '}
+                            {question.type === 'image_order'
+                              ? <ImageOrderDisplay images={question.choices || []} />
+                              : <span className="break-all">{question.answer}</span>}
                           </div>
 
                           {/* Vue par équipe */}
@@ -315,11 +319,15 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                                           {teamAnswers.map(a => (
                                             <div key={a.participantId} className="text-xs sm:text-sm flex flex-wrap items-center gap-1">
                                               <span className="text-gray-500 dark:text-gray-400">{a.pseudo}:</span>
-                                              <span className={`break-all ${a.answer.toLowerCase().trim() === question.answer.toLowerCase().trim()
-                                                ? 'text-green-600 dark:text-green-400 font-semibold' : 'dark:text-gray-300'
-                                              }`}>
-                                                {a.answer || '(vide)'}
-                                              </span>
+                                              {question.type === 'image_order' ? (
+                                                <ImageOrderDisplay images={question.choices || []} answer={a.answer} size="xs" />
+                                              ) : (
+                                                <span className={`break-all ${a.answer.toLowerCase().trim() === question.answer.toLowerCase().trim()
+                                                  ? 'text-green-600 dark:text-green-400 font-semibold' : 'dark:text-gray-300'
+                                                }`}>
+                                                  {a.answer || '(vide)'}
+                                                </span>
+                                              )}
                                             </div>
                                           ))}
                                         </div>
@@ -377,7 +385,9 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                                       <div key={p.participantId} className="flex flex-wrap justify-between items-center py-1 gap-2">
                                         <div className="text-xs sm:text-sm min-w-0 flex-1">
                                           <span className="text-gray-500 dark:text-gray-400">{p.pseudo}:</span>
-                                          <span className="ml-1 dark:text-gray-300 break-all">{answer || '(vide)'}</span>
+                                          {question.type === 'image_order'
+                                            ? <ImageOrderDisplay images={question.choices || []} answer={answer} size="xs" />
+                                            : <span className="ml-1 dark:text-gray-300 break-all">{answer || '(vide)'}</span>}
                                         </div>
                                         {validation !== undefined ? (
                                           <button
@@ -429,9 +439,16 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                                       {participant.teamName && (
                                         <span className="text-xs text-purple-600 dark:text-purple-400">({participant.teamName})</span>
                                       )}
-                                      <span className={`break-all ${isCorrectAnswer ? 'text-green-600 dark:text-green-400' : 'dark:text-gray-300'}`}>
-                                        : {answer || '(vide)'}
-                                      </span>
+                                      {question.type === 'image_order' ? (
+                                        <span className="inline-flex items-center gap-1">
+                                          : <ImageOrderDisplay images={question.choices || []} answer={answer} size="xs" />
+                                          {isCorrectAnswer && <span className="text-green-600 dark:text-green-400 font-bold">✓</span>}
+                                        </span>
+                                      ) : (
+                                        <span className={`break-all ${isCorrectAnswer ? 'text-green-600 dark:text-green-400' : 'dark:text-gray-300'}`}>
+                                          : {answer || '(vide)'}
+                                        </span>
+                                      )}
                                       {hasPasted && (
                                         <Clipboard 
                                           className="w-3 h-3 sm:w-4 sm:h-4 text-orange-500 dark:text-orange-400 flex-shrink-0" 
