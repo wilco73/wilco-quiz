@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Save, Plus, Trash2, Image, Video, Music, Eye, EyeOff, ListChecks, Tag, RefreshCw } from 'lucide-react';
+import { X, Save, Plus, Trash2, Image, Video, Music, Eye, EyeOff, ListChecks, Tag, RefreshCw, ArrowUpDown } from 'lucide-react';
 import { useToast } from './ToastProvider';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -118,20 +118,20 @@ const QuestionEditor = ({
 
     if (formData.type === 'qcm') {
       const filledChoices = formData.choices.filter(c => c.trim());
-      if (filledChoices.length < 2) {
-        toast.warning('Un QCM doit avoir au moins 2 choix');
-        return;
-      }
-      if (!formData.choices[formData.correctChoice]?.trim()) {
-        toast.warning('Le choix correct ne peut pas être vide');
-        return;
-      }
+      if (filledChoices.length < 2) { toast.warning('Un QCM doit avoir au moins 2 choix'); return; }
+      if (!formData.choices[formData.correctChoice]?.trim()) { toast.warning('Le choix correct ne peut pas être vide'); return; }
       formData.answer = formData.choices[formData.correctChoice];
+    } else if (formData.type === 'image_order') {
+      const imgs = (formData.choices || []).map(c => (c || '').trim());
+      const filled = imgs.filter(Boolean);
+      if (filled.length < 3) { toast.warning('Ajoutez au moins 3 images'); return; }
+      if (filled.length > 6) { toast.warning('6 images maximum'); return; }
+      if (filled.length !== imgs.length) { toast.warning('Une image est vide, complétez ou retirez-la'); return; }
+      formData.choices = imgs;
+      // L'ordre saisi EST le bon ordre -> réponse canonique = identité
+      formData.answer = imgs.map((_, i) => i).join('|');
     } else {
-      if (!formData.answer.trim()) {
-        toast.warning('La réponse est requise');
-        return;
-      }
+      if (!formData.answer.trim()) { toast.warning('La réponse est requise'); return; }
     }
 
     setIsLoading(true);
@@ -181,6 +181,23 @@ const QuestionEditor = ({
     const newChoices = [...formData.choices];
     newChoices[index] = value;
     setFormData({ ...formData, choices: newChoices });
+  };
+
+  // ---- Classement d'images (image_order) : réutilise formData.choices ----
+  const moveOrderImage = (index, dir) => {
+    const target = index + dir;
+    if (target < 0 || target >= formData.choices.length) return;
+    const arr = [...formData.choices];
+    [arr[index], arr[target]] = [arr[target], arr[index]];
+    setFormData({ ...formData, choices: arr });
+  };
+  const addOrderImage = () => {
+    if (formData.choices.length >= 6) { toast.warning('6 images maximum'); return; }
+    setFormData({ ...formData, choices: [...formData.choices, ''] });
+  };
+  const removeOrderImage = (index) => {
+    if (formData.choices.length <= 3) { toast.warning('3 images minimum'); return; }
+    setFormData({ ...formData, choices: formData.choices.filter((_, i) => i !== index) });
   };
 
   const addChoice = () => {
@@ -305,18 +322,26 @@ const QuestionEditor = ({
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Type de question
             </label>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {[
                 { type: 'text', label: 'Texte', icon: null },
                 { type: 'qcm', label: 'QCM', icon: ListChecks },
                 { type: 'image', label: 'Image', icon: Image },
                 { type: 'video', label: 'Vidéo', icon: Video },
                 { type: 'audio', label: 'Audio', icon: Music },
+                { type: 'image_order', label: 'Classement', icon: ArrowUpDown },
               ].map(({ type, label, icon: Icon }) => (
                 <button
                   key={type}
                   type="button"
-                  onClick={() => setFormData({ ...formData, type, media: type === 'text' ? '' : formData.media })}
+                  onClick={() => setFormData({
+                    ...formData,
+                    type,
+                    media: type === 'text' ? '' : formData.media,
+                    choices: type === 'image_order'
+                      ? (formData.choices && formData.choices.length >= 3 ? formData.choices : ['', '', ''])
+                      : formData.choices
+                  })}
                   className={`p-2 rounded-lg border-2 transition flex flex-col items-center gap-1 ${
                     formData.type === type
                       ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
@@ -423,7 +448,7 @@ const QuestionEditor = ({
           </div>
 
           {/* Média (pour types non-texte) */}
-          {formData.type !== 'text' && (
+          {formData.type !== 'text' && formData.type !== 'image_order' && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
@@ -535,7 +560,7 @@ const QuestionEditor = ({
           )}
 
           {/* Réponse (pour non-QCM) */}
-          {formData.type !== 'qcm' && (
+          {formData.type !== 'qcm' && formData.type !== 'image_order' && (
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 Réponse *
@@ -547,6 +572,54 @@ const QuestionEditor = ({
                 onChange={(e) => setFormData({ ...formData, answer: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
+            </div>
+          )}
+
+          {/* Classement d'images */}
+          {formData.type === 'image_order' && (
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                Images à classer (3 à 6) — l'ordre ci-dessous est le BON ordre
+              </label>
+              <div className="space-y-2">
+                {formData.choices.map((url, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <div className="flex flex-col">
+                      <button type="button" onClick={() => moveOrderImage(idx, -1)} disabled={idx === 0}
+                        className="p-1 text-gray-500 hover:text-purple-600 disabled:opacity-30 leading-none">▲</button>
+                      <button type="button" onClick={() => moveOrderImage(idx, 1)} disabled={idx === formData.choices.length - 1}
+                        className="p-1 text-gray-500 hover:text-purple-600 disabled:opacity-30 leading-none">▼</button>
+                    </div>
+                    <span className="w-6 text-center font-bold text-purple-600">{idx + 1}</span>
+                    {url ? (
+                      <img src={url} alt={`img ${idx + 1}`} className="w-12 h-12 object-cover rounded border border-gray-300 dark:border-gray-600"
+                        onError={(e) => { e.target.style.visibility = 'hidden'; }} />
+                    ) : (
+                      <div className="w-12 h-12 rounded border border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400">
+                        <Image className="w-5 h-5" />
+                      </div>
+                    )}
+                    <input type="text" placeholder="https://... (URL image)" value={url}
+                      onChange={(e) => updateChoice(idx, e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                    {formData.choices.length > 3 && (
+                      <button type="button" onClick={() => removeOrderImage(idx)}
+                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {formData.choices.length < 6 && (
+                <button type="button" onClick={addOrderImage}
+                  className="mt-2 flex items-center gap-1 text-sm text-purple-600 hover:text-purple-700">
+                  <Plus className="w-4 h-4" /> Ajouter une image
+                </button>
+              )}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Les participants verront ces images dans un ordre aléatoire et devront les remettre dans cet ordre.
+              </p>
             </div>
           )}
 

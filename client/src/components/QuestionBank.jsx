@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download, ZoomIn } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Image, Video, Music, ListChecks, Eye, EyeOff, Upload, Download, ZoomIn, ArrowUpDown } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import QuestionEditor from './QuestionEditor';
 import ImportModal from './ImportModal';
@@ -647,6 +647,7 @@ const QuestionBank = ({ questions, onSave }) => {
       case 'video': return <Video className="w-4 h-4" />;
       case 'audio': return <Music className="w-4 h-4" />;
       case 'qcm': return <ListChecks className="w-4 h-4" />;
+      case 'image_order': return <ArrowUpDown className="w-4 h-4" />;
       default: return null;
     }
   };
@@ -906,6 +907,7 @@ const QuestionBank = ({ questions, onSave }) => {
           <option value="image">Image</option>
           <option value="video">Vidéo</option>
           <option value="audio">Audio</option>
+          <option value="image_order">Classement</option>
         </select>
       </div>
 
@@ -962,6 +964,20 @@ const QuestionBank = ({ questions, onSave }) => {
                     url={question.media}
                     id={question.id}
                   />
+                )}
+
+                {question.type === 'image_order' && (
+                  <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    <p className="font-semibold mb-1">Bon ordre :</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(question.choices || []).map((url, idx) => (
+                        <div key={idx} className="flex flex-col items-center">
+                          <span className="text-xs font-bold text-purple-600">{idx + 1}</span>
+                          <img src={url} alt={`ordre ${idx + 1}`} className="w-14 h-14 object-cover rounded border border-gray-300 dark:border-gray-600" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 {question.type === 'qcm' ? (
