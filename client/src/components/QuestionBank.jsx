@@ -62,7 +62,7 @@ const QuestionBank = ({ questions, onSave }) => {
     ];
 
     const rows = localQuestions.map(q => {
-      const choices = q.type === 'qcm' ? (q.choices || []) : [];
+      const choices = (q.type === 'qcm' || q.type === 'image_order') ? (q.choices || []) : [];
       const tagsStr = (q.tags || []).join('|');
       
       // Pour les QCM, calculer l'index de la bonne réponse à partir de answer et choices
@@ -247,6 +247,27 @@ const QuestionBank = ({ questions, onSave }) => {
               }
 
               question.answer = choices[question.correctChoice];
+            } else if (question.type === 'image_order') {
+              const imgs = [
+                getValue('choice1'),
+                getValue('choice2'),
+                getValue('choice3'),
+                getValue('choice4'),
+                getValue('choice5'),
+                getValue('choice6')
+              ].filter(c => c && c.trim()).map(c => c.trim());
+
+              if (imgs.length < 3) {
+                errors.push(`Ligne ${index + 2}: Classement doit avoir au moins 3 images`);
+                return;
+              }
+              if (imgs.length > 6) {
+                errors.push(`Ligne ${index + 2}: Classement limité à 6 images`);
+                return;
+              }
+              question.choices = imgs;
+              // L'ordre des colonnes Choix EST le bon ordre -> réponse canonique = identité
+              question.answer = imgs.map((_, i) => i).join('|');
             }
 
             importedQuestions.push(question);
@@ -551,6 +572,26 @@ const QuestionBank = ({ questions, onSave }) => {
         '"Berlin"',
         '', '',
         '0'
+      ].join(delimiter),
+
+      // Classement d'images : les colonnes "Choix" = les images DANS LE BON ORDRE.
+      // (Réponse et Index sont ignorés à l'import : le bon ordre = l'ordre des colonnes.)
+      [
+        '',
+        'image_order',
+        'Cinéma',
+        '"Classez ces films du plus ancien au plus récent"',
+        '',
+        '',
+        '',
+        '1',
+        '60',
+        '"https://example.com/film1.jpg"',
+        '"https://example.com/film2.jpg"',
+        '"https://example.com/film3.jpg"',
+        '"https://example.com/film4.jpg"',
+        '', '',
+        ''
       ].join(delimiter)
     ];
 
