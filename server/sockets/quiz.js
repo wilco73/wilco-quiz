@@ -362,23 +362,31 @@ function register(socket, io) {
       // Catégorie du quiz (groupName) pour attribution des points
       const quizCategory = quiz?.groupName || 'Sans catégorie';
       
-      // Auto-validation pour QCM
+      // Auto-validation QCM + classement d'images : l'équipe ne marque QUE si
+      // TOUS les membres ont répondu ET ont tous la bonne réponse (anti-brute-force).
       let autoValidated = false;
-      if (currentQuestion && currentQuestion.type === 'qcm') {
-        const isCorrect = answer.toLowerCase().trim() === currentQuestion.answer.toLowerCase().trim();
+      if (currentQuestion && (currentQuestion.type === 'qcm' || currentQuestion.type === 'image_order')) {
+        const norm = (s) => String(s || '').toLowerCase().trim();
+        const isCorrect = norm(answer) === norm(currentQuestion.answer);
         await db.validateAnswer(lobbyId, odId, questionId, isCorrect);
         autoValidated = true;
-        
-        // Attribution automatique des points pour QCM (sauf mode entraînement)
-        if (isCorrect && !updatedLobby.trainingMode) {
-          const updatedParticipant = updatedLobby.participants.find(p => p.participantId === odId);
-          if (updatedParticipant && updatedParticipant.teamName) {
-            const validation = await db.getParticipantValidation(lobbyId, odId, questionId);
-            if (!validation?.qcm_team_scored) {
-              const team = await db.getTeamByName(updatedParticipant.teamName);
-              if (team) {
-                await db.addTeamScoreByCategory(team.id, quizCategory, currentQuestion.points || 1);
-                await db.markQcmTeamScored(lobbyId, odId, questionId);
+
+        if (!updatedLobby.trainingMode) {
+          const me = updatedLobby.participants.find(p => p.participantId === odId);
+          if (me && me.teamName) {
+            const teammates = updatedLobby.participants.filter(p => p.teamName === me.teamName);
+            const allAnswered = teammates.every(p => p.answersByQuestionId?.[questionId] !== undefined);
+            const allCorrect = teammates.every(p => norm(p.answersByQuestionId?.[questionId]) === norm(currentQuestion.answer));
+
+            if (allAnswered && allCorrect) {
+              const alreadyScored = await db.hasTeamScoredForQuestion(lobbyId, me.teamName, questionId);
+              if (!alreadyScored) {
+                const team = await db.getTeamByName(me.teamName);
+                if (team) {
+                  await db.addTeamScoreByCategory(team.id, quizCategory, currentQuestion.points || 1);
+                  await db.markQcmTeamScored(lobbyId, odId, questionId);
+                  console.log(`[SCORE ÉQUIPE] "${me.teamName}" tous corrects (${currentQuestion.type}) -> +${currentQuestion.points || 1}`);
+                }
               }
             }
           }
