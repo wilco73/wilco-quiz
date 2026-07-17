@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle, XCircle, Clock, Trophy, Target, Users, ChevronDown, ChevronUp } from 'lucide-react';
 import Avatar from './Avatar';
+import ImageOrderDisplay from './ImageOrderDisplay';
 
 const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeaveLobby, onViewScoreboard, onBackToLobbies }) => {
   const [expandedQuestions, setExpandedQuestions] = useState({});
@@ -361,7 +362,9 @@ const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeav
                         <div className="grid md:grid-cols-2 gap-3 mb-4">
                           <div className="bg-white dark:bg-gray-700 rounded p-3 border border-gray-200 dark:border-gray-600">
                             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">✅ Réponse correcte :</p>
-                            <p className="font-bold text-green-700 dark:text-green-400">{question.answer}</p>
+                            {question.type === 'image_order'
+                              ? <ImageOrderDisplay images={question.choices || []} />
+                              : <p className="font-bold text-green-700 dark:text-green-400">{question.answer}</p>}
                           </div>
                           
                           <div className={`rounded p-3 border ${
@@ -373,14 +376,18 @@ const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeav
                             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                               {!hasAnswer ? '❌ Pas de réponse' : '📝 Votre réponse :'}
                             </p>
-                            <p className={`font-bold ${
-                              !hasAnswer ? 'text-gray-500 dark:text-gray-400 italic' :
-                              validation === true ? 'text-green-700 dark:text-green-400' :
-                              validation === false ? 'text-red-700 dark:text-red-400' :
-                              'text-yellow-700 dark:text-yellow-400'
-                            }`}>
-                              {hasAnswer ? userAnswer : '(Aucune réponse)'}
-                            </p>
+                            {question.type === 'image_order' && hasAnswer ? (
+                              <ImageOrderDisplay images={question.choices || []} answer={userAnswer} size="xs" />
+                            ) : (
+                              <p className={`font-bold ${
+                                !hasAnswer ? 'text-gray-500 dark:text-gray-400 italic' :
+                                validation === true ? 'text-green-700 dark:text-green-400' :
+                                validation === false ? 'text-red-700 dark:text-red-400' :
+                                'text-yellow-700 dark:text-yellow-400'
+                              }`}>
+                                {hasAnswer ? userAnswer : '(Aucune réponse)'}
+                              </p>
+                            )}
                           </div>
                         </div>
 
@@ -514,9 +521,13 @@ const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeav
                           <p className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-semibold">
                             ✅ RÉPONSE CORRECTE :
                           </p>
-                          <p className="font-bold text-green-700 dark:text-green-400 text-lg">
-                            {question.answer}
-                          </p>
+                          {question.type === 'image_order' ? (
+                            <ImageOrderDisplay images={question.choices || []} />
+                          ) : (
+                            <p className="font-bold text-green-700 dark:text-green-400 text-lg">
+                              {question.answer}
+                            </p>
+                          )}
                         </div>
 
                         {/* Réponses de chaque membre */}
@@ -559,14 +570,20 @@ const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeav
                                   )}
                                 </div>
                                 
-                                <p className={`text-sm mt-1 ${
-                                  !hasAnswer ? 'text-gray-500 dark:text-gray-400 italic' :
-                                  validation === true ? 'text-green-700 dark:text-green-400 font-semibold' :
-                                  validation === false ? 'text-red-700 dark:text-red-400 font-semibold' :
-                                  'text-gray-700 dark:text-gray-300 font-semibold'
-                                }`}>
-                                  {hasAnswer ? `Réponse: ${answer}` : 'Pas de réponse'}
-                                </p>
+                                {question.type === 'image_order' && hasAnswer ? (
+                                  <div className="mt-1">
+                                    <ImageOrderDisplay images={question.choices || []} answer={answer} size="xs" />
+                                  </div>
+                                ) : (
+                                  <p className={`text-sm mt-1 ${
+                                    !hasAnswer ? 'text-gray-500 dark:text-gray-400 italic' :
+                                    validation === true ? 'text-green-700 dark:text-green-400 font-semibold' :
+                                    validation === false ? 'text-red-700 dark:text-red-400 font-semibold' :
+                                    'text-gray-700 dark:text-gray-300 font-semibold'
+                                  }`}>
+                                    {hasAnswer ? `Réponse: ${answer}` : 'Pas de réponse'}
+                                  </p>
+                                )}
                               </div>
                             );
                           })}
