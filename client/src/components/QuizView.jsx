@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Clock, ZoomIn, X } from 'lucide-react';
+import ImageOrderInput from './ImageOrderInput';
 
 const QuizView = ({
   lobby,
@@ -431,7 +432,7 @@ const QuizView = ({
                 <p className="font-bold text-green-700 dark:text-green-400 mb-2 text-sm sm:text-base">✅ Réponse enregistrée !</p>
                 <div className="bg-white dark:bg-gray-800 rounded p-2 sm:p-3 border border-green-300 dark:border-green-600 mb-3">
                   <p className="text-xs text-gray-600 dark:text-gray-400">Votre réponse :</p>
-                  <p className="break-all font-bold text-green-700 dark:text-green-400 text-sm sm:text-base">{myAnswer || '(vide)'}</p>
+                  <p className="break-all font-bold text-green-700 dark:text-green-400 text-sm sm:text-base">{question?.type === 'image_order' ? 'Ordre enregistré ✓' : (myAnswer || '(vide)')}</p>
                 </div>
                 <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">⏳ Attente des autres participants...</p>
               </div>
@@ -490,6 +491,26 @@ const QuizView = ({
                   </p>
                 </div>
               )}
+            </div>
+          ) : question?.type === 'image_order' ? (
+            // Classement d'images (drag & drop)
+            <div>
+              <ImageOrderInput
+                question={question}
+                onAnswerChange={onAnswerChange}
+                disabled={isTimeExpired}
+              />
+              <button
+                onClick={onSubmitAnswer}
+                disabled={isTimeExpired}
+                className={`mt-4 w-full py-3 sm:py-4 rounded-lg font-semibold text-base sm:text-lg ${
+                  isTimeExpired
+                    ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
+                    : 'bg-purple-600 dark:bg-purple-700 text-white hover:bg-purple-700 dark:hover:bg-purple-600 active:scale-[0.98]'
+                }`}
+              >
+                {isTimeExpired ? '⏰ Temps écoulé' : 'Valider ma réponse'}
+              </button>
             </div>
           ) : (
             // Input texte libre
