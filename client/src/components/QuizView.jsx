@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Clock, ZoomIn, X } from 'lucide-react';
 import ImageOrderInput from './ImageOrderInput';
+import ImageOrderDisplay from './ImageOrderDisplay';
 
 const QuizView = ({
   lobby,
@@ -416,7 +417,13 @@ const QuizView = ({
                 {myAnswer && myAnswer.trim() ? (
                   <div className="bg-white dark:bg-gray-800 rounded p-2 sm:p-3 border border-green-300 dark:border-green-600 mb-3">
                     <p className="text-xs text-gray-600 dark:text-gray-400">Votre réponse :</p>
-                    <p className="break-all font-bold text-green-700 dark:text-green-400 text-sm sm:text-base">{myAnswer}</p>
+                    {question?.type === 'image_order' ? (
+                      <div className="flex justify-center mt-1">
+                        <ImageOrderDisplay images={question.choices || []} answer={myAnswer} />
+                      </div>
+                    ) : (
+                      <p className="break-all font-bold text-green-700 dark:text-green-400 text-sm sm:text-base">{myAnswer}</p>
+                    )}
                   </div>
                 ) : (
                   <div className="bg-red-100 dark:bg-red-900/30 rounded p-2 sm:p-3 border border-red-300 dark:border-red-600 mb-3">
@@ -432,7 +439,13 @@ const QuizView = ({
                 <p className="font-bold text-green-700 dark:text-green-400 mb-2 text-sm sm:text-base">✅ Réponse enregistrée !</p>
                 <div className="bg-white dark:bg-gray-800 rounded p-2 sm:p-3 border border-green-300 dark:border-green-600 mb-3">
                   <p className="text-xs text-gray-600 dark:text-gray-400">Votre réponse :</p>
-                  <p className="break-all font-bold text-green-700 dark:text-green-400 text-sm sm:text-base">{question?.type === 'image_order' ? 'Ordre enregistré ✓' : (myAnswer || '(vide)')}</p>
+                  {question?.type === 'image_order' ? (
+                    <div className="flex justify-center mt-1">
+                      <ImageOrderDisplay images={question.choices || []} answer={myAnswer} />
+                    </div>
+                  ) : (
+                    <p className="break-all font-bold text-green-700 dark:text-green-400 text-sm sm:text-base">{myAnswer || '(vide)'}</p>
+                  )}
                 </div>
                 <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">⏳ Attente des autres participants...</p>
               </div>
