@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, X, Plus, Trash2, ChevronDown, ChevronUp, Shuffle, Filter, Eye, EyeOff, Tag } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import Pagination from './Pagination';
+import ImageOrderDisplay from './ImageOrderDisplay';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -286,7 +287,10 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
                           {showAnswers && (
                             <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded">
                               <p className="text-xs text-green-700 dark:text-green-400 font-semibold">
-                                ✅ Réponse : <span className="font-bold">{q.answer}</span>
+                                ✅ Réponse :{' '}
+                                {q.type === 'image_order'
+                                  ? <ImageOrderDisplay images={q.choices || []} />
+                                  : <span className="font-bold">{q.answer}</span>}
                               </p>
                             </div>
                           )}
@@ -558,7 +562,10 @@ const QuizEditor = ({ quiz, questions, onSave, onCancel }) => {
                       {showAnswers && (
                         <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded">
                           <p className="text-xs text-green-700 dark:text-green-400 font-semibold">
-                            ✅ Réponse : <span className="font-bold">{question.answer}</span>
+                            ✅ Réponse :{' '}
+                            {question.type === 'image_order'
+                              ? <ImageOrderDisplay images={question.choices || []} />
+                              : <span className="font-bold">{question.answer}</span>}
                           </p>
                         </div>
                       )}

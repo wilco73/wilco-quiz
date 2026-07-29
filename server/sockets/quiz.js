@@ -14,6 +14,26 @@ const {
 } = require('../utils/broadcast');
 const timers = require('../utils/timers');
 
+// Ordre d'affichage mélangé (déterministe par question.id) pour le type "classement d'images".
+// Garantit que TOUS les participants voient exactement le même ordre au départ.
+function attachDisplayOrder(question) {
+  if (!question || question.type !== 'image_order') return question;
+  const n = (question.choices || []).length;
+  if (n === 0) return question;
+  const seed = String(question.id || '');
+  let s = 0;
+  for (let k = 0; k < seed.length; k++) s = (s * 31 + seed.charCodeAt(k)) >>> 0;
+  const rand = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  const order = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  // Éviter que l'ordre affiché soit pile le bon ordre
+  if (order.every((v, i) => v === i) && n > 1) order.push(order.shift());
+  return { ...question, displayOrder: order };
+}
+
 function register(socket, io) {
   
   // ==================== LOBBY MANAGEMENT ====================
@@ -220,7 +240,7 @@ function register(socket, io) {
       io.to(`lobby:${lobbyId}`).emit('quiz:started', {
         lobby: getLobbyWithTimer(updatedLobby),
         quiz,
-        currentQuestion: firstQuestion,
+        currentQuestion: attachDisplayOrder(firstQuestion),
         questionIndex: 0
       });
       
@@ -285,7 +305,7 @@ function register(socket, io) {
       // Émission immédiate pour le changement de question (action critique)
       io.to(`lobby:${lobbyId}`).emit('quiz:questionChanged', {
         lobby: getLobbyWithTimer(updatedLobby),
-        currentQuestion: nextQuestion,
+        currentQuestion: attachDisplayOrder(nextQuestion),
         questionIndex: nextIndex,
         totalQuestions: questions.length
       });

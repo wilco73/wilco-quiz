@@ -20,10 +20,8 @@ import { CSS } from '@dnd-kit/utilities';
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
 /**
- * Mélange déterministe (basé sur l'id de question) : l'ordre affiché est stable
- * tant qu'on reste sur la même question, mais différent d'un participant à l'autre
- * seulement si l'id change — ici on veut surtout éviter le re-shuffle à chaque render.
- * Retourne un tableau d'indices ORIGINAUX mélangés.
+ * Fallback local (utilisé seulement si le serveur n'a pas fourni displayOrder).
+ * Déterministe par seed pour rester cohérent entre clients.
  */
 function shuffledOriginalIndices(images, seedStr) {
   const indices = images.map((_, i) => i);
@@ -37,11 +35,8 @@ function shuffledOriginalIndices(images, seedStr) {
     const j = Math.floor(rand() * (i + 1));
     [indices[i], indices[j]] = [indices[j], indices[i]];
   }
-  // Éviter de tomber pile sur le bon ordre (0,1,2,...)
   const isIdentity = indices.every((v, i) => v === i);
-  if (isIdentity && indices.length > 1) {
-    indices.push(indices.shift());
-  }
+  if (isIdentity && indices.length > 1) indices.push(indices.shift());
   return indices;
 }
 
@@ -80,22 +75,35 @@ function SortableImage({ id, url, letter, disabled }) {
 
 /**
  * ImageOrderInput - réordonnancement d'images en drag & drop (PC + mobile).
- * La réponse est la suite des indices d'origine dans l'ordre choisi, ex: "3|1|0|2".
  *
- * Props:
- * - question: { id, choices: [url, ...] }  (choices = images dans le BON ordre côté serveur)
- * - onAnswerChange: (str) => void
- * - disabled: bool (temps écoulé)
+ * - L'ordre de départ vient du SERVEUR (question.displayOrder) => identique pour tous les
+ *   participants (essentiel pour se coordonner en équipe). Fallback local si absent.
+ * - Chaque image garde une LETTRE FIXE (A, B, C…) attribuée selon l'ordre de départ ;
+ *   la lettre suit l'image quand on la déplace (elle ne change pas de place).
+ *   => un joueur peut dire "le bon ordre c'est C, B, D, E, A" et tout le monde comprend.
+ *
+ * La réponse envoyée est la suite des indices d'origine dans l'ordre choisi, ex "3|1|0|2".
  */
 export default function ImageOrderInput({ question, onAnswerChange, disabled = false }) {
   const images = question?.choices || [];
 
-  // Ordre mélangé stable pour cette question
-  const initialOrder = useMemo(
-    () => shuffledOriginalIndices(images, question?.id || ''),
+  // Ordre initial : priorité au serveur (partagé), sinon fallback local déterministe
+  const initialOrder = useMemo(() => {
+    const fromServer = question?.displayOrder;
+    if (Array.isArray(fromServer) && fromServer.length === images.length && images.length > 0) {
+      return fromServer.slice();
+    }
+    return shuffledOriginalIndices(images, question?.id || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [question?.id]
-  );
+  }, [question?.id]);
+
+  // Lettre PERMANENTE par image = sa position dans l'ordre initial (ne bouge plus ensuite)
+  const letterByOrig = useMemo(() => {
+    const map = {};
+    initialOrder.forEach((origIndex, pos) => { map[origIndex] = LETTERS[pos]; });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOrder]);
 
   const [order, setOrder] = useState(initialOrder);
 
@@ -132,17 +140,17 @@ export default function ImageOrderInput({ question, onAnswerChange, disabled = f
   return (
     <div>
       <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-3">
-        Glissez les images pour les remettre dans le bon ordre (position A → {LETTERS[order.length - 1]})
+        Glissez les images pour les remettre dans le bon ordre — la lettre reste attachée à chaque image.
       </p>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={order.map(String)} strategy={rectSortingStrategy}>
           <div className="grid grid-cols-3 gap-3 sm:gap-4 justify-items-center">
-            {order.map((origIndex, pos) => (
+            {order.map((origIndex) => (
               <SortableImage
                 key={origIndex}
                 id={String(origIndex)}
                 url={images[origIndex]}
-                letter={LETTERS[pos]}
+                letter={letterByOrig[origIndex]}
                 disabled={disabled}
               />
             ))}
