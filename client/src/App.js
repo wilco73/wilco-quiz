@@ -226,14 +226,14 @@ const App = () => {
     
     const handleTimerExpired = (data) => {
       console.log('[EVENT] timer:expired recu');
-      // Vérifier si l'utilisateur est un participant
       const isParticipant = currentLobby?.participants?.some(p => p.participantId === currentUser?.id);
       if (isParticipant && !hasAnswered && currentLobby && currentUser) {
-        // Envoyer immédiatement le dernier brouillon avant que le serveur ne finalise
-        // Utiliser la ref pour avoir la valeur la plus récente
         const currentAnswer = myAnswerRef.current;
-        console.log(`[TIMER EXPIRED] Envoi urgent du brouillon: "${currentAnswer}"`);
-        socket.saveDraft(currentLobby.id, currentUser.id, currentAnswer);
+        // Ne pas écraser un brouillon déjà enregistré avec une valeur vide
+        if (currentAnswer && currentAnswer.trim()) {
+          console.log(`[TIMER EXPIRED] Envoi urgent du brouillon: "${currentAnswer}"`);
+          socket.saveDraft(currentLobby.id, currentUser.id, currentAnswer);
+        }
         setHasAnswered(true);
       }
     };
