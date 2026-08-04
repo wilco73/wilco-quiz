@@ -116,6 +116,7 @@ const LobbyList = ({
       'quiz': ['quiz', 'Quiz'],
       'mystery': ['mystery', 'cases_mysteres', 'Cases Mystères'],
       'meme': ['meme', 'make_it_meme', 'Make It Meme'],
+      'burger': ['burger', 'burger_quiz', 'Burger', 'Burger_Quiz']
     };
     
     const variations = idVariations[gameId] || [gameId];
@@ -499,7 +500,7 @@ const LobbyList = ({
               )}
             </div>
           )}
-
+          
           {/* Message si pas d'équipe */}
           {!currentUser?.teamName && (
             <div className={`${cardBaseClass} p-6 sm:p-8 text-center mb-4`}>
@@ -562,6 +563,74 @@ const LobbyList = ({
                   </div>
                 );
               })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ==================== SECTION Burger Quiz ==================== */}
+      {isGameEnabled('burger') && (
+        <section className="mb-6 sm:mb-8">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
+            🍔 Burger Quiz
+          </h2>
+          
+          {/* Boutons d'action - Créer (si permission) + Rejoindre avec code (tout le monde) */}
+          {currentUser?.teamName && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
+              {/* Créer une partie - uniquement si permission */}
+              {canCreateLobby('burger') ? (
+                <button
+                  onClick={handleCreateBurger}
+                  disabled={loadingCreate}
+                  className={`bg-gradient-to-r from-pink-500 to-purple-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
+                >
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="text-3xl">🍔</div>
+                    <div>
+                      <h4 className="text-lg font-bold">{loadingCreate ? 'Création...' : 'Créer une partie'}</h4>
+                      <p className="text-white/80 text-sm">Enfiler votre plus beau cosplay d'Alain Chabat, et créer une partie de Burger Quiz</p>
+                    </div>
+                  </div>
+                </button>
+              ) : (
+                /* Placeholder vide pour garder la grille alignée si pas de bouton créer */
+                <div></div>
+              )}
+              
+              {/* Rejoindre avec code - TOUJOURS VISIBLE si le jeu est activé */}
+              {showJoinInput ? (
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-xl p-4 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    placeholder="CODE"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    maxLength={6}
+                    autoFocus
+                    onKeyPress={(e) => e.key === 'Enter' && joinCode.trim() && handleJoinBurger(joinCode)}
+                  />
+                  <button
+                    onClick={() => handleJoinBurger(joinCode)}
+                    disabled={!joinCode.trim()}
+                    className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                  >
+                    OK
+                  </button>
+                  <button onClick={() => { setShowJoinInput(false); setJoinCode(''); }} className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">✕</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowJoinInput(true)} className="bg-gradient-to-r from-gray-600 to-gray-700 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02]">
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="text-3xl">🔑</div>
+                    <div>
+                      <h4 className="text-lg font-bold">Rejoindre avec code</h4>
+                      <p className="text-white/80 text-sm">Entrez le code d'une partie privée</p>
+                    </div>
+                  </div>
+                </button>
+              )}
             </div>
           )}
         </section>

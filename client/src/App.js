@@ -51,6 +51,7 @@ const App = () => {
   const lastSentDraftRef = useRef(''); // Pour éviter d'envoyer des doublons
   const urgentSaveTriggeredRef = useRef(false); // Pour éviter les envois répétés en fin de timer
   const myAnswerRef = useRef(''); // Ref pour avoir la valeur actuelle dans les event handlers
+  const [burgerEntry, setBurgerEntry] = useState(null); // { entry:'create'|'join', code? }
   
   // Synchroniser myAnswerRef avec myAnswer
   useEffect(() => {
@@ -642,6 +643,9 @@ const App = () => {
     }
   };
 
+  const handleCreateBurger = () => { setBurgerEntry({ entry: 'create' }); setView('burger-game'); };
+  const handleJoinBurger = (code) => { setBurgerEntry({ entry: 'join', code }); setView('burger-game'); };
+
   // === RENDER ===
   
   if (!isConnected && view !== 'login') {
@@ -852,6 +856,15 @@ const App = () => {
           <MemeGameContainer
             currentUser={currentUser}
             onBack={() => setView('lobby-list')}
+          />
+        );
+      case 'burger-game':
+        return (
+          <BurgerGameContainer
+            currentUser={currentUser}
+            entry={burgerEntry?.entry || 'join'}
+            joinCode={burgerEntry?.code}
+            onExit={() => { setBurgerEntry(null); setView('lobby-list'); }}
           />
         );
       default:

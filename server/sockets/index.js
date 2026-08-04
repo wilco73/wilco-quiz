@@ -12,6 +12,7 @@ const drawingHandlers = require('./drawing');
 const pictionaryHandlers = require('./pictionary');
 const relayHandlers = require('./relay');
 const mysteryHandlers = require('./mystery');
+const registerBurgerHandlers = require('./burger');
 const db = require('../database');
 
 const registerMemeHandlers = require('./meme');
@@ -61,6 +62,7 @@ function setup(io) {
     drawingHandlers.register(socket, io);
     pictionaryHandlers.register(socket, io);
     relayHandlers.register(socket, io);
+    registerBurgerHandlers.register(socket, io);
     mysteryHandlers(io, socket, db);
     
     registerMemeHandlers(io, socket, db);
