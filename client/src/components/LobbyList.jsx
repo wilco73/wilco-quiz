@@ -26,6 +26,8 @@ const LobbyList = ({
   const [joinCode, setJoinCode] = useState('');
   const [showJoinInput, setShowJoinInput] = useState(false);
   const [loadingCreate, setLoadingCreate] = useState(false);
+  const [burgerJoinCode, setBurgerJoinCode] = useState('');
+  const [showBurgerJoin, setShowBurgerJoin] = useState(false);
 
   const availableLobbies = lobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
 
@@ -578,12 +580,12 @@ const LobbyList = ({
           </h2>
           
           {/* Boutons d'action - Créer (si permission) + Rejoindre avec code (tout le monde) */}
-          {currentUser?.teamName && (
+          {currentUser && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
               {/* Créer une partie - uniquement si permission */}
               {canCreateLobby('burger') ? (
                 <button
-                  onClick={handleCreateBurger}
+                  onClick={onCreateBurger}
                   disabled={loadingCreate}
                   className={`bg-gradient-to-r from-pink-500 to-purple-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
                 >
@@ -601,29 +603,29 @@ const LobbyList = ({
               )}
               
               {/* Rejoindre avec code - TOUJOURS VISIBLE si le jeu est activé */}
-              {showJoinInput ? (
+              {showBurgerJoin ? (
                 <div className="bg-gray-100 dark:bg-gray-700 rounded-xl p-4 flex items-center gap-2">
                   <input
                     type="text"
-                    value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    value={burgerJoinCode}
+                    onChange={(e) => setBurgerJoinCode(e.target.value.toUpperCase())}
                     placeholder="CODE"
                     className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-pink-500"
-                    maxLength={6}
+                    maxLength={4}
                     autoFocus
-                    onKeyPress={(e) => e.key === 'Enter' && joinCode.trim() && handleJoinBurger(joinCode)}
+                    onKeyPress={(e) => e.key === 'Enter' && burgerJoinCode.trim() && onJoinBurger(burgerJoinCode)}
                   />
                   <button
-                    onClick={() => handleJoinBurger(joinCode)}
-                    disabled={!joinCode.trim()}
+                    onClick={() => onJoinBurger(burgerJoinCode)}
+                    disabled={!burgerJoinCode.trim()}
                     className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-semibold disabled:opacity-50"
                   >
                     OK
                   </button>
-                  <button onClick={() => { setShowJoinInput(false); setJoinCode(''); }} className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">✕</button>
+                  <button onClick={() => { setShowBurgerJoin(false); setBurgerJoinCode(''); }} className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">✕</button>
                 </div>
               ) : (
-                <button onClick={() => setShowJoinInput(true)} className="bg-gradient-to-r from-gray-600 to-gray-700 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02]">
+                <button onClick={() => setShowBurgerJoin(true)} className="bg-gradient-to-r from-gray-600 to-gray-700 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02]">
                   <div className="flex items-center gap-3 text-white">
                     <div className="text-3xl">🔑</div>
                     <div>
