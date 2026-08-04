@@ -664,7 +664,7 @@ const App = () => {
     'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
     'admin-monitoring', 'admin-validation', 'admin-users', 
     'admin-game-settings', 'admin-meme-templates',
-    'meme-editor-test', 'meme-game-test'
+    'meme-editor-test', 'meme-game-test', 'burger-game'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
