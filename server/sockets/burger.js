@@ -195,6 +195,67 @@ function register(socket, io) {
     }
     callback?.({ success: true });
   });
+
+  const requireAnimator = (lobby, odId) => !!lobby && lobby.animatorId === odId;
+
+  // Lancer la partie (animateur)
+  socket.on('burger:start', (data, callback) => {
+    const lobby = burgerLobbies.get(String(data?.code || '').trim());
+    if (!lobby) return callback?.({ success: false, message: 'Partie introuvable' });
+    if (!requireAnimator(lobby, data?.odId)) return callback?.({ success: false, message: "Réservé à l'animateur" });
+    lobby.status = 'playing';
+    lobby.buzzerLocked = true;
+    lobby.firstBuzz = null;
+    broadcast(io, lobby);
+    callback?.({ success: true });
+  });
+
+  // Verrouiller les buzzers (animateur)
+  socket.on('burger:lockBuzzers', (data, callback) => {
+    const lobby = burgerLobbies.get(String(data?.code || '').trim());
+    if (!requireAnimator(lobby, data?.odId)) return callback?.({ success: false, message: "Réservé à l'animateur" });
+    lobby.buzzerLocked = true;
+    broadcast(io, lobby);
+    callback?.({ success: true });
+  });
+
+  // Déverrouiller les buzzers = ré-armer pour une nouvelle question (animateur)
+  socket.on('burger:unlockBuzzers', (data, callback) => {
+    const lobby = burgerLobbies.get(String(data?.code || '').trim());
+    if (!requireAnimator(lobby, data?.odId)) return callback?.({ success: false, message: "Réservé à l'animateur" });
+    lobby.buzzerLocked = false;
+    lobby.firstBuzz = null;
+    broadcast(io, lobby);
+    callback?.({ success: true });
+  });
+
+  // Un joueur buzz — le premier verrouille tout le monde
+  socket.on('burger:buzz', (data, callback) => {
+    const lobby = burgerLobbies.get(String(data?.code || '').trim());
+    if (!lobby) return callback?.({ success: false, message: 'Partie introuvable' });
+    if (lobby.status !== 'playing') return callback?.({ success: false, message: 'Partie non lancée' });
+    if (lobby.buzzerLocked) return callback?.({ success: false, message: 'Buzzers verrouillés' });
+    if (lobby.firstBuzz) return callback?.({ success: false, message: 'Trop tard' });
+    const player = lobby.players[data?.odId];
+    if (!player || !player.team) return callback?.({ success: false, message: 'Choisissez une équipe' });
+
+    lobby.firstBuzz = { odId: player.odId, pseudo: player.pseudo, team: player.team, at: Date.now() };
+    lobby.buzzerLocked = true; // auto-lock : un seul buzz
+    io.to(room(lobby.code)).emit('burger:buzzed', lobby.firstBuzz);
+    broadcast(io, lobby);
+    callback?.({ success: true });
+  });
+
+  // Ajuster les points d'une équipe (animateur)
+  socket.on('burger:addPoint', (data, callback) => {
+    const lobby = burgerLobbies.get(String(data?.code || '').trim());
+    if (!requireAnimator(lobby, data?.odId)) return callback?.({ success: false, message: "Réservé à l'animateur" });
+    const { team, delta } = data || {};
+    if (!lobby.points || lobby.points[team] === undefined) return callback?.({ success: false, message: 'Équipe invalide' });
+    lobby.points[team] = Math.max(0, (lobby.points[team] || 0) + (Number(delta) || 0));
+    broadcast(io, lobby);
+    callback?.({ success: true });
+  });
 }
 
 // Petit helper HTTP-friendly pour lister les parties (facultatif, pour un futur écran)

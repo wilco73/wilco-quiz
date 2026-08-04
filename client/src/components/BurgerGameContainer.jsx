@@ -1,3 +1,5 @@
+import BurgerBuzzer from './BurgerBuzzer';
+import BurgerAnimatorControls from './BurgerAnimatorControls';
 import React, { useEffect, useRef, useState } from 'react';
 import useBurgerGame from '../hooks/useBurgerGame';
 import BurgerTeamChoice from './BurgerTeamChoice';
@@ -53,7 +55,28 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, crea
     );
   }
 
-  // Étape 1 : lobby + choix d'équipe (le buzzer / scoreboard / télécommande viendront ensuite)
+  // Partie lancée : buzzer (joueur) ou télécommande (animateur)
+  if (game.lobby.status === 'playing') {
+    return game.isAnimator ? (
+      <BurgerAnimatorControls
+        lobby={game.lobby}
+        onLock={game.lockBuzzers}
+        onUnlock={game.unlockBuzzers}
+        onAddPoint={game.addPoint}
+        onBack={handleExit}
+      />
+    ) : (
+      <BurgerBuzzer
+        lobby={game.lobby}
+        currentUser={currentUser}
+        myPlayer={game.myPlayer}
+        onBuzz={game.buzz}
+        onBack={handleExit}
+      />
+    );
+  }
+
+  // Sinon : lobby d'attente + choix d'équipe (+ bouton Lancer pour l'animateur)
   return (
     <BurgerTeamChoice
       lobby={game.lobby}
@@ -61,6 +84,7 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, crea
       isAnimator={game.isAnimator}
       myPlayer={game.myPlayer}
       onChooseTeam={game.chooseTeam}
+      onStart={game.isAnimator ? game.startGame : undefined}
       onBack={handleExit}
     />
   );
