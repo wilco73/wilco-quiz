@@ -22,6 +22,7 @@ import { useToast } from './components/ToastProvider';
 import MemeEditorTest from './components/MemeEditorTest';
 import MemeGameTest from './components/MemeGameTest';
 import MemeGameContainer from './components/MemeGameContainer';
+import BurgerGameContainer from './components/BurgerGameContainer';
 import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -760,6 +761,8 @@ const App = () => {
                 toast.error('Erreur lors de la création du lobby');
               }
             }}
+            onCreateBurger={handleCreateBurger}
+            onJoinBurger={handleJoinBurger}
           />
         );
       

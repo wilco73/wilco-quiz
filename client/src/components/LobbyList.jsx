@@ -14,7 +14,9 @@ const LobbyList = ({
   onJoinDrawingLobby,
   onJoinMysteryLobby,
   onJoinMemeLobby,
-  onCreateMemeLobby
+  onCreateMemeLobby,
+  onCreateBurger,
+  onJoinBurger
 }) => {
   const [gameSettings, setGameSettings] = useState([]);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
