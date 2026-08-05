@@ -256,6 +256,34 @@ function register(socket, io) {
     broadcast(io, lobby);
     callback?.({ success: true });
   });
+
+  // Jouer une vidéo de transition — diffusée à tout le lobby (animateur)
+  socket.on('burger:transition', (data, callback) => {
+    const lobby = burgerLobbies.get(String(data?.code || '').trim());
+    if (!requireAnimator(lobby, data?.odId)) return callback?.({ success: false, message: "Réservé à l'animateur" });
+    io.to(room(lobby.code)).emit('burger:playTransition', { video: data?.video || null });
+    callback?.({ success: true });
+  });
+
+  // Signaler une mauvaise réponse (son) (animateur)
+  socket.on('burger:badResponse', (data, callback) => {
+    const lobby = burgerLobbies.get(String(data?.code || '').trim());
+    if (!requireAnimator(lobby, data?.odId)) return callback?.({ success: false, message: "Réservé à l'animateur" });
+    io.to(room(lobby.code)).emit('burger:badResponse');
+    callback?.({ success: true });
+  });
+
+  // Réinitialiser la partie : scores à 0, buzzers verrouillés (animateur)
+  socket.on('burger:reload', (data, callback) => {
+    const lobby = burgerLobbies.get(String(data?.code || '').trim());
+    if (!requireAnimator(lobby, data?.odId)) return callback?.({ success: false, message: "Réservé à l'animateur" });
+    lobby.teams.forEach((t) => { lobby.points[t.id] = 0; });
+    lobby.firstBuzz = null;
+    lobby.buzzerLocked = true;
+    io.to(room(lobby.code)).emit('burger:playTransition', { video: null }); // stoppe une transition en cours
+    broadcast(io, lobby);
+    callback?.({ success: true });
+  });
 }
 
 // Petit helper HTTP-friendly pour lister les parties (facultatif, pour un futur écran)

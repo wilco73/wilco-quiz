@@ -11,21 +11,26 @@ export default function useBurgerGame(currentUser) {
   const [isAnimator, setIsAnimator] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [activeTransition, setActiveTransition] = useState(null);
   const codeRef = useRef(null);
 
   // Écoute l'état du lobby diffusé par le serveur
   useEffect(() => {
     if (!socket) return;
-    const onState = (state) => {
-      setLobby(state);
-      if (state?.code) codeRef.current = state.code;
-    };
-    const onBuzzed = () => {
-      try { new Audio('/resources/burger/sounds/buzz.mp3').play().catch(() => {}); } catch (e) {}
-    };
+    const onState = (state) => { setLobby(state); if (state?.code) codeRef.current = state.code; };
+    const onBuzzed = () => { try { new Audio('/resources/burger/sounds/buzz.mp3').play().catch(() => {}); } catch (e) {} };
+    const onTransition = ({ video }) => setActiveTransition(video || null);
+    const onBad = () => { try { new Audio('/resources/burger/sounds/burger-sound-buzz-1.mp3').play().catch(() => {}); } catch (e) {} };
     socket.on('burger:lobbyState', onState);
     socket.on('burger:buzzed', onBuzzed);
-    return () => { socket.off('burger:lobbyState', onState); socket.off('burger:buzzed', onBuzzed); };
+    socket.on('burger:playTransition', onTransition);
+    socket.on('burger:badResponse', onBad);
+    return () => {
+      socket.off('burger:lobbyState', onState);
+      socket.off('burger:buzzed', onBuzzed);
+      socket.off('burger:playTransition', onTransition);
+      socket.off('burger:badResponse', onBad);
+    };
   }, [socket]);
 
   const emitAck = useCallback((event, payload, timeoutMs = 8000) => {
@@ -75,6 +80,10 @@ export default function useBurgerGame(currentUser) {
   const unlockBuzzers = useCallback(() => emitAck('burger:unlockBuzzers', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
   const buzz = useCallback(() => emitAck('burger:buzz', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
   const addPoint = useCallback((team, delta) => emitAck('burger:addPoint', { code: codeRef.current, odId: currentUser?.id, team, delta }), [emitAck, currentUser]);
+  const sendTransition = useCallback((video) => emitAck('burger:transition', { code: codeRef.current, odId: currentUser?.id, video }), [emitAck, currentUser]);
+  const badResponse = useCallback(() => emitAck('burger:badResponse', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
+  const reload = useCallback(() => emitAck('burger:reload', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
+  const clearTransition = useCallback(() => setActiveTransition(null), []);
   const chooseTeam = useCallback(async (team) => {
     const code = codeRef.current;
     if (!code) return { success: false };
@@ -100,5 +109,6 @@ export default function useBurgerGame(currentUser) {
     lobby, isAnimator, error, loading, myPlayer,
     createLobby, joinLobby, chooseTeam, refreshState, leaveLobby, setError,
     startGame, lockBuzzers, unlockBuzzers, buzz, addPoint,
+    sendTransition, badResponse, reload, activeTransition, clearTransition,
   };
 }

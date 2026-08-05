@@ -11,7 +11,7 @@ import React from 'react';
  * - onChooseTeam: (teamId) => void
  * - onBack: () => void
  */
-export default function BurgerTeamChoice({ lobby, currentUser, isAnimator, myPlayer, onChooseTeam, onBack }) {
+export default function BurgerTeamChoice({ lobby, currentUser, isAnimator, myPlayer, onChooseTeam, onStart, onBack }) {
   if (!lobby) return null;
 
   const playersByTeam = (teamId) => (lobby.players || []).filter((p) => p.team === teamId);
@@ -36,9 +36,17 @@ export default function BurgerTeamChoice({ lobby, currentUser, isAnimator, myPla
         </div>
 
         {isAnimator && (
-          <div className="bg-gray-900/60 border border-gray-700 rounded-xl p-3 mb-4 text-center text-sm text-gray-300">
-            Vous êtes l'animateur. Partagez le code <span className="font-mono font-bold text-white">{lobby.code}</span> aux joueurs.
-            La partie se lance à l'étape suivante.
+          <div className="bg-gray-900/60 border border-gray-700 rounded-xl p-3 mb-4 text-center">
+            <p className="text-sm text-gray-300 mb-3">
+              Vous êtes l'animateur. Partagez le code <span className="font-mono font-bold text-white">{lobby.code}</span> aux joueurs.
+            </p>
+            <button
+              onClick={onStart}
+              disabled={!onStart}
+              className="px-6 py-2.5 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold disabled:opacity-50"
+            >
+              ▶ Lancer la partie
+            </button>
           </div>
         )}
 

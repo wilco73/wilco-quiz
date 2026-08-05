@@ -1,5 +1,6 @@
 import BurgerBuzzer from './BurgerBuzzer';
-import BurgerAnimatorControls from './BurgerAnimatorControls';
+import BurgerScoreboard from './BurgerScoreboard';
+import BurgerTransitionOverlay from './BurgerTransitionOverlay';
 import React, { useEffect, useRef, useState } from 'react';
 import useBurgerGame from '../hooks/useBurgerGame';
 import BurgerTeamChoice from './BurgerTeamChoice';
@@ -56,13 +57,17 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, crea
   }
 
   // Partie lancée : buzzer (joueur) ou télécommande (animateur)
+  let screen;
   if (game.lobby.status === 'playing') {
-    return game.isAnimator ? (
-      <BurgerAnimatorControls
+    screen = game.isAnimator ? (
+      <BurgerScoreboard
         lobby={game.lobby}
         onLock={game.lockBuzzers}
         onUnlock={game.unlockBuzzers}
         onAddPoint={game.addPoint}
+        onTransition={game.sendTransition}
+        onBadResponse={game.badResponse}
+        onReload={game.reload}
         onBack={handleExit}
       />
     ) : (
@@ -74,18 +79,24 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, crea
         onBack={handleExit}
       />
     );
+  } else {
+    screen = (
+      <BurgerTeamChoice
+        lobby={game.lobby}
+        currentUser={currentUser}
+        isAnimator={game.isAnimator}
+        myPlayer={game.myPlayer}
+        onChooseTeam={game.chooseTeam}
+        onStart={game.isAnimator ? game.startGame : undefined}
+        onBack={handleExit}
+      />
+    );
   }
 
-  // Sinon : lobby d'attente + choix d'équipe (+ bouton Lancer pour l'animateur)
   return (
-    <BurgerTeamChoice
-      lobby={game.lobby}
-      currentUser={currentUser}
-      isAnimator={game.isAnimator}
-      myPlayer={game.myPlayer}
-      onChooseTeam={game.chooseTeam}
-      onStart={game.isAnimator ? game.startGame : undefined}
-      onBack={handleExit}
-    />
+    <>
+      {screen}
+      <BurgerTransitionOverlay video={game.activeTransition} onEnd={game.clearTransition} />
+    </>
   );
 }
