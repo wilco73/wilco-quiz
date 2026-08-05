@@ -13,13 +13,20 @@ export default function useBurgerGame(currentUser) {
   const [loading, setLoading] = useState(false);
   const [activeTransition, setActiveTransition] = useState(null);
   const [ended, setEnded] = useState(false);
+  const [buzzFlash, setBuzzFlash] = useState(null);
+  const flashTimerRef = useRef(null);
   const codeRef = useRef(null);
 
   // Écoute l'état du lobby diffusé par le serveur
   useEffect(() => {
     if (!socket) return;
     const onState = (state) => { setLobby(state); if (state?.code) codeRef.current = state.code; };
-    const onBuzzed = () => { try { new Audio('/resources/burger/sounds/buzz.mp3').play().catch(() => {}); } catch (e) {} };
+    const onBuzzed = (info) => {
+      try { new Audio('/resources/burger/sounds/buzz.mp3').play().catch(() => {}); } catch (e) {}
+      setBuzzFlash(info?.color || '#ffffff');
+      clearTimeout(flashTimerRef.current);
+      flashTimerRef.current = setTimeout(() => setBuzzFlash(null), 600);
+    };
     const onTransition = ({ video }) => setActiveTransition(video || null);
     const onBad = () => { try { new Audio('/resources/burger/sounds/burger-sound-buzz-1.mp3').play().catch(() => {}); } catch (e) {} };
     const onEnded = () => setEnded(true);
@@ -115,7 +122,7 @@ export default function useBurgerGame(currentUser) {
   const endGame = useCallback(() => emitAck('burger:endGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
 
   return {
-    lobby, isAnimator, isSpectator, error, loading, myPlayer,
+    lobby, isAnimator, isSpectator, error, loading, myPlayer, buzzFlash,
     createLobby, joinLobby, chooseTeam, refreshState, leaveLobby, setError,
     startGame, lockBuzzers, unlockBuzzers, buzz, addPoint,
     sendTransition, badResponse, reload, activeTransition, clearTransition,

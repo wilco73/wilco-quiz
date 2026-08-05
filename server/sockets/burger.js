@@ -251,7 +251,8 @@ function register(socket, io) {
 
     lobby.firstBuzz = { odId: player.odId, pseudo: player.pseudo, team: player.team, at: Date.now() };
     lobby.buzzerLocked = true; // auto-lock : un seul buzz
-    io.to(room(lobby.code)).emit('burger:buzzed', lobby.firstBuzz);
+    const t = lobby.teams.find((x) => x.id === player.team);
+    io.to(room(lobby.code)).emit('burger:buzzed', { ...lobby.firstBuzz, color: t?.color || '#ffffff' });
     broadcast(io, lobby);
     callback?.({ success: true });
   });

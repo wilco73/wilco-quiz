@@ -5,6 +5,7 @@ import BurgerTeamChoice from './BurgerTeamChoice';
 import BurgerBuzzer from './BurgerBuzzer';
 import BurgerScoreboard from './BurgerScoreboard';
 import BurgerTransitionOverlay from './BurgerTransitionOverlay';
+import BurgerBuzzFlash from './BurgerBuzzFlash';
 
 /**
  * BurgerGameContainer - point d'entrée du mode Burger Quiz.
@@ -76,6 +77,7 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, onEx
       <>
         <BurgerScoreboard lobby={game.lobby} readOnly onBack={handleExit} />
         <BurgerTransitionOverlay video={game.activeTransition} onEnd={game.clearTransition} />
+        <BurgerBuzzFlash color={game.buzzFlash} />
       </>
     );
   }
@@ -122,6 +124,7 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, onEx
     <>
       {screen}
       <BurgerTransitionOverlay video={game.activeTransition} onEnd={game.clearTransition} />
+      <BurgerBuzzFlash color={game.buzzFlash} />
     </>
   );
 }
