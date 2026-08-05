@@ -37,7 +37,7 @@ export function TeamBurger({ points, w = 110 }) {
 function Drink({ points, w = 66 }) {
   return (
     <div className="flex flex-col items-center" style={{ marginBottom: 0 }}>
-      <Layer name="straw" filled={points >= 13} w={Math.round(w * 0.72)} />
+      <Layer name="straw" filled={points >= 13} w={Math.round(w)} />
       <Layer name="top-cup" filled={points >= 12} w={w} />
       <Layer name="cup" filled={points >= 11} w={w} />
     </div>
