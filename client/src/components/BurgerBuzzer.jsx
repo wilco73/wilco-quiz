@@ -1,5 +1,5 @@
 import React from 'react';
-import { TeamBurger } from './BurgerBits';
+import { TeamMenu } from './BurgerBits';
 
 /**
  * BurgerBuzzer - écran joueur (plein écran).
@@ -36,7 +36,9 @@ export default function BurgerBuzzer({ lobby, currentUser, myPlayer, onBuzz, onB
             <div key={t.id} className={`flex flex-col items-center rounded-xl px-3 py-1 ${mine ? 'ring-2 ring-white/70' : ''}`}>
               <div className="text-2xl font-black leading-none" style={{ color: t.color }}>{lobby.points?.[t.id] ?? 0}</div>
               <div style={{ transform: 'scale(1)' }}>
-                <TeamBurger points={lobby.points?.[t.id] ?? 0} w={44} />
+                <div className="my-1">
+                  <TeamMenu points={lobby.points?.[t.id] ?? 0} burgerW={32} />
+                </div>
               </div>
               <div className="text-xs font-bold" style={{ color: t.color }}>{t.name}</div>
             </div>
