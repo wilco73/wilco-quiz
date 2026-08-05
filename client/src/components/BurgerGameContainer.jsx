@@ -32,6 +32,11 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, crea
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
+  useEffect(() => {
+    if (game.ended) onExit?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.ended]);
+
   const handleExit = async () => {
     await game.leaveLobby();
     onExit?.();
@@ -68,6 +73,7 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, crea
         onTransition={game.sendTransition}
         onBadResponse={game.badResponse}
         onReload={game.reload}
+        onEndGame={game.endGame}
         onBack={handleExit}
       />
     ) : (

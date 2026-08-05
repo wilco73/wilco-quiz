@@ -63,6 +63,7 @@ function publicLobby(lobby) {
     points: lobby.points,               // { mayo: 0, ketchup: 0, ... }
     buzzerLocked: lobby.buzzerLocked,
     firstBuzz: lobby.firstBuzz,
+    winner: lobby.winner || null,
     teamCounts: countByTeam(lobby),
   };
 }
@@ -252,7 +253,14 @@ function register(socket, io) {
     if (!requireAnimator(lobby, data?.odId)) return callback?.({ success: false, message: "Réservé à l'animateur" });
     const { team, delta } = data || {};
     if (!lobby.points || lobby.points[team] === undefined) return callback?.({ success: false, message: 'Équipe invalide' });
-    lobby.points[team] = Math.max(0, (lobby.points[team] || 0) + (Number(delta) || 0));
+    lobby.points[team] = Math.max(0, Math.min(25, (lobby.points[team] || 0) + (Number(delta) || 0)));
+    // Menu rempli : 25 points -> équipe gagnante, on verrouille les buzzers
+    if (lobby.points[team] >= 25) {
+      lobby.winner = team;
+      lobby.buzzerLocked = true;
+    } else if (lobby.winner && (lobby.points[lobby.winner] || 0) < 25) {
+      lobby.winner = null; // si on retire un point au gagnant
+    }
     broadcast(io, lobby);
     callback?.({ success: true });
   });
@@ -280,8 +288,18 @@ function register(socket, io) {
     lobby.teams.forEach((t) => { lobby.points[t.id] = 0; });
     lobby.firstBuzz = null;
     lobby.buzzerLocked = true;
+    lobby.winner = null;
     io.to(room(lobby.code)).emit('burger:playTransition', { video: null }); // stoppe une transition en cours
     broadcast(io, lobby);
+    callback?.({ success: true });
+  });
+
+  // Fin de partie : renvoie tout le monde à l'accueil + supprime le lobby (animateur)
+  socket.on('burger:endGame', (data, callback) => {
+    const lobby = burgerLobbies.get(String(data?.code || '').trim());
+    if (!requireAnimator(lobby, data?.odId)) return callback?.({ success: false, message: "Réservé à l'animateur" });
+    io.to(room(lobby.code)).emit('burger:gameEnded');
+    burgerLobbies.delete(lobby.code);
     callback?.({ success: true });
   });
 }

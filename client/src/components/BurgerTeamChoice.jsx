@@ -18,7 +18,7 @@ export default function BurgerTeamChoice({ lobby, currentUser, isAnimator, myPla
   const unassigned = (lobby.players || []).filter((p) => !p.team);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-900 via-gray-900 to-yellow-900 p-4 text-white">
+    <div className="fixed inset-0 z-40 overflow-y-auto bg-gradient-to-br from-red-900 via-gray-900 to-yellow-900 p-4 text-white">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
