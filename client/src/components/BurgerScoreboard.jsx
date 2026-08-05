@@ -35,7 +35,7 @@ function FitScale({ width, height, children }) {
 }
 
 export default function BurgerScoreboard({
-  lobby, onLock, onUnlock, onAddPoint, onTransition, onBadResponse, onReload, onEndGame, onBack,
+  lobby, onLock, onUnlock, onAddPoint, onTransition, onBadResponse, onReload, onEndGame, onBack, readOnly = false,
 }) {
   if (!lobby) return null;
   const locked = lobby.buzzerLocked;
@@ -50,7 +50,9 @@ export default function BurgerScoreboard({
       <div className="flex items-center justify-between px-4 py-2 shrink-0">
         <button onClick={onBack} className="px-3 py-1.5 rounded-lg bg-gray-800/70 hover:bg-gray-700 text-sm">← Quitter</button>
         <h1 className="text-base sm:text-xl font-extrabold">🍔 Burger Quiz</h1>
-        <span className="bg-gray-800 rounded-lg px-3 py-1 font-mono font-bold tracking-widest text-sm">{lobby.code}</span>
+        {readOnly
+          ? <span className="bg-gray-700 rounded-lg px-3 py-1 text-sm font-semibold">👁 Spectateur</span>
+          : <span className="bg-gray-800 rounded-lg px-3 py-1 font-mono font-bold tracking-widest text-sm">{lobby.code}</span>}
       </div>
 
       {/* Bandeau : victoire OU qui a buzzé */}
@@ -83,29 +85,31 @@ export default function BurgerScoreboard({
       </div>
 
       {/* Contrôles */}
-      <div className="bg-gray-950/85 border-t border-gray-800 p-2 space-y-2 shrink-0">
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <button onClick={onUnlock} className={`px-3 py-2 rounded-lg font-bold text-sm ${!locked ? 'bg-green-600' : 'bg-green-700 hover:bg-green-600'}`}>🔓 Déverrouiller</button>
-          <button onClick={onLock} className={`px-3 py-2 rounded-lg font-bold text-sm ${locked ? 'bg-red-600' : 'bg-red-700 hover:bg-red-600'}`}>🔒 Verrouiller</button>
-          <span className="mx-1 h-6 w-px bg-gray-700" />
-          {lobby.teams.map((team) => (
-            <span key={team.id} className="inline-flex items-center gap-1">
-              <span className="text-xs font-bold" style={{ color: team.color }}>{team.name}</span>
-              <button onClick={() => onAddPoint(team.id, -1)} className="w-8 h-8 rounded bg-gray-700 hover:bg-gray-600 font-bold">−</button>
-              <button onClick={() => onAddPoint(team.id, 1)} className="w-8 h-8 rounded font-bold text-gray-900" style={{ backgroundColor: team.color }}>+</button>
-            </span>
-          ))}
+      {!readOnly && (
+        <div className="bg-gray-950/85 border-t border-gray-800 p-2 space-y-2 shrink-0">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button onClick={onUnlock} className={`px-3 py-2 rounded-lg font-bold text-sm ${!locked ? 'bg-green-600' : 'bg-green-700 hover:bg-green-600'}`}>🔓 Déverrouiller</button>
+            <button onClick={onLock} className={`px-3 py-2 rounded-lg font-bold text-sm ${locked ? 'bg-red-600' : 'bg-red-700 hover:bg-red-600'}`}>🔒 Verrouiller</button>
+            <span className="mx-1 h-6 w-px bg-gray-700" />
+            {lobby.teams.map((team) => (
+              <span key={team.id} className="inline-flex items-center gap-1">
+                <span className="text-xs font-bold" style={{ color: team.color }}>{team.name}</span>
+                <button onClick={() => onAddPoint(team.id, -1)} className="w-8 h-8 rounded bg-gray-700 hover:bg-gray-600 font-bold">−</button>
+                <button onClick={() => onAddPoint(team.id, 1)} className="w-8 h-8 rounded font-bold text-gray-900" style={{ backgroundColor: team.color }}>+</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {TRANSITIONS.map((t) => (
+              <button key={t.file} onClick={() => onTransition(t.file)} className="px-2.5 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 text-xs sm:text-sm font-semibold">🎬 {t.label}</button>
+            ))}
+            <span className="mx-1 h-6 w-px bg-gray-700" />
+            <button onClick={onBadResponse} className="px-2.5 py-1.5 rounded-lg bg-orange-700 hover:bg-orange-600 text-xs sm:text-sm font-semibold">❌ Mauvaise réponse</button>
+            <button onClick={onReload} className="px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs sm:text-sm font-semibold">🔄 Reset</button>
+            <button onClick={onEndGame} className="px-2.5 py-1.5 rounded-lg bg-red-800 hover:bg-red-700 text-xs sm:text-sm font-bold">🏁 Fin de partie</button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {TRANSITIONS.map((t) => (
-            <button key={t.file} onClick={() => onTransition(t.file)} className="px-2.5 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 text-xs sm:text-sm font-semibold">🎬 {t.label}</button>
-          ))}
-          <span className="mx-1 h-6 w-px bg-gray-700" />
-          <button onClick={onBadResponse} className="px-2.5 py-1.5 rounded-lg bg-orange-700 hover:bg-orange-600 text-xs sm:text-sm font-semibold">❌ Mauvaise réponse</button>
-          <button onClick={onReload} className="px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs sm:text-sm font-semibold">🔄 Reset</button>
-          <button onClick={onEndGame} className="px-2.5 py-1.5 rounded-lg bg-red-800 hover:bg-red-700 text-xs sm:text-sm font-bold">🏁 Fin de partie</button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

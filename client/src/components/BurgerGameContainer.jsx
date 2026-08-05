@@ -70,6 +70,16 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, onEx
     );
   }
 
+  // Spectateur : a rejoint une partie en cours sans être dans une équipe -> vue lecture seule
+  if (game.isSpectator) {
+    return (
+      <>
+        <BurgerScoreboard lobby={game.lobby} readOnly onBack={handleExit} />
+        <BurgerTransitionOverlay video={game.activeTransition} onEnd={game.clearTransition} />
+      </>
+    );
+  }
+
   // Écran principal selon l'état
   let screen;
   if (game.lobby.status === 'playing') {

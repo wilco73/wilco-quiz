@@ -9,6 +9,7 @@ export default function useBurgerGame(currentUser) {
   const { socket } = useSocketContext();
   const [lobby, setLobby] = useState(null);
   const [isAnimator, setIsAnimator] = useState(false);
+  const [isSpectator, setIsSpectator] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeTransition, setActiveTransition] = useState(null);
@@ -74,6 +75,7 @@ export default function useBurgerGame(currentUser) {
     if (res.success) {
       setLobby(res.lobby);
       setIsAnimator(!!res.isAnimator);
+      setIsSpectator(!!res.spectator);
       codeRef.current = res.lobby.code;
     } else setError(res.message || 'Partie introuvable');
     return res;
@@ -112,7 +114,7 @@ export default function useBurgerGame(currentUser) {
   const endGame = useCallback(() => emitAck('burger:endGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
 
   return {
-    lobby, isAnimator, error, loading, myPlayer,
+    lobby, isAnimator, isSpectator, error, loading, myPlayer,
     createLobby, joinLobby, chooseTeam, refreshState, leaveLobby, setError,
     startGame, lockBuzzers, unlockBuzzers, buzz, addPoint,
     sendTransition, badResponse, reload, activeTransition, clearTransition,

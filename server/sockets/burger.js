@@ -127,21 +127,30 @@ function register(socket, io) {
       if (!lobby) return callback?.({ success: false, message: 'Partie introuvable' });
       if (!odId) return callback?.({ success: false, message: 'Utilisateur invalide' });
 
-      // L'animateur qui rejoint sa propre partie
       const isAnimator = odId === lobby.animatorId;
+      const existing = lobby.players[odId];
+      let spectator = false;
 
-      if (!isAnimator && !lobby.players[odId]) {
-        // Nouveau joueur : vérifier la capacité globale (équipes * maxPerTeam)
-        const capacity = lobby.teams.length * lobby.maxPerTeam;
-        if (Object.keys(lobby.players).length >= capacity) {
-          return callback?.({ success: false, message: 'Partie complète' });
+      if (!isAnimator) {
+        if (lobby.status === 'waiting') {
+          // Lobby d'attente : nouveau joueur ajouté (dans la limite de capacité)
+          if (!existing) {
+            const capacity = lobby.teams.length * lobby.maxPerTeam;
+            if (Object.keys(lobby.players).length >= capacity) {
+              return callback?.({ success: false, message: 'Partie complète' });
+            }
+            lobby.players[odId] = { odId, pseudo, avatar: avatar || null, team: null };
+          }
+        } else {
+          // Partie déjà lancée : joueur d'origine AVEC équipe => reconnexion ;
+          // sinon (nouveau venu, ou joueur sans équipe) => spectateur (pas de buzz)
+          spectator = !(existing && existing.team);
         }
-        lobby.players[odId] = { odId, pseudo, avatar: avatar || null, team: null };
       }
 
       socket.join(room(code));
       broadcast(io, lobby);
-      callback?.({ success: true, lobby: publicLobby(lobby), isAnimator });
+      callback?.({ success: true, lobby: publicLobby(lobby), isAnimator, spectator });
     } catch (e) {
       console.error('[BURGER] joinLobby:', e);
       callback?.({ success: false, message: e.message });
