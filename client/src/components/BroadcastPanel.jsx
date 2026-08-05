@@ -42,6 +42,18 @@ const BroadcastPanel = ({
   
   const toast = useToast();
 
+  const [newMedia, setNewMedia] = useState({ type: 'image', url: '', name: '' });
+
+  const applyNewMedia = (patch) => {
+    const nm = { ...newMedia, ...patch };
+    setNewMedia(nm);
+    if (nm.url.trim()) {
+      setSelectedMedia({ _inline: true, type: nm.type, url: nm.url.trim(), name: nm.name.trim() || 'Média' });
+    } else {
+      setSelectedMedia(null);
+    }
+  };
+
   // Sélectionner un média et appliquer ses options par défaut
   const handleSelectMedia = (media) => {
     setSelectedMedia(media);
@@ -121,7 +133,8 @@ const BroadcastPanel = ({
           senderId,
           senderPseudo,
           message: message.trim() || null,
-          mediaId: selectedMedia?.id || null,
+          mediaId: selectedMedia?._inline ? null : (selectedMedia?.id || null),
+          media: selectedMedia?._inline ? { type: selectedMedia.type, url: selectedMedia.url, name: selectedMedia.name } : null,
           options: selectedMedia?.type !== 'image' ? options : {}
         })
       });
@@ -236,6 +249,12 @@ const BroadcastPanel = ({
         >
           <Search className="w-4 h-4 mx-auto mb-1" />
           Rechercher
+        </button>
+        <button
+          onClick={() => setActiveTab('url')}
+          className={`flex-1 py-2 text-sm font-medium ${activeTab === 'url' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}
+        >
+          Nouveau
         </button>
       </div>
 
@@ -372,6 +391,50 @@ const BroadcastPanel = ({
                 ))
               )}
             </div>
+          </div>
+        )}
+        {activeTab === 'url' && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type de média</label>
+              <select
+                value={newMedia.type}
+                onChange={(e) => applyNewMedia({ type: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white"
+              >
+                <option value="image">Image</option>
+                <option value="video">Vidéo</option>
+                <option value="audio">Audio</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">URL du média</label>
+              <input
+                type="text"
+                value={newMedia.url}
+                onChange={(e) => applyNewMedia({ url: e.target.value })}
+                placeholder="https://..."
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nom (optionnel)</label>
+              <input
+                type="text"
+                value={newMedia.name}
+                onChange={(e) => applyNewMedia({ name: e.target.value })}
+                placeholder="Ex: photo surprise"
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            {selectedMedia?._inline && newMedia.url.trim() && (
+              <div className="rounded-lg border-2 border-blue-500 p-2 bg-black/5 dark:bg-black/20">
+                {newMedia.type === 'image' && <img src={newMedia.url} alt="" className="max-h-40 rounded mx-auto" onError={(e) => { e.target.style.display = 'none'; }} />}
+                {newMedia.type === 'video' && <video src={newMedia.url} className="max-h-40 rounded mx-auto" controls />}
+                {newMedia.type === 'audio' && <audio src={newMedia.url} controls className="w-full" />}
+              </div>
+            )}
           </div>
         )}
       </div>

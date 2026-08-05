@@ -184,52 +184,50 @@ router.delete('/grid/:gridId/:mediaId', async (req, res) => {
 // Envoyer un broadcast (via HTTP pour compatibilité, mais préférer WebSocket)
 router.post('/broadcast', async (req, res) => {
   try {
-    const { 
-      lobbyId, 
+    const {
+      lobbyId,
       lobbyType = 'global',
-      senderId, 
+      senderId,
       senderPseudo,
-      message, 
+      message,
       mediaId,
+      media: inlineMedia,   // média envoyé directement (upload à la volée, base64)
       options = {}
     } = req.body;
-    
+
     if (!senderId || !senderPseudo) {
       return res.status(400).json({ success: false, message: 'senderId et senderPseudo sont requis' });
     }
-    
-    if (!message && !mediaId) {
-      return res.status(400).json({ success: false, message: 'message ou mediaId requis' });
+
+    if (!message && !mediaId && !inlineMedia) {
+      return res.status(400).json({ success: false, message: 'message ou média requis' });
     }
-    
-    // Récupérer le média si fourni
-    let media = null;
-    if (mediaId) {
+
+    // Média : soit "inline" (upload direct), soit référencé par id
+    let media = inlineMedia || null;
+    if (!media && mediaId) {
       media = await db.getMediaById(mediaId);
       if (!media) {
         return res.status(404).json({ success: false, message: 'Média introuvable' });
       }
     }
-    
-    // Sauvegarder dans l'historique
-    const broadcast = await db.saveBroadcast({
-      lobbyId,
-      lobbyType,
-      senderId,
-      senderPseudo,
-      message,
-      mediaId,
-      options
-    });
-    
+
+    // Historique : non bloquant (les lobbies burger sont éphémères / hors base)
+    let broadcast = null;
+    try {
+      broadcast = await db.saveBroadcast({ lobbyId, lobbyType, senderId, senderPseudo, message, mediaId, options });
+    } catch (e) {
+      console.warn('[BROADCAST] Historique non enregistré:', e.message);
+    }
+
     // Émettre via Socket.IO
     const broadcastData = {
-      id: broadcast.id,
+      id: broadcast?.id || `bc_${Date.now()}`,
       message,
       media,
       senderPseudo,
       options,
-      timestamp: broadcast.created_at
+      timestamp: broadcast?.created_at || new Date().toISOString()
     };
     
     if (io) {
