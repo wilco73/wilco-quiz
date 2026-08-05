@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useSocketContext } from '../contexts/SocketContext';
 import useBurgerGame from '../hooks/useBurgerGame';
 import BurgerCreateConfig from './BurgerCreateConfig';
 import BurgerTeamChoice from './BurgerTeamChoice';
@@ -6,18 +7,22 @@ import BurgerBuzzer from './BurgerBuzzer';
 import BurgerScoreboard from './BurgerScoreboard';
 import BurgerTransitionOverlay from './BurgerTransitionOverlay';
 import BurgerBuzzFlash from './BurgerBuzzFlash';
+import BroadcastPanel from './BroadcastPanel';
+import BroadcastModal, { BroadcastReviewButton, useBroadcastReceiver } from './BroadcastModal';
 
 /**
  * BurgerGameContainer - point d'entrée du mode Burger Quiz.
- * - entry 'create' : écran de configuration (nb d'équipes) puis création.
- * - entry 'join'   : rejoint directement par code.
  */
 export default function BurgerGameContainer({ currentUser, entry, joinCode, onExit }) {
   const game = useBurgerGame(currentUser);
+  const { socket: rawSocket } = useSocketContext();
   const started = useRef(false);
   const [fatal, setFatal] = useState(null);
+  const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
 
-  // Rejoindre automatiquement (entry 'join'). La création attend la config.
+  // Réception des médias envoyés par l'animateur (+ "revoir le dernier")
+  const { currentBroadcast, lastBroadcast, hasUnread, closeBroadcast, reviewLastBroadcast } = useBroadcastReceiver(rawSocket);
+
   useEffect(() => {
     if (started.current || !currentUser) return;
     if (entry === 'join') {
@@ -30,7 +35,6 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, onEx
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
-  // Fin de partie déclenchée par l'animateur -> tout le monde revient à l'accueil
   useEffect(() => {
     if (game.ended) onExit?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,6 +50,27 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, onEx
     onExit?.();
   };
 
+  // Overlays communs (médias reçus + revoir + flash de buzz)
+  const overlays = game.lobby ? (
+    <>
+      {game.isAnimator && (
+        <BroadcastPanel
+          isOpen={showBroadcastPanel}
+          onClose={() => setShowBroadcastPanel(false)}
+          currentLobbyId={game.lobby.code}
+          currentLobbyType="burger"
+          gridId={null}
+          senderId={currentUser?.id}
+          senderPseudo={currentUser?.pseudo}
+        />
+      )}
+      {currentBroadcast && <BroadcastModal broadcast={currentBroadcast} onClose={closeBroadcast} />}
+      <BroadcastReviewButton lastBroadcast={lastBroadcast} hasUnread={hasUnread} onClick={reviewLastBroadcast} />
+      <BurgerTransitionOverlay video={game.activeTransition} onEnd={game.clearTransition} />
+      <BurgerBuzzFlash color={game.buzzFlash} />
+    </>
+  ) : null;
+
   if (fatal) {
     return (
       <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-900 text-white p-6">
@@ -57,12 +82,10 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, onEx
     );
   }
 
-  // Création : écran de config tant que le lobby n'existe pas
   if (entry === 'create' && !game.lobby) {
     return <BurgerCreateConfig onCreate={handleConfirmCreate} onBack={onExit} loading={game.loading} />;
   }
 
-  // Attente (join en cours)
   if (!game.lobby) {
     return (
       <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-900 text-white">
@@ -71,18 +94,16 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, onEx
     );
   }
 
-  // Spectateur : a rejoint une partie en cours sans être dans une équipe -> vue lecture seule
+  // Spectateur : partie en cours sans équipe -> lecture seule
   if (game.isSpectator) {
     return (
       <>
         <BurgerScoreboard lobby={game.lobby} readOnly onBack={handleExit} />
-        <BurgerTransitionOverlay video={game.activeTransition} onEnd={game.clearTransition} />
-        <BurgerBuzzFlash color={game.buzzFlash} />
+        {overlays}
       </>
     );
   }
 
-  // Écran principal selon l'état
   let screen;
   if (game.lobby.status === 'playing') {
     screen = game.isAnimator ? (
@@ -95,6 +116,7 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, onEx
         onBadResponse={game.badResponse}
         onReload={game.reload}
         onEndGame={game.endGame}
+        onSendMedia={() => setShowBroadcastPanel(true)}
         onBack={handleExit}
       />
     ) : (
@@ -123,8 +145,7 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, onEx
   return (
     <>
       {screen}
-      <BurgerTransitionOverlay video={game.activeTransition} onEnd={game.clearTransition} />
-      <BurgerBuzzFlash color={game.buzzFlash} />
+      {overlays}
     </>
   );
 }

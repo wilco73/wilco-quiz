@@ -235,7 +235,9 @@ router.post('/broadcast', async (req, res) => {
     if (io) {
       if (lobbyId && lobbyType !== 'global') {
         // Broadcast ciblé vers un lobby
-        const roomName = lobbyType === 'mystery' ? `mystery:${lobbyId}` : `lobby:${lobbyId}`;
+        const roomName = lobbyType === 'mystery' ? `mystery:${lobbyId}`
+                       : lobbyType === 'burger' ? `burger:${lobbyId}`
+                       : `lobby:${lobbyId}`;
         io.to(roomName).emit('broadcast:received', broadcastData);
         console.log(`[BROADCAST] Envoyé à ${roomName}:`, message || media?.name);
       } else {

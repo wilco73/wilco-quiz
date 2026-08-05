@@ -35,7 +35,7 @@ function FitScale({ width, height, children }) {
 }
 
 export default function BurgerScoreboard({
-  lobby, onLock, onUnlock, onAddPoint, onTransition, onBadResponse, onReload, onEndGame, onBack, readOnly = false,
+  lobby, onLock, onUnlock, onAddPoint, onTransition, onBadResponse, onReload, onEndGame, onBack, onSendMedia, readOnly = false,
 }) {
   if (!lobby) return null;
   const locked = lobby.buzzerLocked;
@@ -105,6 +105,7 @@ export default function BurgerScoreboard({
             ))}
             <span className="mx-1 h-6 w-px bg-gray-700" />
             <button onClick={onBadResponse} className="px-2.5 py-1.5 rounded-lg bg-orange-700 hover:bg-orange-600 text-xs sm:text-sm font-semibold">❌ Mauvaise réponse</button>
+            <button onClick={onSendMedia} className="px-2.5 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 text-xs sm:text-sm font-semibold">📡 Média</button>
             <button onClick={onReload} className="px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs sm:text-sm font-semibold">🔄 Reset</button>
             <button onClick={onEndGame} className="px-2.5 py-1.5 rounded-lg bg-red-800 hover:bg-red-700 text-xs sm:text-sm font-bold">🏁 Fin de partie</button>
           </div>
