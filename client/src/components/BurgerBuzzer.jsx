@@ -2,7 +2,8 @@ import React from 'react';
 
 /**
  * BurgerBuzzer - écran joueur quand la partie est lancée.
- * Gros bouton buzzer, couleur de l'équipe, verrouillage, "qui a buzzé".
+ * - Bandeau de score permanent en haut (suivi des scores, équipe du joueur mise en avant).
+ * - Gros bouton buzzer, couleur de l'équipe, verrouillage, "qui a buzzé".
  */
 export default function BurgerBuzzer({ lobby, currentUser, myPlayer, onBuzz, onBack }) {
   if (!lobby) return null;
@@ -13,18 +14,28 @@ export default function BurgerBuzzer({ lobby, currentUser, myPlayer, onBuzz, onB
   const iBuzzedFirst = first && first.odId === currentUser?.id;
   const firstTeam = first ? lobby.teams.find((t) => t.id === first.team) : null;
 
-  // Le bouton est actif seulement si : dans une équipe, partie déverrouillée, personne n'a encore buzzé
   const canBuzz = !!myTeam && !locked && !first;
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900 text-white p-4 select-none">
-      <div className="flex items-center justify-between mb-2">
-        <button onClick={onBack} className="px-3 py-1.5 rounded-lg bg-gray-800/70 hover:bg-gray-700 text-sm">← Quitter</button>
-        {myTeam && (
-          <span className="px-3 py-1 rounded-full text-sm font-bold" style={{ backgroundColor: myTeam.color, color: '#111' }}>
-            {myTeam.name}
-          </span>
-        )}
+      {/* Barre haute : quitter + bandeau de scores */}
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <button onClick={onBack} className="px-3 py-1.5 rounded-lg bg-gray-800/70 hover:bg-gray-700 text-sm shrink-0">← Quitter</button>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {lobby.teams.map((t) => {
+            const mine = t.id === myTeam?.id;
+            return (
+              <div
+                key={t.id}
+                className={`flex items-center gap-2 rounded-full px-3 py-1 ${mine ? 'ring-2 ring-white' : ''}`}
+                style={{ backgroundColor: t.color, color: '#111' }}
+              >
+                <span className="text-xs font-bold uppercase tracking-wide">{t.name}</span>
+                <span className="text-lg font-black leading-none">{lobby.points?.[t.id] ?? 0}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {!myTeam && (
@@ -67,20 +78,11 @@ export default function BurgerBuzzer({ lobby, currentUser, myPlayer, onBuzz, onB
             BUZZ
           </button>
 
-          <p className="text-xs text-gray-500">
-            {locked && !first ? 'En attente du déverrouillage par l\'animateur' : ''}
+          <p className="text-xs text-gray-500 h-4">
+            {locked && !first ? "En attente du déverrouillage par l'animateur" : ''}
           </p>
         </div>
       )}
-
-      {/* Mini scores */}
-      <div className="flex justify-center gap-4 pt-2">
-        {lobby.teams.map((t) => (
-          <span key={t.id} className="text-sm font-bold" style={{ color: t.color }}>
-            {t.name} : {lobby.points?.[t.id] ?? 0}
-          </span>
-        ))}
-      </div>
     </div>
   );
 }
