@@ -644,7 +644,7 @@ const App = () => {
     }
   };
 
-  const handleCreateBurger = () => { setBurgerEntry({ entry: 'create', teams: ['mayo','ketchup','wasabi'] }); setView('burger-game'); };
+  const handleCreateBurger = () => { setBurgerEntry({ entry: 'create' }); setView('burger-game'); };
   const handleJoinBurger = (code) => { setBurgerEntry({ entry: 'join', code }); setView('burger-game'); };
 
   // === RENDER ===
@@ -867,7 +867,6 @@ const App = () => {
             currentUser={currentUser}
             entry={burgerEntry?.entry || 'join'}
             joinCode={burgerEntry?.code}
-            createOptions={{ teams: burgerEntry?.teams }}
             onExit={() => { setBurgerEntry(null); setView('lobby-list'); }}
           />
         );

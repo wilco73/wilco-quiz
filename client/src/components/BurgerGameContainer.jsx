@@ -1,41 +1,44 @@
+import React, { useEffect, useRef, useState } from 'react';
+import useBurgerGame from '../hooks/useBurgerGame';
+import BurgerCreateConfig from './BurgerCreateConfig';
+import BurgerTeamChoice from './BurgerTeamChoice';
 import BurgerBuzzer from './BurgerBuzzer';
 import BurgerScoreboard from './BurgerScoreboard';
 import BurgerTransitionOverlay from './BurgerTransitionOverlay';
-import React, { useEffect, useRef, useState } from 'react';
-import useBurgerGame from '../hooks/useBurgerGame';
-import BurgerTeamChoice from './BurgerTeamChoice';
 
 /**
- * BurgerGameContainer - point d'entrée du mode Burger Quiz (étape 1).
- *
- * Props:
- * - currentUser: { id, pseudo, avatar }
- * - entry: 'create' | 'join'
- * - joinCode: string (si entry === 'join')
- * - createOptions: { teams?, maxPerTeam? } (si entry === 'create', optionnel)
- * - onExit: () => void
+ * BurgerGameContainer - point d'entrée du mode Burger Quiz.
+ * - entry 'create' : écran de configuration (nb d'équipes) puis création.
+ * - entry 'join'   : rejoint directement par code.
  */
-export default function BurgerGameContainer({ currentUser, entry, joinCode, createOptions, onExit }) {
+export default function BurgerGameContainer({ currentUser, entry, joinCode, onExit }) {
   const game = useBurgerGame(currentUser);
   const started = useRef(false);
   const [fatal, setFatal] = useState(null);
 
+  // Rejoindre automatiquement (entry 'join'). La création attend la config.
   useEffect(() => {
     if (started.current || !currentUser) return;
-    started.current = true;
-    (async () => {
-      const res = entry === 'create'
-        ? await game.createLobby(createOptions || {})
-        : await game.joinLobby(joinCode);
-      if (!res?.success) setFatal(res?.message || 'Impossible de rejoindre la partie');
-    })();
+    if (entry === 'join') {
+      started.current = true;
+      (async () => {
+        const res = await game.joinLobby(joinCode);
+        if (!res?.success) setFatal(res?.message || 'Impossible de rejoindre la partie');
+      })();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
+  // Fin de partie déclenchée par l'animateur -> tout le monde revient à l'accueil
   useEffect(() => {
     if (game.ended) onExit?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.ended]);
+
+  const handleConfirmCreate = async (options) => {
+    const res = await game.createLobby(options);
+    if (!res?.success) setFatal(res?.message || 'Impossible de créer la partie');
+  };
 
   const handleExit = async () => {
     await game.leaveLobby();
@@ -44,7 +47,7 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, crea
 
   if (fatal) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-6">
+      <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-900 text-white p-6">
         <div className="text-center">
           <p className="text-lg mb-4">🍔 {fatal}</p>
           <button onClick={onExit} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg">Retour</button>
@@ -53,15 +56,21 @@ export default function BurgerGameContainer({ currentUser, entry, joinCode, crea
     );
   }
 
+  // Création : écran de config tant que le lobby n'existe pas
+  if (entry === 'create' && !game.lobby) {
+    return <BurgerCreateConfig onCreate={handleConfirmCreate} onBack={onExit} loading={game.loading} />;
+  }
+
+  // Attente (join en cours)
   if (!game.lobby) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+      <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-900 text-white">
         <p className="animate-pulse">Connexion à la partie…</p>
       </div>
     );
   }
 
-  // Partie lancée : buzzer (joueur) ou télécommande (animateur)
+  // Écran principal selon l'état
   let screen;
   if (game.lobby.status === 'playing') {
     screen = game.isAnimator ? (
