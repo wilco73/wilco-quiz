@@ -7,14 +7,12 @@ import { TeamMenu } from './BurgerBits';
  * - Gros bouton buzzer, verrouillage, "qui a buzzé", bannière de victoire.
  */
 export default function BurgerBuzzer({ lobby, currentUser, myPlayer, onBuzz, onBack }) {
-  if (!lobby) return null;
-
-  const myTeam = lobby.teams.find((t) => t.id === myPlayer?.team) || null;
-  const locked = lobby.buzzerLocked;
-  const first = lobby.firstBuzz;
+  const myTeam = lobby?.teams.find((t) => t.id === myPlayer?.team) || null;
+  const locked = lobby?.buzzerLocked;
+  const first = lobby?.firstBuzz;
   const iBuzzedFirst = first && first.odId === currentUser?.id;
-  const firstTeam = first ? lobby.teams.find((t) => t.id === first.team) : null;
-  const winner = lobby.winner ? lobby.teams.find((t) => t.id === lobby.winner) : null;
+  const firstTeam = first ? lobby?.teams.find((t) => t.id === first.team) : null;
+  const winner = lobby?.winner ? lobby.teams.find((t) => t.id === lobby.winner) : null;
 
   const canBuzz = !!myTeam && !locked && !first && !winner;
 
@@ -31,6 +29,8 @@ export default function BurgerBuzzer({ lobby, currentUser, myPlayer, onBuzz, onB
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [canBuzz, onBuzz]);
+
+   if (!lobby) return null;
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-gray-900 text-white p-3 select-none overflow-hidden">
