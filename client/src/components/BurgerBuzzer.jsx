@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { TeamMenu } from './BurgerBits';
 
 /**
@@ -17,6 +17,20 @@ export default function BurgerBuzzer({ lobby, currentUser, myPlayer, onBuzz, onB
   const winner = lobby.winner ? lobby.teams.find((t) => t.id === lobby.winner) : null;
 
   const canBuzz = !!myTeam && !locked && !first && !winner;
+
+  // PC : la barre espace buzze (quand c'est autorisé)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      // ne pas interférer si on tape dans un champ
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
+      e.preventDefault();
+      if (canBuzz) onBuzz();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [canBuzz, onBuzz]);
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-gray-900 text-white p-3 select-none overflow-hidden">
@@ -76,6 +90,9 @@ export default function BurgerBuzzer({ lobby, currentUser, myPlayer, onBuzz, onB
           >
             BUZZ
           </button>
+          <p className="text-xs text-gray-500 h-4 hidden sm:block">
+            {canBuzz ? 'Astuce : appuie sur Espace pour buzzer' : ''}
+          </p>
         </div>
       )}
     </div>

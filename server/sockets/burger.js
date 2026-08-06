@@ -89,6 +89,15 @@ function register(socket, io) {
       const { odId, pseudo, teams, maxPerTeam } = data || {};
       if (!odId) return callback?.({ success: false, message: 'Utilisateur invalide' });
 
+      // Fermer un éventuel ancien lobby animé par CE même animateur (il en recrée un nouveau).
+      // socket.to(...) => on renvoie les joueurs restants à l'accueil, mais PAS l'animateur (lui crée).
+      for (const [c, l] of burgerLobbies) {
+        if (l.animatorId === odId) {
+          socket.to(room(c)).emit('burger:gameEnded', { code: c });
+          burgerLobbies.delete(c);
+        }
+      }
+
       const teamList = buildTeams(teams);
       const points = {};
       teamList.forEach((t) => { points[t.id] = 0; });
@@ -198,10 +207,12 @@ function register(socket, io) {
   socket.on('burger:leaveLobby', (data, callback) => {
     const { code, odId } = data || {};
     const lobby = burgerLobbies.get(String(code || '').trim());
-    if (lobby && lobby.players[odId]) {
-      delete lobby.players[odId];
+    if (lobby) {
+      if (lobby.players[odId]) {
+        delete lobby.players[odId];
+        broadcast(io, lobby);
+      }
       socket.leave(room(code));
-      broadcast(io, lobby);
     }
     callback?.({ success: true });
   });
@@ -308,7 +319,7 @@ function register(socket, io) {
   socket.on('burger:endGame', (data, callback) => {
     const lobby = burgerLobbies.get(String(data?.code || '').trim());
     if (!requireAnimator(lobby, data?.odId)) return callback?.({ success: false, message: "Réservé à l'animateur" });
-    io.to(room(lobby.code)).emit('burger:gameEnded');
+    io.to(room(lobby.code)).emit('burger:gameEnded', { code: lobby.code });
     burgerLobbies.delete(lobby.code);
     callback?.({ success: true });
   });

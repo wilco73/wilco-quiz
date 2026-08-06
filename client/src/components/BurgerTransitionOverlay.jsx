@@ -15,6 +15,7 @@ export default function BurgerTransitionOverlay({ video, onEnd }) {
     if (!video || !ref.current) return;
     const el = ref.current;
     el.currentTime = 0;
+    el.volume = 0.45; // limite le volume des transitions (0 à 1)
     const p = el.play();
     if (p && p.catch) p.catch(() => {});
   }, [video]);

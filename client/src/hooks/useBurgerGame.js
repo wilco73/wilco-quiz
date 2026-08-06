@@ -20,7 +20,11 @@ export default function useBurgerGame(currentUser) {
   // Écoute l'état du lobby diffusé par le serveur
   useEffect(() => {
     if (!socket) return;
-    const onState = (state) => { setLobby(state); if (state?.code) codeRef.current = state.code; };
+    const onState = (state) => {
+      if (codeRef.current && state?.code && state.code !== codeRef.current) return; // broadcast d'un autre lobby -> ignorer
+      setLobby(state);
+      if (state?.code) codeRef.current = state.code;
+    };
     const onBuzzed = (info) => {
       try { new Audio('/resources/burger/sounds/buzz.mp3').play().catch(() => {}); } catch (e) {}
       setBuzzFlash(info?.color || '#ffffff');
@@ -29,7 +33,10 @@ export default function useBurgerGame(currentUser) {
     };
     const onTransition = ({ video }) => setActiveTransition(video || null);
     const onBad = () => { try { new Audio('/resources/burger/sounds/burger-sound-buzz-1.mp3').play().catch(() => {}); } catch (e) {} };
-    const onEnded = () => setEnded(true);
+    const onEnded = (data) => {
+      if (data?.code && codeRef.current && data.code !== codeRef.current) return; // fin d'un autre lobby -> ignorer
+      setEnded(true);
+    };
     socket.on('burger:lobbyState', onState);
     socket.on('burger:buzzed', onBuzzed);
     socket.on('burger:playTransition', onTransition);
