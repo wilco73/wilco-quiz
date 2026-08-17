@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Eye, Volume2, VolumeX, Play, Pause } from 'lucide-react';
+import { X, Eye, Volume2, VolumeX, Play, Pause, ZoomIn } from 'lucide-react';
 
 const BroadcastModal = ({ broadcast, onClose }) => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -8,6 +8,7 @@ const BroadcastModal = ({ broadcast, onClose }) => {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(80);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
@@ -101,6 +102,7 @@ const BroadcastModal = ({ broadcast, onClose }) => {
   if (!broadcast) return null;
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden animate-scale-in">
         {/* Header */}
@@ -130,11 +132,16 @@ const BroadcastModal = ({ broadcast, onClose }) => {
           {media && (
             <div className="rounded-xl overflow-hidden bg-black">
               {media.type === 'image' && (
-                <img 
-                  src={media.url} 
-                  alt={media.name}
-                  className="w-full max-h-[50vh] object-contain"
-                />
+                <div className="relative cursor-zoom-in" onClick={() => setZoomed(true)}>
+                  <img 
+                    src={media.url} 
+                    alt={media.name}
+                    className="w-full max-h-[50vh] object-contain"
+                  />
+                  <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
+                    <ZoomIn className="w-3.5 h-3.5" /> Agrandir
+                  </div>
+                </div>
               )}
 
               {media.type === 'video' && (
@@ -251,6 +258,22 @@ const BroadcastModal = ({ broadcast, onClose }) => {
         </div>
       </div>
     </div>
+
+    {zoomed && media?.type === 'image' && (
+      <div
+        className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-2 sm:p-4"
+        onClick={() => setZoomed(false)}
+      >
+        <button
+          onClick={() => setZoomed(false)}
+          className="absolute top-2 right-2 sm:top-4 sm:right-4 p-2 bg-white/20 hover:bg-white/30 rounded-full text-white"
+        >
+          <X className="w-6 h-6 sm:w-8 sm:h-8" />
+        </button>
+        <img src={media.url} alt="Zoom" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
+      </div>
+    )}
+    </>
   );
 };
 
