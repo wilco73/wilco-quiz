@@ -25,6 +25,11 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
 
   const handleChangeAvatar = async (avatarId) => {
     setSelectedAvatar(avatarId);
+    if (currentUser?.isGuest) {
+      onUpdateProfile({ ...currentUser, avatar: avatarId });
+      setShowAvatarSelector(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const response = await fetch(`${API_URL}/participants/${currentUser.id}/avatar`, {
@@ -245,7 +250,8 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
           </div>
         )}
 
-        {/* Gestion equipe */}
+        {/* Gestion equipe (masquée pour les invités) */}
+        {!currentUser?.isGuest && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-4">
           <h3 className="text-lg font-bold mb-4 dark:text-white flex items-center gap-2">
             <Users className="w-5 h-5 text-purple-600" />
@@ -346,8 +352,10 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
             </>
           )}
         </div>
+        )}
 
-        {/* Changement de mot de passe */}
+        {/* Changement de mot de passe (masqué pour les invités) */}
+        {!currentUser?.isGuest && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
           <h3 className="text-lg font-bold mb-4 dark:text-white flex items-center gap-2">
             <Key className="w-5 h-5 text-purple-600" />
@@ -402,6 +410,7 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
