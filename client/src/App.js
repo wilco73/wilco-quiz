@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSocketContext } from './contexts/SocketContext';
 import { saveSession, getSession, clearSession } from './services/storage';
 import * as api from './services/api';
-import LoginView from './components/LoginView';
+import AuthView from './components/AuthView';
 import MainLayout from './components/MainLayout';
 import LobbyList from './components/LobbyList';
 import LobbyView from './components/LobbyView';
@@ -437,30 +437,36 @@ const App = () => {
   // === HANDLERS ===
   
   // Login unifié - le serveur détermine le rôle via la colonne 'role'
-  const handleLogin = async (pseudo, password) => {
-    const result = await socket.login(pseudo, password);
-    
-    if (result.success) {
-      const user = result.user;
-      setCurrentUser(user);
-      
-      // Vérifier si l'utilisateur a des droits admin
-      if (user.isAdmin || user.isSuperAdmin) {
-        setIsAdmin(true);
-        setAdminUsername(user.pseudo);
-      }
-      
-      setView('lobby-list');
-      saveSession({ currentUser: user });
-      
-      if (result.isNew) {
-        toast.success(`Bienvenue ${user.pseudo} ! Votre compte a été créé.`);
-      } else {
-        toast.success(`Bon retour ${user.pseudo} !`);
-      }
-    } else {
-      toast.error(result.message || 'Échec de connexion');
+  const applyLoggedInUser = (user) => {
+    setCurrentUser(user);
+    if (user.isAdmin || user.isSuperAdmin) {
+      setIsAdmin(true);
+      setAdminUsername(user.pseudo);
     }
+    setView('lobby-list');
+    saveSession({ currentUser: user });
+  };
+
+  // Connexion via Supabase Auth (email/mdp ; Twitch plus tard)
+  const handleAuthedToken = async (token) => {
+    const result = await socket.loginWithToken(token);
+    if (result?.success) {
+      applyLoggedInUser(result.user);
+      toast.success(`Bon retour ${result.user.displayName || result.user.pseudo} !`);
+    } else {
+      toast.error(result?.message || 'Connexion impossible');
+    }
+  };
+
+  // Connexion legacy (pseudo + mot de passe) — transition, renvoie true/false
+  const handleLegacyLogin = async (identifier, password) => {
+    const result = await socket.login(identifier, password);
+    if (result?.success) {
+      applyLoggedInUser(result.user);
+      toast.success(`Bon retour ${result.user.pseudo} !`);
+      return true;
+    }
+    return false;
   };
 
   const handleJoinLobby = async (lobbyId) => {
@@ -878,7 +884,7 @@ const App = () => {
   return (
     <div className="App">
       {view === 'login' && (
-        <LoginView onLogin={handleLogin} />
+        <AuthView onAuthed={handleAuthedToken} onLegacyLogin={handleLegacyLogin} />
       )}
       
       {/* Vues avec MainLayout */}
