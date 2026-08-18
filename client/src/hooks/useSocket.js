@@ -293,6 +293,11 @@ export function useSocket() {
       socketRef.current.emit('auth:updateRole', { requesterId, targetId, newRole }, resolve);
     });
   }, []);
+
+  const completeAccount = useCallback((email, password) => new Promise((resolve) => {
+    if (!socketRef.current) return resolve({ success: false, message: 'Socket indisponible' });
+    socketRef.current.emit('auth:completeAccount', { email, password }, (res) => resolve(res || { success: false }));
+  }), []);
   
   const getAllUsers = useCallback((requesterId) => {
     return new Promise((resolve) => {
@@ -659,6 +664,7 @@ export function useSocket() {
     loginWithToken,
     getUser,
     updateUserRole,
+    completeAccount,
     getAllUsers,
     confirmTeamChange,
     // Lobby

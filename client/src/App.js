@@ -23,6 +23,8 @@ import MemeEditorTest from './components/MemeEditorTest';
 import MemeGameTest from './components/MemeGameTest';
 import MemeGameContainer from './components/MemeGameContainer';
 import BurgerGameContainer from './components/BurgerGameContainer';
+import ResetPasswordView from './components/ResetPasswordView';
+import CompleteAccountView from './components/CompleteAccountView';
 import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -469,6 +471,16 @@ const App = () => {
     return false;
   };
 
+  const handleCompleteAccount = async (email, password) => {
+    const result = await socket.completeAccount(email, password);
+    if (result?.success) {
+      applyLoggedInUser(result.user); // needsCompletion est désormais false
+      toast.success('Compte complété ! Vous pourrez désormais vous connecter par email.');
+      return { success: true };
+    }
+    return { success: false, message: result?.message };
+  };
+
   const handleJoinLobby = async (lobbyId) => {
     if (!currentUser) return;
     
@@ -655,6 +667,22 @@ const App = () => {
 
   // === RENDER ===
   
+  // Page de réinitialisation de mot de passe (lien reçu par email), indépendante de l'auth
+  if (window.location.pathname === '/reset-password') {
+    return <ResetPasswordView />;
+  }
+
+  // Compte legacy non migré -> on force la complétion avant tout accès
+  if (currentUser?.needsCompletion) {
+    return (
+      <CompleteAccountView
+        user={currentUser}
+        onComplete={handleCompleteAccount}
+        onLogout={() => { clearSession(); setCurrentUser(null); setView('login'); }}
+      />
+    );
+  }
+
   if (!isConnected && view !== 'login') {
     return <ReconnectingScreen />;
   }

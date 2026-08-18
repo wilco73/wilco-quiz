@@ -445,6 +445,28 @@ async function saveAllTeams(teams) {
 
 // ==================== PARTICIPANTS ====================
 
+// Crée un utilisateur Supabase Auth (API admin, clé service_role)
+async function createAuthUser({ email, password, pseudo, emailConfirm = true }) {
+  const { data, error } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: emailConfirm, // comptes existants -> validés directement (confirmation stricte : plus tard)
+    user_metadata: pseudo ? { pseudo } : undefined,
+  });
+  if (error) throw error;
+  return data.user;
+}
+
+// Lie un compte Supabase Auth à une ligne participants existante (garde le même id)
+async function linkParticipantAuth(participantId, { authUserId, email }) {
+  const { error } = await supabase.from('participants')
+    .update({ auth_user_id: authUserId, email })
+    .eq('id', participantId);
+  if (error) throw error;
+  cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
+  return getParticipantById(participantId);
+}
+
 async function getAllParticipants() {
   // Cache de 10 secondes - les participants changent pendant les sessions
   return cache.getOrFetch(cache.KEYS.ALL_PARTICIPANTS, async () => {
@@ -3963,6 +3985,8 @@ module.exports = {
   saveAllTeams,
 
   // Participants
+  createAuthUser, 
+  linkParticipantAuth,
   getAllParticipants,
   getParticipantByPseudo,
   getParticipantById,

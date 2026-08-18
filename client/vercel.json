@@ -4,6 +4,7 @@
   "outputDirectory": "build",
   "framework": "create-react-app",
   "rewrites": [
+    { "source": "/(.*)", "destination": "/" },
     {
       "source": "/((?!api|static|favicon.ico|manifest.json|robots.txt|avatars|logo).*)",
       "destination": "/index.html"

@@ -64,6 +64,42 @@ function register(socket, io) {
       callback({ success: false, message: 'Erreur serveur' });
     }
   });
+
+  socket.on('auth:completeAccount', async (data, callback) => {
+    try {
+      const info = connectedParticipants.get(socket.id);
+      if (!info?.odId) return callback({ success: false, message: 'Vous devez être connecté' });
+
+      const { email, password } = data || {};
+      if (!email || !password || password.length < 6) {
+        return callback({ success: false, message: 'Email et mot de passe (6 caractères min.) requis' });
+      }
+
+      const participant = await db.getParticipantById(info.odId);
+      if (!participant) return callback({ success: false, message: 'Compte introuvable' });
+
+      // Déjà complété -> on renvoie simplement l'utilisateur à jour
+      if (participant.authUserId) {
+        const user = { ...participant, isAdmin: db.isAdmin(participant.role), isSuperAdmin: db.isSuperAdmin(participant.role) };
+        return callback({ success: true, user });
+      }
+
+      let authUser;
+      try {
+        authUser = await db.createAuthUser({ email: email.trim(), password, pseudo: participant.pseudo, emailConfirm: true });
+      } catch (e) {
+        const msg = /already|exists|registered/i.test(e.message) ? 'Cet email est déjà utilisé' : 'Impossible de créer le compte';
+        return callback({ success: false, message: msg });
+      }
+
+      const updated = await db.linkParticipantAuth(participant.id, { authUserId: authUser.id, email: email.trim() });
+      const user = { ...updated, isAdmin: db.isAdmin(updated.role), isSuperAdmin: db.isSuperAdmin(updated.role) };
+      callback({ success: true, user });
+    } catch (error) {
+      console.error('[AUTH:COMPLETE]', error.message);
+      callback({ success: false, message: 'Erreur serveur' });
+    }
+  });
   
   /**
    * Confirmation de changement d'équipe
