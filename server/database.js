@@ -36,6 +36,43 @@ const ROLE_HIERARCHY = {
   'superadmin': 2
 };
 
+const PARTICIPANT_SELECT = `
+  id, pseudo, password_hash, team_id, avatar, role, created_at,
+  email, auth_user_id,
+  twitch_user_id, twitch_login, twitch_display_name, twitch_avatar_url,
+  display_name_source, avatar_source,
+  teams (name)
+`;
+
+function mapParticipant(data) {
+  if (!data) return null;
+  const displayName = (data.display_name_source === 'twitch' && data.twitch_display_name)
+    ? data.twitch_display_name : data.pseudo;
+  const avatarUrl = (data.avatar_source === 'twitch' && data.twitch_avatar_url)
+    ? data.twitch_avatar_url : null; // null => l'app utilise l'avatar préréglé (data.avatar)
+  return {
+    id: data.id,
+    pseudo: data.pseudo,
+    password: data.password_hash,
+    teamId: data.team_id,
+    teamName: data.teams?.name || null,
+    avatar: data.avatar || 'default',
+    avatarUrl,
+    role: data.role || 'user',
+    email: data.email || null,
+    authUserId: data.auth_user_id || null,
+    needsCompletion: !data.auth_user_id,   // compte legacy pas encore migré vers Supabase Auth
+    displayName,
+    displayNameSource: data.display_name_source || 'site',
+    avatarSource: data.avatar_source || 'site',
+    twitch: data.twitch_user_id ? {
+      id: data.twitch_user_id, login: data.twitch_login,
+      displayName: data.twitch_display_name, avatarUrl: data.twitch_avatar_url,
+    } : null,
+    createdAt: data.created_at,
+  };
+}
+
 /**
  * Vérifie si un rôle a les permissions d'un autre rôle
  */
@@ -432,52 +469,27 @@ async function getAllParticipants() {
 }
 
 async function getParticipantByPseudo(pseudo) {
-  // Recherche insensible à la casse avec ilike
-  const { data } = await supabase
-    .from('participants')
-    .select(`
-      id, pseudo, password_hash, team_id, avatar, role, created_at,
-      teams (name)
-    `)
-    .ilike('pseudo', pseudo)
-    .single();
-
-  if (!data) return null;
-
-  return {
-    id: data.id,
-    pseudo: data.pseudo,
-    password: data.password_hash,
-    teamId: data.team_id,
-    teamName: data.teams?.name || null,
-    avatar: data.avatar || 'default',
-    role: data.role || 'user',
-    createdAt: data.created_at
-  };
+  const { data } = await supabase.from('participants').select(PARTICIPANT_SELECT).ilike('pseudo', pseudo).single();
+  return mapParticipant(data);
 }
 
 async function getParticipantById(id) {
-  const { data } = await supabase
-    .from('participants')
-    .select(`
-      id, pseudo, password_hash, team_id, avatar, role, created_at,
-      teams (name)
-    `)
-    .eq('id', id)
-    .single();
+  const { data } = await supabase.from('participants').select(PARTICIPANT_SELECT).eq('id', id).single();
+  return mapParticipant(data);
+}
 
-  if (!data) return null;
+// Vérifie un JWT Supabase (envoyé par le front) et renvoie l'utilisateur auth
+async function verifySupabaseJwt(jwt) {
+  if (!jwt) return null;
+  const { data, error } = await supabase.auth.getUser(jwt);
+  if (error || !data?.user) return null;
+  return data.user; // { id, email, user_metadata, ... }
+}
 
-  return {
-    id: data.id,
-    pseudo: data.pseudo,
-    password: data.password_hash,
-    teamId: data.team_id,
-    teamName: data.teams?.name || null,
-    avatar: data.avatar || 'default',
-    role: data.role || 'user',
-    createdAt: data.created_at
-  };
+// Retrouve le profil participant lié à un compte Supabase Auth
+async function getParticipantByAuthUserId(authUserId) {
+  const { data } = await supabase.from('participants').select('id').eq('auth_user_id', authUserId).single();
+  return data ? getParticipantById(data.id) : null;
 }
 
 async function createParticipant(id, pseudo, password, teamId, avatar = 'default', role = 'user') {
@@ -3909,6 +3921,7 @@ module.exports = {
   verifyPasswordSync,
   normalizeTeamName,
   areTeamNamesEqual,
+  verifySupabaseJwt,
 
   // Admins
   verifyAdmin,
@@ -3939,6 +3952,7 @@ module.exports = {
   deleteParticipant,
   verifyParticipantPassword,
   saveAllParticipants,
+  getParticipantByAuthUserId,
 
   // Questions
   getAllQuestions,
