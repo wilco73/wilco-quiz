@@ -70,6 +70,9 @@ function mapParticipant(data) {
       displayName: data.twitch_display_name, avatarUrl: data.twitch_avatar_url,
     } : null,
     createdAt: data.created_at,
+    status: data.status || 'active',
+    bannedUntil: data.banned_until || null,
+    banReason: data.ban_reason || null,
   };
 }
 
@@ -583,6 +586,25 @@ async function deleteParticipant(participantId) {
 
   // Invalider le cache des participants
   cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
+}
+
+async function ensureUniquePseudo(base) {
+  const clean = (base || 'Joueur').trim() || 'Joueur';
+  let pseudo = clean, n = 1;
+  while (true) {
+    const { data } = await supabase.from('participants').select('id').ilike('pseudo', pseudo).maybeSingle();
+    if (!data) return pseudo;
+    n++; pseudo = `${clean}${n}`;
+  }
+}
+
+async function createAuthParticipant({ id, pseudo, email, authUserId, role = 'user' }) {
+  const { error } = await supabase.from('participants').insert({
+    id, pseudo, email, auth_user_id: authUserId, role, avatar: 'default'
+  });
+  if (error) throw error;
+  cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
+  return getParticipantById(id);
 }
 
 // ==================== GESTION DES ROLES ====================
@@ -3953,6 +3975,8 @@ module.exports = {
   verifyParticipantPassword,
   saveAllParticipants,
   getParticipantByAuthUserId,
+  ensureUniquePseudo,
+  createAuthParticipant,
 
   // Questions
   getAllQuestions,

@@ -16,63 +16,52 @@ function register(socket, io) {
   socket.on('auth:login', async (data, callback) => {
     try {
       const { pseudo, password } = data;
-      
-      // Vérifier si le participant existe
-      const existingParticipant = await db.getParticipantByPseudo(pseudo);
-      
-      if (existingParticipant) {
-        // Vérifier le mot de passe
-        if (!await db.verifyParticipantPassword(pseudo, password)) {
-          callback({ success: false, message: 'Mot de passe incorrect' });
-          return;
-        }
-        
-        // Connexion réussie
-        connectedParticipants.set(socket.id, { odId: existingParticipant.id, pseudo });
-        
-        if (!participantSockets.has(existingParticipant.id)) {
-          participantSockets.set(existingParticipant.id, new Set());
-        }
-        participantSockets.get(existingParticipant.id).add(socket.id);
-        
-        // Ajouter les flags de permissions pour le frontend
-        const user = {
-          ...existingParticipant,
-          isAdmin: db.isAdmin(existingParticipant.role),
-          isSuperAdmin: db.isSuperAdmin(existingParticipant.role)
-        };
-        
-        console.log(`[AUTH] Connexion: "${pseudo}" (rôle: ${existingParticipant.role})`);
-        
-        callback({ success: true, user });
-        return;
+      const existing = await db.getParticipantByPseudo(pseudo);
+      if (!existing) return callback({ success: false, message: 'Compte introuvable' });
+      if (!await db.verifyParticipantPassword(pseudo, password)) {
+        return callback({ success: false, message: 'Mot de passe incorrect' });
       }
-      
-      // Créer nouveau participant avec rôle 'user' par défaut
-      const odId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const newParticipant = await db.createParticipant(odId, pseudo, password, null, 'default', 'user');
-      
-      connectedParticipants.set(socket.id, { odId, pseudo });
-      if (!participantSockets.has(odId)) {
-        participantSockets.set(odId, new Set());
+      if (existing.status === 'banned' || existing.status === 'blocked') {
+        return callback({ success: false, message: 'Compte bloqué' });
       }
-      participantSockets.get(odId).add(socket.id);
-      
-      console.log(`[AUTH] Nouveau participant: "${pseudo}" (rôle: user)`);
-      
-      // Notifier uniquement la liste des participants (avec debounce)
-      broadcastParticipantsUpdate(io);
-      
-      const user = {
-        ...newParticipant,
-        isAdmin: false,
-        isSuperAdmin: false
-      };
-      
-      callback({ success: true, user, isNew: true });
+      connectedParticipants.set(socket.id, { odId: existing.id, pseudo });
+      if (!participantSockets.has(existing.id)) participantSockets.set(existing.id, new Set());
+      participantSockets.get(existing.id).add(socket.id);
+      const user = { ...existing, isAdmin: db.isAdmin(existing.role), isSuperAdmin: db.isSuperAdmin(existing.role) };
+      callback({ success: true, user });
     } catch (error) {
-      console.error('[AUTH:LOGIN] Erreur:', error.message);
-      callback({ success: false, message: 'Erreur serveur: ' + error.message });
+      console.error('[AUTH:LOGIN]', error.message);
+      callback({ success: false, message: 'Erreur serveur' });
+    }
+  });
+
+  socket.on('auth:loginWithToken', async (data, callback) => {
+    try {
+      const { token } = data || {};
+      const authUser = await db.verifySupabaseJwt(token);
+      if (!authUser) return callback({ success: false, message: 'Session invalide' });
+
+      let participant = await db.getParticipantByAuthUserId(authUser.id);
+      if (!participant) {
+        // 1re connexion d'un compte Supabase -> création du profil
+        const desired = authUser.user_metadata?.pseudo || authUser.email?.split('@')[0] || 'Joueur';
+        const pseudo = await db.ensureUniquePseudo(desired);
+        const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        participant = await db.createAuthParticipant({ id, pseudo, email: authUser.email, authUserId: authUser.id });
+      }
+      if (participant.status === 'banned' || participant.status === 'blocked') {
+        return callback({ success: false, message: 'Compte bloqué', banned: true });
+      }
+
+      connectedParticipants.set(socket.id, { odId: participant.id, pseudo: participant.pseudo });
+      if (!participantSockets.has(participant.id)) participantSockets.set(participant.id, new Set());
+      participantSockets.get(participant.id).add(socket.id);
+
+      const user = { ...participant, isAdmin: db.isAdmin(participant.role), isSuperAdmin: db.isSuperAdmin(participant.role) };
+      callback({ success: true, user });
+    } catch (error) {
+      console.error('[AUTH:TOKEN]', error.message);
+      callback({ success: false, message: 'Erreur serveur' });
     }
   });
   

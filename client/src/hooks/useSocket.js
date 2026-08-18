@@ -266,6 +266,11 @@ export function useSocket() {
       socketRef.current.emit('auth:login', { pseudo, password }, resolve);
     });
   }, []);
+
+  const loginWithToken = useCallback((token) => new Promise((resolve) => {
+    if (!socketRef.current) return resolve({ success: false, message: 'Socket indisponible' });
+    socketRef.current.emit('auth:loginWithToken', { token }, (res) => resolve(res || { success: false }));
+  }), []);
   
   // Récupérer les infos utilisateur (refresh)
   const getUser = useCallback((odId) => {
@@ -651,6 +656,7 @@ export function useSocket() {
     setCurrentLobbyState,
     // Auth
     login,
+    loginWithToken,
     getUser,
     updateUserRole,
     getAllUsers,
