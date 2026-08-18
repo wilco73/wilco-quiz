@@ -16,15 +16,17 @@ export default function CompleteAccountView({ user, onComplete, onLogout }) {
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [currentPassword, setCurrentPassword] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     if (!email.trim()) { setError('Renseignez un email'); return; }
-    if (password.length < 6) { setError('Mot de passe : 6 caractères minimum'); return; }
-    if (password !== confirm) { setError('Les mots de passe ne correspondent pas'); return; }
+    if (!currentPassword) { setError('Saisissez votre mot de passe actuel'); return; }
+    if (password && password.length < 6) { setError('Le nouveau mot de passe doit faire 6 caractères min.'); return; }
+    if (password && password !== confirm) { setError('Les mots de passe ne correspondent pas'); return; }
     setLoading(true);
-    const res = await onComplete(email.trim(), password);
+    const res = await onComplete({ email: email.trim(), currentPassword, password: password || null });
     setLoading(false);
     if (!res?.success) setError(res?.message || 'Une erreur est survenue');
   };
@@ -49,13 +51,18 @@ export default function CompleteAccountView({ user, onComplete, onLogout }) {
             className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 focus:border-purple-500 outline-none"
           />
           <input
+            type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Mot de passe actuel" autoComplete="current-password"
+            className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 focus:border-purple-500 outline-none"
+          />
+          <input
             type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-            placeholder="Nouveau mot de passe (6 caractères min.)" autoComplete="new-password"
+            placeholder="Nouveau mot de passe (6 caractères min.) (optionnel)" autoComplete="new-password"
             className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 focus:border-purple-500 outline-none"
           />
           <input
             type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)}
-            placeholder="Confirmer le mot de passe" autoComplete="new-password"
+            placeholder="Confirmer le nouveau mot de passe" autoComplete="new-password"
             className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 focus:border-purple-500 outline-none"
           />
           <button type="submit" disabled={loading} className="w-full py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 font-bold disabled:opacity-50">

@@ -67,16 +67,21 @@ function register(socket, io) {
 
   socket.on('auth:completeAccount', async (data, callback) => {
     try {
-      const info = connectedParticipants.get(socket.id);
-      if (!info?.odId) return callback({ success: false, message: 'Vous devez être connecté' });
+      const { odId, currentPassword, email, password } = data || {};
+      if (!odId || !currentPassword) return callback({ success: false, message: 'Reconnectez-vous pour compléter votre compte' });
+      if (!email) return callback({ success: false, message: 'Email requis' });
 
-      const { email, password } = data || {};
-      if (!email || !password || password.length < 6) {
-        return callback({ success: false, message: 'Email et mot de passe (6 caractères min.) requis' });
-      }
-
-      const participant = await db.getParticipantById(info.odId);
+      const participant = await db.getParticipantByIdWithSecret
+        ? await db.getParticipantById(odId)
+        : await db.getParticipantById(odId);
       if (!participant) return callback({ success: false, message: 'Compte introuvable' });
+
+      // Ré-authentifier l'action avec le mot de passe legacy actuel (le socket peut ne pas être ré-identifié après un reload)
+      const okPwd = await db.verifyParticipantPassword(participant.pseudo, currentPassword);
+      if (!okPwd) return callback({ success: false, message: 'Mot de passe actuel incorrect' });
+
+      // (ré)enregistre la présence socket au passage
+      connectedParticipants.set(socket.id, { odId: participant.id, pseudo: participant.pseudo });
 
       // Déjà complété -> on renvoie simplement l'utilisateur à jour
       if (participant.authUserId) {
@@ -84,9 +89,10 @@ function register(socket, io) {
         return callback({ success: true, user });
       }
 
+      const finalPassword = (password && password.length >= 6) ? password : currentPassword;
       let authUser;
       try {
-        authUser = await db.createAuthUser({ email: email.trim(), password, pseudo: participant.pseudo, emailConfirm: true });
+        authUser = await db.createAuthUser({ email: email.trim(), password: finalPassword, pseudo: participant.pseudo, emailConfirm: true });
       } catch (e) {
         const msg = /already|exists|registered/i.test(e.message) ? 'Cet email est déjà utilisé' : 'Impossible de créer le compte';
         return callback({ success: false, message: msg });

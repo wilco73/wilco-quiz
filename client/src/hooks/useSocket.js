@@ -294,9 +294,9 @@ export function useSocket() {
     });
   }, []);
 
-  const completeAccount = useCallback((email, password) => new Promise((resolve) => {
+  const completeAccount = useCallback((payload) => new Promise((resolve) => {
     if (!socketRef.current) return resolve({ success: false, message: 'Socket indisponible' });
-    socketRef.current.emit('auth:completeAccount', { email, password }, (res) => resolve(res || { success: false }));
+    socketRef.current.emit('auth:completeAccount', payload, (res) => resolve(res || { success: false }));
   }), []);
   
   const getAllUsers = useCallback((requesterId) => {

@@ -471,11 +471,11 @@ const App = () => {
     return false;
   };
 
-  const handleCompleteAccount = async (email, password) => {
-    const result = await socket.completeAccount(email, password);
+  const handleCompleteAccount = async ({ email, currentPassword, password }) => {
+    const result = await socket.completeAccount({ odId: currentUser.id, email, currentPassword, password });
     if (result?.success) {
-      applyLoggedInUser(result.user); // needsCompletion est désormais false
-      toast.success('Compte complété ! Vous pourrez désormais vous connecter par email.');
+      applyLoggedInUser(result.user);
+      toast.success('Compte complété !');
       return { success: true };
     }
     return { success: false, message: result?.message };
