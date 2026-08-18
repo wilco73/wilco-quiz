@@ -167,6 +167,17 @@ export default function GameSettingsManager() {
                     />
                     <span className="text-gray-400">Badge Beta</span>
                   </label>
+
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={game.guest_allowed || false}
+                      onChange={(e) => updateGame(game.id, { guest_allowed: e.target.checked })}
+                      className="rounded bg-gray-700 border-gray-600"
+                      disabled={saving}
+                    />
+                    <span className="text-gray-400">Accès invité</span>
+                  </label>
                 </div>
               </div>
               

@@ -449,6 +449,19 @@ const App = () => {
     saveSession({ currentUser: user });
   };
 
+  const handleGuest = (pseudo) => {
+    const guest = {
+      id: `guest_${Math.random().toString(36).slice(2, 11)}`,
+      pseudo: pseudo || 'Invité',
+      displayName: pseudo || 'Invité',
+      role: 'user',
+      isGuest: true,
+    };
+    setCurrentUser(guest);
+    saveSession({ currentUser: guest });
+    setView('lobby-list');
+  };
+
   // Connexion via Supabase Auth (email/mdp ; Twitch plus tard)
   const handleAuthedToken = async (token) => {
     const result = await socket.loginWithToken(token);
@@ -912,7 +925,7 @@ const App = () => {
   return (
     <div className="App">
       {view === 'login' && (
-        <AuthView onAuthed={handleAuthedToken} onLegacyLogin={handleLegacyLogin} />
+        <AuthView onAuthed={handleAuthedToken} onLegacyLogin={handleLegacyLogin} onGuest={handleGuest} />
       )}
       
       {/* Vues avec MainLayout */}

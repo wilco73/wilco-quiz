@@ -63,6 +63,10 @@ function register(socket, io) {
   socket.on('lobby:join', async (data, callback) => {
     try {
       const { lobbyId, odId, pseudo, teamName } = data;
+
+      if (typeof odId === 'string' && odId.startsWith('guest_')) {
+        return callback({ success: false, message: 'Connectez-vous avec un compte pour rejoindre un quiz' });
+      }
       
       const lobby = await db.getLobbyById(lobbyId);
       if (!lobby) {

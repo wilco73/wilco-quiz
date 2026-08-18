@@ -47,9 +47,10 @@ router.get('/:id', async (req, res) => {
 // PUT - Mettre à jour un jeu
 router.put('/:id', async (req, res) => {
   try {
-    const { is_enabled, is_beta, create_permission, name, description, icon } = req.body;
+    const { is_enabled, is_beta, create_permission, name, description, icon, guest_allowed } = req.body;
     
     const updates = {};
+    if (guest_allowed !== undefined) updates.guest_allowed = guest_allowed;
     if (is_enabled !== undefined) updates.is_enabled = is_enabled;
     if (is_beta !== undefined) updates.is_beta = is_beta;
     if (create_permission !== undefined) updates.create_permission = create_permission;

@@ -19,6 +19,8 @@ export default function AuthView({ onAuthed, onLegacyLogin, onGuest }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [info, setInfo] = useState(null);
+  const [guestOpen, setGuestOpen] = useState(false);
+  const [guestPseudo, setGuestPseudo] = useState('');
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -151,9 +153,29 @@ export default function AuthView({ onAuthed, onLegacyLogin, onGuest }) {
             <div className="my-4 flex items-center gap-3 text-gray-500 text-xs">
               <span className="flex-1 h-px bg-gray-700" /> ou <span className="flex-1 h-px bg-gray-700" />
             </div>
-            <button onClick={onGuest} className="w-full py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 font-semibold text-sm">
-              Jouer en invité
-            </button>
+            {guestOpen ? (
+              <div className="space-y-2">
+                <input
+                  type="text" value={guestPseudo} onChange={(e) => setGuestPseudo(e.target.value)}
+                  placeholder="Votre pseudo (invité)" maxLength={20}
+                  className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 focus:border-purple-500 outline-none"
+                />
+                <button
+                  onClick={() => guestPseudo.trim() && onGuest(guestPseudo.trim())}
+                  disabled={!guestPseudo.trim()}
+                  className="w-full py-2.5 rounded-lg bg-gray-600 hover:bg-gray-500 font-semibold text-sm disabled:opacity-50"
+                >
+                  Rejoindre en invité
+                </button>
+                <p className="text-[11px] text-gray-500 text-center">
+                  Les invités ne sont pas classés et n'ont accès qu'à certains jeux.
+                </p>
+              </div>
+            ) : (
+              <button onClick={() => setGuestOpen(true)} className="w-full py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 font-semibold text-sm">
+                Jouer en invité
+              </button>
+            )}
           </>
         )}
       </div>

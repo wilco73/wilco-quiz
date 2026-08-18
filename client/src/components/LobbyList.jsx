@@ -145,9 +145,11 @@ const LobbyList = ({
     
     // IMPORTANT: is_enabled doit être strictement true
     const enabled = game.is_enabled === true;
+    // Invité : le jeu doit aussi être explicitement autorisé aux invités
+    if (currentUser?.isGuest && game.guest_allowed !== true) return false;
     console.log(`[LobbyList] Game ${gameId} (${game.id}/${game.name}) is_enabled:`, game.is_enabled, '→', enabled);
     return enabled;
-  }, [settingsLoaded, findGameSetting]);
+  }, [settingsLoaded, findGameSetting, currentUser]);
 
   // Vérifier si l'utilisateur peut créer un lobby pour ce jeu
   const canCreateLobby = useCallback((gameId) => {
