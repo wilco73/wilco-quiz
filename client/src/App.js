@@ -49,6 +49,7 @@ const App = () => {
   const [currentMysteryLobby, setCurrentMysteryLobby] = useState(null);
   const [currentMemeLobby, setCurrentMemeLobby] = useState(null);
   const [currentMemeLobbyCode, setCurrentMemeLobbyCode] = useState(null);
+  const [pendingToken, setPendingToken] = useState(null);
   
   const hasReconnected = useRef(false);
   const draftTimeoutRef = useRef(null);
@@ -90,12 +91,14 @@ const App = () => {
     }
   }, [timerState?.remaining, myAnswer, currentLobby, currentUser, isAdmin, hasAnswered, socket]);
 
-  // Connexion avec Twitch
+  // Retour de liaison Twitch (?linked=twitch) : rafraîchir le profil avec les infos Twitch
   useEffect(() => {
     if (!socket.isConnected) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('linked') === 'twitch') {
       (async () => {
+        // Forcer un token à jour pour que l'identité Twitch fraîchement liée soit prise en compte
+        await supabase.auth.refreshSession().catch(() => {});
         const { data } = await supabase.auth.getSession();
         if (data?.session) {
           const result = await socket.loginWithToken(data.session.access_token);
@@ -169,30 +172,37 @@ const App = () => {
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
-  // auto-login
+  // auto-login (1/2) : détecter une session Supabase et mémoriser le token à traiter
   useEffect(() => {
     if (window.location.pathname === '/reset-password') return;
 
-    const doLogin = async (session) => {
-      if (!session || currentUserRef.current) return;
-      const result = await socket.loginWithToken(session.access_token);
-      if (result?.success) applyLoggedInUser(result.user);
+    const consider = (session) => {
+      const stored = getSession?.();
+      if (session && !currentUserRef.current && !stored?.currentUser) {
+        setPendingToken(session.access_token);
+      }
     };
 
-    // Connexion explicite uniquement (pas les refresh de token)
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN') doLogin(session);
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') consider(session);
+      if (event === 'SIGNED_OUT') setPendingToken(null);
     });
-
-    // Au chargement : session Supabase présente + PAS de session app -> on connecte
-    supabase.auth.getSession().then(({ data }) => {
-      const stored = getSession?.();
-      if (data?.session && !stored?.currentUser) doLogin(data.session);
-    });
+    supabase.auth.getSession().then(({ data }) => consider(data?.session));
 
     return () => sub?.subscription?.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket.isConnected]);
+  }, []);
+
+  // auto-login (2/2) : dès que le socket est prêt ET qu'un token attend -> connexion
+  useEffect(() => {
+    if (!pendingToken || !socket.isConnected || currentUserRef.current) return;
+    (async () => {
+      const result = await socket.loginWithToken(pendingToken);
+      if (result?.success) applyLoggedInUser(result.user);
+      setPendingToken(null);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingToken, socket.isConnected]);
 
   // Synchroniser currentLobby avec les lobbies globaux (fallback pour les participants)
   // Utile quand un participant ne reçoit pas lobby:state directement
