@@ -169,21 +169,30 @@ const App = () => {
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
+  // auto-login
   useEffect(() => {
-    if (window.location.pathname === '/reset-password') return; // pas d'auto-login sur la page de reset
-    const tryAuto = async (session) => {
-      const stored = getSession?.(); // session locale déjà présente ?
-      if (session && !currentUserRef.current && !stored?.currentUser) {
-        await handleAuthedToken(session.access_token);
-      }
+    if (window.location.pathname === '/reset-password') return;
+
+    const doLogin = async (session) => {
+      if (!session || currentUserRef.current) return;
+      const result = await socket.loginWithToken(session.access_token);
+      if (result?.success) applyLoggedInUser(result.user);
     };
+
+    // Connexion explicite uniquement (pas les refresh de token)
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN') tryAuto(session);
+      if (event === 'SIGNED_IN') doLogin(session);
     });
-    supabase.auth.getSession().then(({ data }) => tryAuto(data?.session));
+
+    // Au chargement : session Supabase présente + PAS de session app -> on connecte
+    supabase.auth.getSession().then(({ data }) => {
+      const stored = getSession?.();
+      if (data?.session && !stored?.currentUser) doLogin(data.session);
+    });
+
     return () => sub?.subscription?.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [socket.isConnected]);
 
   // Synchroniser currentLobby avec les lobbies globaux (fallback pour les participants)
   // Utile quand un participant ne reçoit pas lobby:state directement
@@ -611,11 +620,14 @@ const App = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Couper AUSSI la session Supabase, sinon reconnexion fantôme au retour sur l'onglet
+    try { await supabase.auth.signOut(); } catch (e) { /* ignore */ }
+
     if (currentLobby && currentUser) {
       socket.leaveLobby(currentLobby.id, currentUser.id);
     }
-    
+
     clearSession();
     setCurrentUser(null);
     setCurrentLobby(null);
