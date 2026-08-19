@@ -322,7 +322,13 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
                 Liez votre compte Twitch pour afficher votre nom/photo Twitch (et accéder aux fonctionnalités abonnés à venir).
               </p>
-              <button onClick={handleLinkTwitch} className="px-4 py-2 rounded-lg bg-[#9146FF] hover:bg-[#7d2ff5] text-white font-semibold text-sm">
+              <button
+                onClick={handleLinkTwitch}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#9146FF] hover:bg-[#772ce8] text-white font-semibold text-sm transition-colors shadow"
+              >
+                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current" aria-hidden="true">
+                  <path d="M4.265 0L1.6 4.265v15.47h5.334V24h3.199l2.667-2.667h4l5.334-5.334V0H4.265zm2.4 2.4h14.669v11.733l-3.2 3.2h-4.267l-2.666 2.666v-2.666H6.665V2.4zm5.334 3.2v6.4h2.4v-6.4h-2.4zm5.333 0v6.4h2.4v-6.4h-2.4z"/>
+                </svg>
                 Lier mon compte Twitch
               </button>
             </div>
