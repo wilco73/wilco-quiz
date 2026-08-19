@@ -269,6 +269,18 @@ function register(socket, io) {
       callback({ success: false, message: error.message || 'Erreur serveur' });
     }
   });
+
+  socket.on('auth:identify', async (data) => {
+    try {
+      const { odId } = data || {};
+      if (!odId) return;
+      const p = await db.getParticipantById(odId);
+      if (!p) return;
+      connectedParticipants.set(socket.id, { odId: p.id, pseudo: p.pseudo });
+      if (!participantSockets.has(p.id)) participantSockets.set(p.id, new Set());
+      participantSockets.get(p.id).add(socket.id);
+    } catch (e) { /* best-effort */ }
+  });
 }
 
 module.exports = { register };

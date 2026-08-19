@@ -286,6 +286,10 @@ export function useSocket() {
       socketRef.current.emit('auth:getUser', { odId }, resolve);
     });
   }, []);
+
+  const identify = useCallback((odId) => {
+    if (socketRef.current && odId) socketRef.current.emit('auth:identify', { odId });
+  }, []);
   
   // Mettre à jour le rôle d'un utilisateur (superadmin only)
   const updateUserRole = useCallback((requesterId, targetId, newRole) => {
@@ -667,6 +671,7 @@ export function useSocket() {
     login,
     loginWithToken,
     getUser,
+    identify,
     updateUserRole,
     completeAccount,
     getAllUsers,

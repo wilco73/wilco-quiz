@@ -26,6 +26,7 @@ import BurgerGameContainer from './components/BurgerGameContainer';
 import ResetPasswordView from './components/ResetPasswordView';
 import CompleteAccountView from './components/CompleteAccountView';
 import { supabase } from './services/supabase';
+import { API_URL } from './config';
 import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -101,7 +102,6 @@ const App = () => {
 
   // Retour OAuth Twitch (connexion ?auth=twitch OU liaison ?linked=twitch) — avec réessais
   useEffect(() => {
-    if (!socket.isConnected) return;
     const params = new URLSearchParams(window.location.search);
     const isLinked = params.get('linked') === 'twitch';
     const isAuth = params.get('auth') === 'twitch';
@@ -116,34 +116,41 @@ const App = () => {
         window.history.replaceState({}, '', '/');
         return;
       }
-      // Connexion : si déjà connecté, rien à faire. Liaison : on continue même connecté.
       if (isAuth && currentUserRef.current) { setOauthConnecting(false); window.history.replaceState({}, '', '/'); return; }
+      if (isLinked) await supabase.auth.refreshSession().catch(() => {});
 
-      if (isLinked) await supabase.auth.refreshSession().catch(() => { });
-
-      loggingInRef.current = true;
-      for (let i = 0; i < 6 && !cancelled; i++) {
+      // Attendre que Supabase établisse la session (échange PKCE asynchrone)
+      let session = null;
+      for (let i = 0; i < 20 && !session && !cancelled; i++) {
         const { data } = await supabase.auth.getSession();
-        if (data?.session) {
-          const result = await socket.loginWithToken(data.session.access_token);
-          console.log('[OAUTH] try', i, '->', result?.success, result?.message);
-          if (result?.success) {
-            applyLoggedInUser(result.user);
-            if (isLinked) { setView('profile'); toast.success('Compte Twitch lié !'); }
-            else toast.success('Connecté avec Twitch !');
-            window.history.replaceState({}, '', '/');
-            break;
-          }
-        }
-        await new Promise((r) => setTimeout(r, 1200));
+        session = data?.session;
+        if (!session) await new Promise((r) => setTimeout(r, 200));
       }
-      loggingInRef.current = false;
+      if (cancelled) return;
+
+      if (session) {
+        const result = await loginWithTokenRest(session.access_token);
+        if (result?.success) {
+          applyLoggedInUser(result.user);
+          if (isLinked) { setView('profile'); toast.success('Compte Twitch lié !'); }
+          else toast.success('Connecté avec Twitch !');
+        } else {
+          toast.error(result?.message || 'Connexion impossible');
+        }
+      }
       setOauthConnecting(false);
+      window.history.replaceState({}, '', '/');
     })();
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket.isConnected]);
+  }, []);
+
+  useEffect(() => {
+    if (socket.isConnected && currentUser && !currentUser.isGuest) {
+      socket.identify(currentUser.id);
+    }
+  }, [socket.isConnected, currentUser]);
 
 
   // Synchroniser le lobby actuel avec les mises a jour Socket
@@ -523,12 +530,18 @@ const App = () => {
     setView('lobby-list');
   };
 
+  const loginWithTokenRest = async (token) => {
+    try {
+      const res = await fetch(`${API_URL}/auth/token`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
+      });
+      return await res.json();
+    } catch (e) { return { success: false, message: 'Erreur réseau' }; }
+  };
+
   // Connexion via Supabase Auth (email/mdp ; Twitch plus tard)
   const handleAuthedToken = async (token) => {
-    if (loggingInRef.current) return;
-    loggingInRef.current = true;
-    const result = await socket.loginWithToken(token);
-    loggingInRef.current = false;
+    const result = await loginWithTokenRest(token);
     if (result?.success) {
       applyLoggedInUser(result.user);
       toast.success(`Bon retour ${result.user.displayName || result.user.pseudo} !`);
