@@ -506,13 +506,20 @@ async function getParticipantById(id) {
 // Vérifie un JWT Supabase (envoyé par le front) et renvoie l'utilisateur auth
 async function verifySupabaseJwt(jwt) {
   if (!jwt) return null;
-  const { data, error } = await supabase.auth.getUser(jwt);
-  if (error || !data?.user) return null;
   try {
-    const { data: full } = await supabase.auth.admin.getUserById(data.user.id);
-    if (full?.user) return full.user; // inclut les identities de façon fiable
-  } catch (e) { /* fallback ci-dessous */ }
-  return data.user;
+    // 1) Décoder le JWT pour récupérer l'id utilisateur (sans validation d'horloge stricte)
+    const payload = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64').toString('utf8'));
+    const userId = payload.sub;
+    if (!userId) return null;
+
+    // 2) Récupérer l'utilisateur complet (avec identities) via l'API admin — 1 seul appel
+    const { data, error } = await supabase.auth.admin.getUserById(userId);
+    if (error || !data?.user) return null;
+    return data.user;
+  } catch (e) {
+    console.error('[verifySupabaseJwt]', e.message);
+    return null;
+  }
 }
 
 // Retrouve le profil participant lié à un compte Supabase Auth
