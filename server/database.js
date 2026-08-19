@@ -20,6 +20,9 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+// Réchauffe la connexion sortante vers Supabase Auth au démarrage
+// (évite que le tout premier appel getUserById soit lent -> timeout côté client)
+supabase.auth.admin.getUserById('00000000-0000-0000-0000-000000000000').catch(() => {});
 const SALT_ROUNDS = 10;
 
 // ==================== CONSTANTES ROLES ====================

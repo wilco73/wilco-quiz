@@ -91,40 +91,44 @@ const App = () => {
     }
   }, [timerState?.remaining, myAnswer, currentLobby, currentUser, isAdmin, hasAnswered, socket]);
 
-  // Connexion avec Twitch
+  // Retour OAuth Twitch (connexion ?auth=twitch OU liaison ?linked=twitch) — avec réessais
   useEffect(() => {
-    const doLogin = async (source) => {
-      if (currentUserRef.current || loggingInRef.current || !socket.isConnected) return;
-      const stored = getSession?.();
-      if (stored?.currentUser) return;
+    if (!socket.isConnected) return;
+    const params = new URLSearchParams(window.location.search);
+    const isLinked = params.get('linked') === 'twitch';
+    const isAuth = params.get('auth') === 'twitch';
+    const hasError = params.get('error');
+    if (!isLinked && !isAuth && !hasError) return; // hors retour Twitch : ne rien faire
 
-      const params = new URLSearchParams(window.location.search);
-      const isLinked = params.get('linked') === 'twitch';
+    let cancelled = false;
+    (async () => {
+      if (hasError) {
+        toast.error('Connexion Twitch impossible (compte déjà utilisé ?)');
+        window.history.replaceState({}, '', '/');
+        return;
+      }
       if (isLinked) await supabase.auth.refreshSession().catch(() => {});
 
-      const { data } = await supabase.auth.getSession();
-      console.log('[OAUTH]', source, 'session?', !!data?.session, 'linked?', isLinked);
-      if (!data?.session) return;
-
       loggingInRef.current = true;
-      const result = await socket.loginWithToken(data.session.access_token);
-      loggingInRef.current = false;
-      console.log('[OAUTH] login result', result?.success, result?.message);
-
-      if (result?.success) {
-        applyLoggedInUser(result.user);
-        if (isLinked) { setView('profile'); toast.success('Compte Twitch lié !'); }
-        if (params.get('auth') === 'twitch' || isLinked) window.history.replaceState({}, '', '/');
+      for (let i = 0; i < 6 && !cancelled && !currentUserRef.current; i++) {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          const result = await socket.loginWithToken(data.session.access_token);
+          console.log('[OAUTH] try', i, '->', result?.success, result?.message);
+          if (result?.success) {
+            applyLoggedInUser(result.user);
+            if (isLinked) { setView('profile'); toast.success('Compte Twitch lié !'); }
+            else toast.success('Connecté avec Twitch !');
+            window.history.replaceState({}, '', '/');
+            break;
+          }
+        }
+        await new Promise((r) => setTimeout(r, 1500));
       }
-    };
+      loggingInRef.current = false;
+    })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      console.log('[OAUTH] event', event);
-      if (event === 'SIGNED_IN') doLogin('event');
-    });
-    doLogin('mount');
-
-    return () => sub?.subscription?.unsubscribe();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket.isConnected]);
 
