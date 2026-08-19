@@ -25,6 +25,7 @@ import MemeGameContainer from './components/MemeGameContainer';
 import BurgerGameContainer from './components/BurgerGameContainer';
 import ResetPasswordView from './components/ResetPasswordView';
 import CompleteAccountView from './components/CompleteAccountView';
+import { supabase } from './services/supabase';
 import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -89,6 +90,27 @@ const App = () => {
     }
   }, [timerState?.remaining, myAnswer, currentLobby, currentUser, isAdmin, hasAnswered, socket]);
 
+  // Connexion avec Twitch
+  useEffect(() => {
+    if (!socket.isConnected) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('linked') === 'twitch') {
+      (async () => {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          const result = await socket.loginWithToken(data.session.access_token);
+          if (result?.success) { applyLoggedInUser(result.user); setView('profile'); toast.success('Compte Twitch lié !'); }
+          else toast.error(result?.message || 'Liaison impossible');
+        }
+        window.history.replaceState({}, '', '/');
+      })();
+    } else if (params.get('error')) {
+      toast.error('Liaison Twitch impossible (compte déjà utilisé ?)');
+      window.history.replaceState({}, '', '/');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket.isConnected]);
+
   // Synchroniser le lobby actuel avec les mises a jour Socket
   useEffect(() => {
     // Mise a jour depuis currentLobbyState (events socket)
@@ -142,6 +164,26 @@ const App = () => {
       }
     }
   }, [currentLobbyState, view, isAdmin, currentUser]);
+
+  // Connexion avec Twitch
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+
+  useEffect(() => {
+    if (window.location.pathname === '/reset-password') return; // pas d'auto-login sur la page de reset
+    const tryAuto = async (session) => {
+      const stored = getSession?.(); // session locale déjà présente ?
+      if (session && !currentUserRef.current && !stored?.currentUser) {
+        await handleAuthedToken(session.access_token);
+      }
+    };
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN') tryAuto(session);
+    });
+    supabase.auth.getSession().then(({ data }) => tryAuto(data?.session));
+    return () => sub?.subscription?.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Synchroniser currentLobby avec les lobbies globaux (fallback pour les participants)
   // Utile quand un participant ne reçoit pas lobby:state directement

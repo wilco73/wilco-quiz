@@ -7,6 +7,18 @@ const db = require('../database');
 const { connectedParticipants, participantSockets } = require('../utils/state');
 const { broadcastParticipantsUpdate, broadcastTeamsUpdate } = require('../utils/broadcast');
 
+function extractTwitch(authUser) {
+  const m = authUser.user_metadata || {};
+  const providers = authUser.app_metadata?.providers || [authUser.app_metadata?.provider];
+  if (!providers.includes('twitch')) return null;
+  return {
+    twitch_user_id: m.sub || m.provider_id || null,
+    twitch_login: m.nickname || m.preferred_username || null,
+    twitch_display_name: m.name || m.full_name || m.nickname || null,
+    twitch_avatar_url: m.picture || m.avatar_url || null,
+  };
+}
+
 function register(socket, io) {
   
   /**
@@ -41,13 +53,16 @@ function register(socket, io) {
       const authUser = await db.verifySupabaseJwt(token);
       if (!authUser) return callback({ success: false, message: 'Session invalide' });
 
+      const twitch = extractTwitch(authUser);
       let participant = await db.getParticipantByAuthUserId(authUser.id);
       if (!participant) {
-        // 1re connexion d'un compte Supabase -> création du profil
-        const desired = authUser.user_metadata?.pseudo || authUser.email?.split('@')[0] || 'Joueur';
+        const desired = authUser.user_metadata?.pseudo || twitch?.twitch_display_name || authUser.email?.split('@')[0] || 'Joueur';
         const pseudo = await db.ensureUniquePseudo(desired);
         const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        participant = await db.createAuthParticipant({ id, pseudo, email: authUser.email, authUserId: authUser.id });
+        participant = await db.createAuthParticipant({ id, pseudo, email: authUser.email, authUserId: authUser.id, twitch });
+      } else if (twitch?.twitch_user_id && participant.twitch?.id !== twitch.twitch_user_id) {
+        await db.updateParticipantTwitch(participant.id, twitch);
+        participant = await db.getParticipantById(participant.id);
       }
       if (participant.status === 'banned' || participant.status === 'blocked') {
         return callback({ success: false, message: 'Compte bloqué', banned: true });

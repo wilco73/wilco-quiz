@@ -45,8 +45,9 @@ export const AVATARS = {
 export const AVATAR_CATEGORIES = [...new Set(Object.values(AVATARS).map(a => a.category))];
 
 // Composant Avatar
-const Avatar = ({ avatarId, size = 'md', className = '', showBorder = true }) => {
+const Avatar = ({ avatarId, avatarUrl, size = 'md', className = '', showBorder = true }) => {
   const avatar = AVATARS[avatarId] || AVATARS.default;
+  const imgSrc = avatarUrl || avatar.image;
   
   const sizeClasses = {
     xs: 'w-6 h-6',
@@ -72,7 +73,7 @@ const Avatar = ({ avatarId, size = 'md', className = '', showBorder = true }) =>
       title={avatar.label}
     >
       <img 
-        src={avatar.image} 
+        src={imgSrc} 
         alt={avatar.label}
         className="w-full h-full object-cover"
         onError={(e) => {

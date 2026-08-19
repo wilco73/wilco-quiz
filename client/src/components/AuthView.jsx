@@ -72,6 +72,14 @@ export default function AuthView({ onAuthed, onLegacyLogin, onGuest }) {
     setLoading(false);
   };
 
+  const handleTwitch = async () => {
+    setError(null);
+    await supabase.auth.signInWithOAuth({
+      provider: 'twitch',
+      options: { redirectTo: window.location.origin },
+    });
+  };
+
   const handleForgot = async () => {
     setError(null); setInfo(null);
     const target = identifier.includes('@') ? identifier.trim() : email.trim();
@@ -147,6 +155,14 @@ export default function AuthView({ onAuthed, onLegacyLogin, onGuest }) {
             </button>
           </form>
         )}
+
+        <button
+          onClick={handleTwitch}
+          className="w-full mt-3 py-2.5 rounded-lg bg-[#9146FF] hover:bg-[#7d2ff5] font-bold text-sm flex items-center justify-center gap-2"
+        >
+          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>
+          Se connecter avec Twitch
+        </button>
 
         {onGuest && (
           <>

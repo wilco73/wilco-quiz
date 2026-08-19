@@ -620,10 +620,48 @@ async function ensureUniquePseudo(base) {
   }
 }
 
-async function createAuthParticipant({ id, pseudo, email, authUserId, role = 'user' }) {
-  const { error } = await supabase.from('participants').insert({
-    id, pseudo, email, auth_user_id: authUserId, role, avatar: 'default'
-  });
+async function createAuthParticipant({ id, pseudo, email, authUserId, role = 'user', twitch = null }) {
+  const row = { id, pseudo, email, auth_user_id: authUserId, role, avatar: 'default' };
+  if (twitch) {
+    row.twitch_user_id = twitch.twitch_user_id;
+    row.twitch_login = twitch.twitch_login;
+    row.twitch_display_name = twitch.twitch_display_name;
+    row.twitch_avatar_url = twitch.twitch_avatar_url;
+    row.display_name_source = 'twitch'; // compte créé via Twitch -> par défaut on affiche Twitch
+    row.avatar_source = 'twitch';
+  }
+  const { error } = await supabase.from('participants').insert(row);
+  if (error) throw error;
+  cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
+  return getParticipantById(id);
+}
+
+async function updateParticipantTwitch(id, twitch) {
+  const { error } = await supabase.from('participants').update({
+    twitch_user_id: twitch.twitch_user_id,
+    twitch_login: twitch.twitch_login,
+    twitch_display_name: twitch.twitch_display_name,
+    twitch_avatar_url: twitch.twitch_avatar_url,
+  }).eq('id', id);
+  if (error) throw error;
+  cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
+}
+
+async function updateParticipantDisplayPrefs(id, { displayNameSource, avatarSource }) {
+  const updates = {};
+  if (displayNameSource) updates.display_name_source = displayNameSource;
+  if (avatarSource) updates.avatar_source = avatarSource;
+  const { error } = await supabase.from('participants').update(updates).eq('id', id);
+  if (error) throw error;
+  cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
+  return getParticipantById(id);
+}
+
+async function unlinkParticipantTwitch(id) {
+  const { error } = await supabase.from('participants').update({
+    twitch_user_id: null, twitch_login: null, twitch_display_name: null, twitch_avatar_url: null,
+    display_name_source: 'site', avatar_source: 'site',
+  }).eq('id', id);
   if (error) throw error;
   cache.invalidate(cache.KEYS.ALL_PARTICIPANTS);
   return getParticipantById(id);
@@ -4001,6 +4039,9 @@ module.exports = {
   getParticipantByAuthUserId,
   ensureUniquePseudo,
   createAuthParticipant,
+  updateParticipantTwitch,
+  updateParticipantDisplayPrefs,
+  unlinkParticipantTwitch,
 
   // Questions
   getAllQuestions,

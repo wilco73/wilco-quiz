@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Users, Key, Save, Plus, ChevronDown, Check, X, AlertCircle, Smile } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import { supabase } from '../services/supabase';
 import Avatar, { AvatarSelector, AVATARS } from './Avatar';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -53,6 +54,38 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
     }
     setIsLoading(false);
   };
+
+  const handleLinkTwitch = async () => {
+    await supabase.auth.linkIdentity({
+      provider: 'twitch',
+      options: { redirectTo: window.location.origin + '/?linked=twitch' },
+    });
+  };
+
+  const handleUnlinkTwitch = async () => {
+    try {
+      const res = await fetch(`${API_URL}/participants/${currentUser.id}/twitch/unlink`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Compte Twitch délié');
+        onUpdateProfile({ ...currentUser, twitch: null, displayNameSource: 'site', avatarSource: 'site', avatarUrl: null, displayName: currentUser.pseudo });
+      }
+    } catch { toast.error('Erreur'); }
+  };
+
+  const handleDisplayPref = async (patch) => {
+    try {
+      const res = await fetch(`${API_URL}/participants/${currentUser.id}/display-prefs`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const p = data.participant;
+        onUpdateProfile({ ...currentUser, displayNameSource: p.displayNameSource, avatarSource: p.avatarSource, displayName: p.displayName, avatarUrl: p.avatarUrl });
+      }
+    } catch { toast.error('Erreur'); }
+  };
+
 
   const handleChangeTeam = async () => {
     if (!selectedTeam && !showCreateTeam) {
@@ -195,7 +228,7 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
                 className="relative group flex-shrink-0"
                 title="Changer d'avatar"
               >
-                <Avatar avatarId={selectedAvatar} size="xl" />
+                <Avatar avatarId={selectedAvatar} avatarUrl={currentUser?.avatarUrl} size="xl" />
                 <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <Smile className="w-6 h-6 text-white" />
                 </div>
@@ -248,6 +281,53 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
               onSelect={handleChangeAvatar}
             />
           </div>
+        )}
+
+        {!currentUser?.isGuest && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-4">
+          <h3 className="text-lg font-bold mb-4 dark:text-white flex items-center gap-2">
+            <span className="text-[#9146FF] font-black">▶</span> Compte Twitch & affichage
+          </h3>
+
+          {currentUser?.twitch ? (
+            <>
+              <div className="flex items-center gap-3 mb-4">
+                {currentUser.twitch.avatarUrl && <img src={currentUser.twitch.avatarUrl} alt="" className="w-10 h-10 rounded-full" />}
+                <div>
+                  <p className="text-sm dark:text-white font-semibold">Lié à : {currentUser.twitch.displayName || currentUser.twitch.login}</p>
+                  <button onClick={handleUnlinkTwitch} className="text-xs text-red-500 hover:underline">Délier Twitch</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nom affiché</label>
+                  <select value={currentUser.displayNameSource || 'site'} onChange={(e) => handleDisplayPref({ displayNameSource: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="site">Pseudo du site ({currentUser.pseudo})</option>
+                    <option value="twitch">Nom Twitch ({currentUser.twitch.displayName})</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Avatar</label>
+                  <select value={currentUser.avatarSource || 'site'} onChange={(e) => handleDisplayPref({ avatarSource: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="site">Avatar du site</option>
+                    <option value="twitch">Photo Twitch</option>
+                  </select>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                Liez votre compte Twitch pour afficher votre nom/photo Twitch (et accéder aux fonctionnalités abonnés à venir).
+              </p>
+              <button onClick={handleLinkTwitch} className="px-4 py-2 rounded-lg bg-[#9146FF] hover:bg-[#7d2ff5] text-white font-semibold text-sm">
+                Lier mon compte Twitch
+              </button>
+            </div>
+          )}
+        </div>
         )}
 
         {/* Gestion equipe (masquée pour les invités) */}

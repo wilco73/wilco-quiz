@@ -209,6 +209,29 @@ router.put('/:id/pseudo', async (req, res) => {
   res.json({ success: true, participant: await db.getParticipantById(id) });
 });
 
+// choix pour l'affichage du pseudo et/ou de l'avatar twitch
+router.put('/:id/display-prefs', async (req, res) => {
+  try {
+    const { displayNameSource, avatarSource } = req.body;
+    const participant = await db.updateParticipantDisplayPrefs(req.params.id, { displayNameSource, avatarSource });
+    res.json({ success: true, participant });
+  } catch (error) {
+    console.error('[PARTICIPANTS] display-prefs:', error.message);
+    res.status(500).json({ success: false, message: 'Erreur' });
+  }
+});
+
+// delier son compte twitch
+router.post('/:id/twitch/unlink', async (req, res) => {
+  try {
+    const participant = await db.unlinkParticipantTwitch(req.params.id);
+    res.json({ success: true, participant });
+  } catch (error) {
+    console.error('[PARTICIPANTS] twitch/unlink:', error.message);
+    res.status(500).json({ success: false, message: 'Erreur' });
+  }
+});
+
 // Changer l'avatar d'un participant
 router.put('/:id/avatar', async (req, res) => {
   const { id } = req.params;
