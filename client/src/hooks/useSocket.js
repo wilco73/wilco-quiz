@@ -270,7 +270,7 @@ export function useSocket() {
   const loginWithToken = useCallback((token) => new Promise((resolve) => {
     if (!socketRef.current) return resolve({ success: false, message: 'Socket indisponible' });
     let done = false;
-    const t = setTimeout(() => { if (!done) { done = true; resolve({ success: false, message: 'timeout' }); } }, 10000);
+    const t = setTimeout(() => { if (!done) { done = true; resolve({ success: false, message: 'timeout' }); } }, 20000);
     socketRef.current.emit('auth:loginWithToken', { token }, (res) => {
       if (done) return; done = true; clearTimeout(t); resolve(res || { success: false });
     });
