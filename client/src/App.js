@@ -55,6 +55,7 @@ const App = () => {
   const lastSentDraftRef = useRef(''); // Pour éviter d'envoyer des doublons
   const urgentSaveTriggeredRef = useRef(false); // Pour éviter les envois répétés en fin de timer
   const myAnswerRef = useRef(''); // Ref pour avoir la valeur actuelle dans les event handlers
+  const loggingInRef = useRef(false);
   const [burgerEntry, setBurgerEntry] = useState(null); // { entry:'create'|'join', code? }
   
   // Synchroniser myAnswerRef avec myAnswer
@@ -90,42 +91,43 @@ const App = () => {
     }
   }, [timerState?.remaining, myAnswer, currentLobby, currentUser, isAdmin, hasAnswered, socket]);
 
-  // Retour OAuth Twitch : connexion (?auth=twitch) OU liaison (?linked=twitch)
+  // Connexion avec Twitch
   useEffect(() => {
-    if (!socket.isConnected) return;
-    const params = new URLSearchParams(window.location.search);
-    const isAuth = params.get('auth') === 'twitch';
-    const isLinked = params.get('linked') === 'twitch';
-    const hasError = params.get('error');
-    if (!isAuth && !isLinked && !hasError) return;
+    const doLogin = async (source) => {
+      if (currentUserRef.current || loggingInRef.current || !socket.isConnected) return;
+      const stored = getSession?.();
+      if (stored?.currentUser) return;
 
-    (async () => {
-      if (hasError) {
-        toast.error('Connexion Twitch impossible (compte déjà utilisé ?)');
-      } else {
-        if (isLinked) await supabase.auth.refreshSession().catch(() => {});
-        // Attendre que Supabase ait établi la session depuis l'URL
-        let session = null;
-        for (let i = 0; i < 15 && !session; i++) {
-          const { data } = await supabase.auth.getSession();
-          session = data?.session;
-          if (!session) await new Promise((r) => setTimeout(r, 200));
-        }
-        if (session) {
-          const result = await socket.loginWithToken(session.access_token);
-          if (result?.success) {
-            applyLoggedInUser(result.user);
-            if (isLinked) { setView('profile'); toast.success('Compte Twitch lié !'); }
-            else toast.success('Connecté avec Twitch !');
-          } else {
-            toast.error(result?.message || 'Connexion impossible');
-          }
-        }
+      const params = new URLSearchParams(window.location.search);
+      const isLinked = params.get('linked') === 'twitch';
+      if (isLinked) await supabase.auth.refreshSession().catch(() => {});
+
+      const { data } = await supabase.auth.getSession();
+      console.log('[OAUTH]', source, 'session?', !!data?.session, 'linked?', isLinked);
+      if (!data?.session) return;
+
+      loggingInRef.current = true;
+      const result = await socket.loginWithToken(data.session.access_token);
+      loggingInRef.current = false;
+      console.log('[OAUTH] login result', result?.success, result?.message);
+
+      if (result?.success) {
+        applyLoggedInUser(result.user);
+        if (isLinked) { setView('profile'); toast.success('Compte Twitch lié !'); }
+        if (params.get('auth') === 'twitch' || isLinked) window.history.replaceState({}, '', '/');
       }
-      window.history.replaceState({}, '', '/');
-    })();
+    };
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      console.log('[OAUTH] event', event);
+      if (event === 'SIGNED_IN') doLogin('event');
+    });
+    doLogin('mount');
+
+    return () => sub?.subscription?.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket.isConnected]);
+
 
   // Synchroniser le lobby actuel avec les mises a jour Socket
   useEffect(() => {
@@ -506,7 +508,10 @@ const App = () => {
 
   // Connexion via Supabase Auth (email/mdp ; Twitch plus tard)
   const handleAuthedToken = async (token) => {
+    if (loggingInRef.current) return;
+    loggingInRef.current = true;
     const result = await socket.loginWithToken(token);
+    loggingInRef.current = false;
     if (result?.success) {
       applyLoggedInUser(result.user);
       toast.success(`Bon retour ${result.user.displayName || result.user.pseudo} !`);

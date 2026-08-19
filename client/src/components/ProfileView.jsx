@@ -64,13 +64,21 @@ const ProfileView = ({ currentUser, teams, onUpdateProfile, onClose, embedded = 
 
   const handleUnlinkTwitch = async () => {
     try {
+      // 1) Retirer l'identité Twitch côté Supabase (sinon elle se rattache à la prochaine connexion)
+      const { data: { user } } = await supabase.auth.getUser();
+      const twitchIdentity = user?.identities?.find((i) => i.provider === 'twitch');
+      if (twitchIdentity) {
+        const { error } = await supabase.auth.unlinkIdentity(twitchIdentity);
+        if (error) { toast.error('Impossible de délier : ' + error.message); return; }
+      }
+      // 2) Nettoyer les champs Twitch du profil
       const res = await fetch(`${API_URL}/participants/${currentUser.id}/twitch/unlink`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         toast.success('Compte Twitch délié');
         onUpdateProfile({ ...currentUser, twitch: null, displayNameSource: 'site', avatarSource: 'site', avatarUrl: null, displayName: currentUser.pseudo });
       }
-    } catch { toast.error('Erreur'); }
+    } catch (e) { toast.error('Erreur'); }
   };
 
   const handleDisplayPref = async (patch) => {
