@@ -76,7 +76,7 @@ export default function AuthView({ onAuthed, onLegacyLogin, onGuest }) {
     setError(null);
     await supabase.auth.signInWithOAuth({
       provider: 'twitch',
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: window.location.origin + '/?auth=twitch' },
     });
   };
 

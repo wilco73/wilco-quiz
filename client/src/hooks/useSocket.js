@@ -269,7 +269,11 @@ export function useSocket() {
 
   const loginWithToken = useCallback((token) => new Promise((resolve) => {
     if (!socketRef.current) return resolve({ success: false, message: 'Socket indisponible' });
-    socketRef.current.emit('auth:loginWithToken', { token }, (res) => resolve(res || { success: false }));
+    let done = false;
+    const t = setTimeout(() => { if (!done) { done = true; resolve({ success: false, message: 'timeout' }); } }, 10000);
+    socketRef.current.emit('auth:loginWithToken', { token }, (res) => {
+      if (done) return; done = true; clearTimeout(t); resolve(res || { success: false });
+    });
   }), []);
   
   // Récupérer les infos utilisateur (refresh)

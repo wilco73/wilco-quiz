@@ -508,7 +508,11 @@ async function verifySupabaseJwt(jwt) {
   if (!jwt) return null;
   const { data, error } = await supabase.auth.getUser(jwt);
   if (error || !data?.user) return null;
-  return data.user; // { id, email, user_metadata, ... }
+  try {
+    const { data: full } = await supabase.auth.admin.getUserById(data.user.id);
+    if (full?.user) return full.user; // inclut les identities de façon fiable
+  } catch (e) { /* fallback ci-dessous */ }
+  return data.user;
 }
 
 // Retrouve le profil participant lié à un compte Supabase Auth

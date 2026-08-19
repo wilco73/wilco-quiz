@@ -49,7 +49,6 @@ const App = () => {
   const [currentMysteryLobby, setCurrentMysteryLobby] = useState(null);
   const [currentMemeLobby, setCurrentMemeLobby] = useState(null);
   const [currentMemeLobbyCode, setCurrentMemeLobbyCode] = useState(null);
-  const [pendingToken, setPendingToken] = useState(null);
   
   const hasReconnected = useRef(false);
   const draftTimeoutRef = useRef(null);
@@ -91,26 +90,40 @@ const App = () => {
     }
   }, [timerState?.remaining, myAnswer, currentLobby, currentUser, isAdmin, hasAnswered, socket]);
 
-  // Retour de liaison Twitch (?linked=twitch) : rafraîchir le profil avec les infos Twitch
+  // Retour OAuth Twitch : connexion (?auth=twitch) OU liaison (?linked=twitch)
   useEffect(() => {
     if (!socket.isConnected) return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('linked') === 'twitch') {
-      (async () => {
-        // Forcer un token à jour pour que l'identité Twitch fraîchement liée soit prise en compte
-        await supabase.auth.refreshSession().catch(() => {});
-        const { data } = await supabase.auth.getSession();
-        if (data?.session) {
-          const result = await socket.loginWithToken(data.session.access_token);
-          if (result?.success) { applyLoggedInUser(result.user); setView('profile'); toast.success('Compte Twitch lié !'); }
-          else toast.error(result?.message || 'Liaison impossible');
+    const isAuth = params.get('auth') === 'twitch';
+    const isLinked = params.get('linked') === 'twitch';
+    const hasError = params.get('error');
+    if (!isAuth && !isLinked && !hasError) return;
+
+    (async () => {
+      if (hasError) {
+        toast.error('Connexion Twitch impossible (compte déjà utilisé ?)');
+      } else {
+        if (isLinked) await supabase.auth.refreshSession().catch(() => {});
+        // Attendre que Supabase ait établi la session depuis l'URL
+        let session = null;
+        for (let i = 0; i < 15 && !session; i++) {
+          const { data } = await supabase.auth.getSession();
+          session = data?.session;
+          if (!session) await new Promise((r) => setTimeout(r, 200));
         }
-        window.history.replaceState({}, '', '/');
-      })();
-    } else if (params.get('error')) {
-      toast.error('Liaison Twitch impossible (compte déjà utilisé ?)');
+        if (session) {
+          const result = await socket.loginWithToken(session.access_token);
+          if (result?.success) {
+            applyLoggedInUser(result.user);
+            if (isLinked) { setView('profile'); toast.success('Compte Twitch lié !'); }
+            else toast.success('Connecté avec Twitch !');
+          } else {
+            toast.error(result?.message || 'Connexion impossible');
+          }
+        }
+      }
       window.history.replaceState({}, '', '/');
-    }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket.isConnected]);
 
@@ -171,38 +184,6 @@ const App = () => {
   // Connexion avec Twitch
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
-
-  // auto-login (1/2) : détecter une session Supabase et mémoriser le token à traiter
-  useEffect(() => {
-    if (window.location.pathname === '/reset-password') return;
-
-    const consider = (session) => {
-      const stored = getSession?.();
-      if (session && !currentUserRef.current && !stored?.currentUser) {
-        setPendingToken(session.access_token);
-      }
-    };
-
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') consider(session);
-      if (event === 'SIGNED_OUT') setPendingToken(null);
-    });
-    supabase.auth.getSession().then(({ data }) => consider(data?.session));
-
-    return () => sub?.subscription?.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // auto-login (2/2) : dès que le socket est prêt ET qu'un token attend -> connexion
-  useEffect(() => {
-    if (!pendingToken || !socket.isConnected || currentUserRef.current) return;
-    (async () => {
-      const result = await socket.loginWithToken(pendingToken);
-      if (result?.success) applyLoggedInUser(result.user);
-      setPendingToken(null);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingToken, socket.isConnected]);
 
   // Synchroniser currentLobby avec les lobbies globaux (fallback pour les participants)
   // Utile quand un participant ne reçoit pas lobby:state directement
@@ -630,9 +611,9 @@ const App = () => {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     // Couper AUSSI la session Supabase, sinon reconnexion fantôme au retour sur l'onglet
-    try { await supabase.auth.signOut(); } catch (e) { /* ignore */ }
+    supabase.auth.signOut({ scope: 'local' }).catch(() => {}); // instantané, coupe la session locale
 
     if (currentLobby && currentUser) {
       socket.leaveLobby(currentLobby.id, currentUser.id);
