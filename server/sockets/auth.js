@@ -8,14 +8,23 @@ const { connectedParticipants, participantSockets } = require('../utils/state');
 const { broadcastParticipantsUpdate, broadcastTeamsUpdate } = require('../utils/broadcast');
 
 function extractTwitch(authUser) {
-  const m = authUser.user_metadata || {};
+  if (!authUser) return null;
+  const identities = authUser.identities || [];
+  const tw = identities.find((i) => i.provider === 'twitch');
+  const d = tw?.identity_data || {};          // infos Twitch après linkIdentity
+  const m = authUser.user_metadata || {};     // infos après connexion directe Twitch
   const providers = authUser.app_metadata?.providers || [authUser.app_metadata?.provider];
-  if (!providers.includes('twitch')) return null;
+  const isTwitch = !!tw || providers.includes('twitch');
+  if (!isTwitch) return null;
+
+  const twitchId = d.sub || d.provider_id || d.user_id || m.sub || m.provider_id || null;
+  if (!twitchId) return null;
+
   return {
-    twitch_user_id: m.sub || m.provider_id || null,
-    twitch_login: m.nickname || m.preferred_username || null,
-    twitch_display_name: m.name || m.full_name || m.nickname || null,
-    twitch_avatar_url: m.picture || m.avatar_url || null,
+    twitch_user_id: String(twitchId),
+    twitch_login: d.nickname || d.preferred_username || d.login || m.nickname || m.preferred_username || null,
+    twitch_display_name: d.name || d.full_name || d.nickname || m.name || m.full_name || null,
+    twitch_avatar_url: d.picture || d.avatar_url || m.picture || m.avatar_url || null,
   };
 }
 
