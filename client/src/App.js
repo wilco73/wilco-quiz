@@ -33,7 +33,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 const App = () => {
   const socket = useSocketContext();
   const toast = useToast();
-  
+
   // Etats principaux
   const [view, setView] = useState('login');
   const [isAdmin, setIsAdmin] = useState(false);
@@ -49,7 +49,7 @@ const App = () => {
   const [currentMysteryLobby, setCurrentMysteryLobby] = useState(null);
   const [currentMemeLobby, setCurrentMemeLobby] = useState(null);
   const [currentMemeLobbyCode, setCurrentMemeLobbyCode] = useState(null);
-  
+
   const hasReconnected = useRef(false);
   const draftTimeoutRef = useRef(null);
   const lastSentDraftRef = useRef(''); // Pour éviter d'envoyer des doublons
@@ -57,23 +57,31 @@ const App = () => {
   const myAnswerRef = useRef(''); // Ref pour avoir la valeur actuelle dans les event handlers
   const loggingInRef = useRef(false);
   const [burgerEntry, setBurgerEntry] = useState(null); // { entry:'create'|'join', code? }
-  
+
   // Synchroniser myAnswerRef avec myAnswer
   useEffect(() => {
     myAnswerRef.current = myAnswer;
   }, [myAnswer]);
-  
+
   // Raccourcis vers l'etat global Socket
   const { lobbies, teams, participants, quizzes, questions } = socket.globalState;
   const { timerState, isConnected, currentLobbyState, socketReady } = socket;
+
+  const [oauthConnecting, setOauthConnecting] = useState(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('auth') === 'twitch';
+    } catch { return false; }
+  });
+
 
   // ========== SAUVEGARDE URGENTE QUAND TIMER BAS ==========
   // Envoyer immédiatement le brouillon quand il reste peu de temps
   useEffect(() => {
     if (!currentLobby || !currentUser || isAdmin || hasAnswered) return;
-    
+
     const remaining = timerState?.remaining;
-    
+
     // Quand il reste 3 secondes ou moins, envoyer immédiatement sans debounce
     if (remaining !== undefined && remaining <= 3 && remaining > 0) {
       // Éviter les envois répétés pour la même réponse
@@ -84,7 +92,7 @@ const App = () => {
         urgentSaveTriggeredRef.current = true;
       }
     }
-    
+
     // Reset le flag quand le timer remonte (nouvelle question)
     if (remaining > 5) {
       urgentSaveTriggeredRef.current = false;
@@ -98,19 +106,23 @@ const App = () => {
     const isLinked = params.get('linked') === 'twitch';
     const isAuth = params.get('auth') === 'twitch';
     const hasError = params.get('error');
-    if (!isLinked && !isAuth && !hasError) return; // hors retour Twitch : ne rien faire
+    if (!isLinked && !isAuth && !hasError) return;
 
     let cancelled = false;
     (async () => {
       if (hasError) {
         toast.error('Connexion Twitch impossible (compte déjà utilisé ?)');
+        setOauthConnecting(false);
         window.history.replaceState({}, '', '/');
         return;
       }
-      if (isLinked) await supabase.auth.refreshSession().catch(() => {});
+      // Connexion : si déjà connecté, rien à faire. Liaison : on continue même connecté.
+      if (isAuth && currentUserRef.current) { setOauthConnecting(false); window.history.replaceState({}, '', '/'); return; }
+
+      if (isLinked) await supabase.auth.refreshSession().catch(() => { });
 
       loggingInRef.current = true;
-      for (let i = 0; i < 6 && !cancelled && !currentUserRef.current; i++) {
+      for (let i = 0; i < 6 && !cancelled; i++) {
         const { data } = await supabase.auth.getSession();
         if (data?.session) {
           const result = await socket.loginWithToken(data.session.access_token);
@@ -123,9 +135,10 @@ const App = () => {
             break;
           }
         }
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 1200));
       }
       loggingInRef.current = false;
+      setOauthConnecting(false);
     })();
 
     return () => { cancelled = true; };
@@ -139,19 +152,19 @@ const App = () => {
     if (currentLobbyState) {
       const updatedLobby = currentLobbyState.lobby;
       const updatedQuiz = currentLobbyState.quiz;
-      
+
       if (updatedLobby) {
         const oldIndex = currentLobby?.session?.currentQuestionIndex || 0;
         const newIndex = updatedLobby.session?.currentQuestionIndex || 0;
-        
+
         console.log('[APP] lobby:state - status:', updatedLobby.status, 'questionIndex:', newIndex);
-        
+
         setCurrentLobby(updatedLobby);
         if (updatedQuiz) setCurrentQuiz(updatedQuiz);
-        
+
         // Vérifier si l'utilisateur est un participant du lobby
         const isParticipant = updatedLobby.participants?.some(p => p.participantId === currentUser?.id);
-        
+
         // Changement de question - pour les participants seulement
         if (newIndex > oldIndex && isParticipant) {
           setMyAnswer('');
@@ -160,19 +173,19 @@ const App = () => {
           lastSentDraftRef.current = '';
           urgentSaveTriggeredRef.current = false;
         }
-        
+
         // Quiz demarre - passer en vue quiz (pour les participants)
         if (updatedLobby.status === 'playing' && view === 'lobby' && isParticipant) {
           console.log('[APP] Quiz demarre, passage en vue quiz');
           setView('quiz');
         }
-        
+
         // Quiz termine - ne pas forcer si l'utilisateur est deja sur une autre vue
         // (lobby-list, history, profile, etc.)
         if (updatedLobby.status === 'finished' && view === 'quiz' && isParticipant) {
           setView('results');
         }
-        
+
         // Synchroniser hasAnswered - pour les participants
         if (currentUser && isParticipant) {
           const myParticipant = updatedLobby.participants?.find(p => p.participantId === currentUser.id);
@@ -204,7 +217,7 @@ const App = () => {
         const countLocalValidations = currentLobby.participants?.reduce((acc, p) => {
           return acc + Object.keys(p.validationsByQuestionId || {}).length;
         }, 0) || 0;
-        
+
         if (countGlobalValidations > countLocalValidations) {
           console.log('[APP] Sync depuis lobbies global - validations:', countLocalValidations, '->', countGlobalValidations);
           setCurrentLobby(updatedFromGlobal);
@@ -219,19 +232,19 @@ const App = () => {
       console.log('[APP] Socket pas encore pret pour les events');
       return;
     }
-    
+
     console.log('[APP] Enregistrement des event listeners');
-    
+
     const handleQuizStarted = (data) => {
       console.log('[EVENT] quiz:started recu', data);
       setCurrentLobby(data.lobby);
       setCurrentQuiz(data.quiz);
       // Mettre a jour aussi currentLobbyState pour eviter l'ecrasement
       socket.setCurrentLobbyState({ lobby: data.lobby, quiz: data.quiz });
-      
+
       // Vérifier si l'utilisateur est un PARTICIPANT du lobby (pas juste en monitoring)
       const isParticipant = data.lobby?.participants?.some(p => p.participantId === currentUser?.id);
-      
+
       // Si c'est un participant (admin ou non), passer en vue quiz
       // Les admins en monitoring restent sur leur vue actuelle
       if (isParticipant && view === 'lobby') {
@@ -240,14 +253,14 @@ const App = () => {
         setHasAnswered(false);
       }
     };
-    
+
     const handleQuestionChanged = (data) => {
       console.log('[EVENT] quiz:questionChanged recu', data.questionIndex);
       setCurrentLobby(data.lobby);
       if (data.quiz) setCurrentQuiz(data.quiz);
       // Mettre a jour aussi currentLobbyState
       socket.setCurrentLobbyState({ lobby: data.lobby, quiz: data.quiz || currentQuiz });
-      
+
       // Vérifier si l'utilisateur est un participant
       const isParticipant = data.lobby?.participants?.some(p => p.participantId === currentUser?.id);
       if (isParticipant) {
@@ -255,7 +268,7 @@ const App = () => {
         setHasAnswered(false);
       }
     };
-    
+
     const handleQuizFinished = (data) => {
       console.log('[EVENT] quiz:finished recu', data);
       // Mettre à jour avec le lobby complet si disponible
@@ -275,7 +288,7 @@ const App = () => {
         setView('results');
       }
     };
-    
+
     const handleTimerExpired = (data) => {
       console.log('[EVENT] timer:expired recu');
       const isParticipant = currentLobby?.participants?.some(p => p.participantId === currentUser?.id);
@@ -289,7 +302,7 @@ const App = () => {
         setHasAnswered(true);
       }
     };
-    
+
     const handleLobbyDeleted = (data) => {
       console.log('[EVENT] lobby:deleted recu');
       if (currentLobby?.id === data.lobbyId) {
@@ -304,7 +317,7 @@ const App = () => {
         }
       }
     };
-    
+
     const handleLobbyStopped = (data) => {
       console.log('[EVENT] lobby:stopped recu');
       if (currentLobby?.id === data.lobbyId) {
@@ -322,14 +335,14 @@ const App = () => {
         }
       }
     };
-    
+
     socket.on('quiz:started', handleQuizStarted);
     socket.on('quiz:questionChanged', handleQuestionChanged);
     socket.on('quiz:finished', handleQuizFinished);
     socket.on('timer:expired', handleTimerExpired);
     socket.on('lobby:deleted', handleLobbyDeleted);
     socket.on('lobby:stopped', handleLobbyStopped);
-    
+
     // Listener pour les drawing lobbies supprimés
     const handleDrawingLobbyDeleted = (data) => {
       if (currentDrawingLobby?.id === data.lobbyId) {
@@ -338,9 +351,9 @@ const App = () => {
         toast.info('Le lobby de dessin a été supprimé');
       }
     };
-    
+
     socket.on('drawingLobby:deleted', handleDrawingLobbyDeleted);
-    
+
     // Listener pour les mystery lobbies
     const handleMysteryLobbyDeleted = (data) => {
       if (currentMysteryLobby?.id === data.lobbyId) {
@@ -354,18 +367,18 @@ const App = () => {
         toast.info('Le lobby mystère a été supprimé');
       }
     };
-    
+
     socket.on('mystery:lobbyDeleted', handleMysteryLobbyDeleted);
-    
+
     // Écouter l'événement personnalisé pour rejoindre un mystery lobby
     const handleJoinMysteryLobby = (event) => {
       const lobby = event.detail;
       setCurrentMysteryLobby(lobby);
       setView('mystery-game');
     };
-    
+
     window.addEventListener('mystery:joinLobby', handleJoinMysteryLobby);
-    
+
     return () => {
       console.log('[APP] Nettoyage des event listeners');
       socket.off('quiz:started', handleQuizStarted);
@@ -384,18 +397,18 @@ const App = () => {
   useEffect(() => {
     if (hasReconnected.current) return;
     if (!isConnected) return;
-    
+
     const savedSession = getSession();
     if (!savedSession) {
       hasReconnected.current = true;
       return;
     }
-    
+
     // Restaurer l'utilisateur
     if (savedSession.currentUser) {
       const user = savedSession.currentUser;
       setCurrentUser(user);
-      
+
       // Restaurer les droits admin si présents
       if (user.isAdmin || user.isSuperAdmin) {
         setIsAdmin(true);
@@ -431,9 +444,9 @@ const App = () => {
   // Reconnexion a un lobby
   const reconnectToLobby = async (lobbyId, user) => {
     console.log('[APP] Tentative de reconnexion au lobby:', lobbyId);
-    
+
     const lobby = lobbies.find(l => l.id === lobbyId);
-    
+
     if (!lobby) {
       console.log('[APP] Lobby introuvable, redirection vers liste');
       setView('lobby-list');
@@ -441,24 +454,24 @@ const App = () => {
       saveSession({ currentUser: user });
       return;
     }
-    
+
     const isInLobby = lobby.participants?.some(p => p.participantId === user.id);
     console.log('[APP] Est dans le lobby:', isInLobby, 'Status:', lobby.status);
-    
+
     if (isInLobby) {
       setCurrentLobby(lobby);
       const quiz = quizzes.find(q => q.id === lobby.quizId);
       if (quiz) {
         setCurrentQuiz(quiz);
       }
-      
+
       // Rejoindre la room Socket pour recevoir les events
       try {
         await socket.joinLobby(lobbyId, user.id, user.pseudo, user.teamName);
       } catch (err) {
         console.error('[APP] Erreur joinLobby:', err);
       }
-      
+
       if (lobby.status === 'finished') {
         setView('results');
       } else if (lobby.status === 'playing' || lobby.session) {
@@ -480,12 +493,12 @@ const App = () => {
       toast.info('Le quiz a continue sans vous');
       saveSession({ currentUser: user });
     }
-    
+
     setIsAppReconnecting(false);
   };
 
   // === HANDLERS ===
-  
+
   // Login unifié - le serveur détermine le rôle via la colonne 'role'
   const applyLoggedInUser = (user) => {
     setCurrentUser(user);
@@ -547,9 +560,9 @@ const App = () => {
 
   const handleJoinLobby = async (lobbyId) => {
     if (!currentUser) return;
-    
+
     const result = await socket.joinLobby(lobbyId, currentUser.id, currentUser.pseudo, currentUser.teamName);
-    
+
     if (result.success) {
       setCurrentLobby(result.lobby);
       setCurrentQuiz(result.quiz);
@@ -562,9 +575,9 @@ const App = () => {
 
   const handleLeaveLobby = async () => {
     if (!currentLobby || !currentUser) return;
-    
+
     await socket.leaveLobby(currentLobby.id, currentUser.id);
-    
+
     setCurrentLobby(null);
     setCurrentQuiz(null);
     setMyAnswer('');
@@ -575,12 +588,12 @@ const App = () => {
 
   const handleAnswerChange = (answer) => {
     setMyAnswer(answer);
-    
+
     // Debounce pour sauvegarder le brouillon
     if (draftTimeoutRef.current) {
       clearTimeout(draftTimeoutRef.current);
     }
-    
+
     draftTimeoutRef.current = setTimeout(() => {
       if (currentLobby && currentUser) {
         socket.saveDraft(currentLobby.id, currentUser.id, answer);
@@ -590,22 +603,22 @@ const App = () => {
 
   const handleSubmitAnswer = async () => {
     if (!currentLobby || !currentUser || !currentQuiz) return;
-    
+
     const questions = currentLobby.shuffled && currentLobby.shuffledQuestions
       ? currentLobby.shuffledQuestions
       : currentQuiz.questions;
     const currentIndex = currentLobby.session?.currentQuestionIndex || 0;
     const currentQuestion = questions[currentIndex];
-    
+
     if (!currentQuestion) return;
-    
+
     const result = await socket.submitAnswer(
       currentLobby.id,
       currentUser.id,
       currentQuestion.id,
       myAnswer
     );
-    
+
     if (result.success) {
       setHasAnswered(true);
     } else {
@@ -622,7 +635,7 @@ const App = () => {
 
   const handleLogout = () => {
     // Couper AUSSI la session Supabase, sinon reconnexion fantôme au retour sur l'onglet
-    supabase.auth.signOut({ scope: 'local' }).catch(() => {}); // instantané, coupe la session locale
+    supabase.auth.signOut({ scope: 'local' }).catch(() => { }); // instantané, coupe la session locale
 
     if (currentLobby && currentUser) {
       socket.leaveLobby(currentLobby.id, currentUser.id);
@@ -640,13 +653,13 @@ const App = () => {
     setView('login');
     hasReconnected.current = false;
   };
-  
+
   const handleJoinDrawingLobby = async (lobby) => {
     if (!currentUser || !currentUser.teamName) {
       toast.error('Vous devez rejoindre une équipe d\'abord');
       return;
     }
-    
+
     // Si c'est une demande de création
     if (lobby.action === 'create') {
       try {
@@ -661,7 +674,7 @@ const App = () => {
           })
         });
         const data = await res.json();
-        
+
         if (data.success) {
           // Rejoindre le lobby créé
           const result = await socket.joinDrawingLobby(
@@ -670,7 +683,7 @@ const App = () => {
             currentUser.pseudo,
             currentUser.teamName
           );
-          
+
           if (result.success) {
             setCurrentDrawingLobby(result.lobby);
             setView('drawing-lobby');
@@ -685,7 +698,7 @@ const App = () => {
       }
       return;
     }
-    
+
     // Rejoindre un lobby existant
     const result = await socket.joinDrawingLobby(
       lobby.id,
@@ -693,7 +706,7 @@ const App = () => {
       currentUser.pseudo,
       currentUser.teamName
     );
-    
+
     if (result.success) {
       setCurrentDrawingLobby(result.lobby);
       setView('drawing-lobby');
@@ -733,10 +746,19 @@ const App = () => {
   const handleJoinBurger = (code) => { setBurgerEntry({ entry: 'join', code }); setView('burger-game'); };
 
   // === RENDER ===
-  
+
   // Page de réinitialisation de mot de passe (lien reçu par email), indépendante de l'auth
   if (window.location.pathname === '/reset-password') {
     return <ResetPasswordView />;
+  }
+
+  if (oauthConnecting && !currentUser) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-900 via-gray-900 to-gray-900 text-white gap-4">
+        <div className="w-10 h-10 border-4 border-[#9146FF] border-t-transparent rounded-full animate-spin" />
+        <p className="text-lg">Connexion avec Twitch…</p>
+      </div>
+    );
   }
 
   // Compte legacy non migré -> on force la complétion avant tout accès
@@ -753,7 +775,7 @@ const App = () => {
   if (!isConnected && view !== 'login') {
     return <ReconnectingScreen />;
   }
-  
+
   if (isAppReconnecting) {
     return <ReconnectingScreen />;
   }
@@ -761,9 +783,9 @@ const App = () => {
   // Vues qui utilisent le MainLayout (navigation latérale)
   const layoutViews = [
     'lobby-list', 'history', 'profile', 'scoreboard', 'meme-game',
-    'admin-dashboard', 'admin-participants', 'admin-questions', 
+    'admin-dashboard', 'admin-participants', 'admin-questions',
     'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
-    'admin-monitoring', 'admin-validation', 'admin-users', 
+    'admin-monitoring', 'admin-validation', 'admin-users',
     'admin-game-settings', 'admin-meme-templates',
     'meme-editor-test', 'meme-game-test', 'burger-game'
   ];
@@ -798,9 +820,9 @@ const App = () => {
                       pseudo: currentUser.pseudo,
                     })
                   });
-                  
+
                   const data = await res.json();
-                  
+
                   if (data.success) {
                     setCurrentMemeLobby(data.lobby);
                     setCurrentMemeLobbyCode(null);
@@ -826,7 +848,7 @@ const App = () => {
                 toast.error('Vous devez rejoindre une équipe d\'abord');
                 return;
               }
-              
+
               try {
                 // Créer le lobby via API REST (comme drawing-lobbies)
                 const res = await fetch(`${API_URL}/meme-lobbies`, {
@@ -845,9 +867,9 @@ const App = () => {
                     }
                   })
                 });
-                
+
                 const data = await res.json();
-                
+
                 if (data.success) {
                   setCurrentMemeLobby(data.lobby);
                   setCurrentMemeLobbyCode(null);
@@ -866,7 +888,7 @@ const App = () => {
             onJoinBurger={handleJoinBurger}
           />
         );
-      
+
       case 'history':
         return (
           <HistoryView
@@ -882,7 +904,7 @@ const App = () => {
             embedded={true}
           />
         );
-      
+
       case 'profile':
         return (
           <ProfileView
@@ -896,21 +918,21 @@ const App = () => {
             embedded={true}
           />
         );
-      
-        case 'meme-game':
-          return (
-            <MemeGameContainer
-              currentUser={currentUser}
-              lobby={currentMemeLobby}
-              onBack={() => {
-                setCurrentMemeLobby(null);
-                setCurrentMemeLobbyCode(null);
-                setView('lobby-list');
-                saveSession({ currentUser });
-              }}
-            />
-          );
-      
+
+      case 'meme-game':
+        return (
+          <MemeGameContainer
+            currentUser={currentUser}
+            lobby={currentMemeLobby}
+            onBack={() => {
+              setCurrentMemeLobby(null);
+              setCurrentMemeLobbyCode(null);
+              setView('lobby-list');
+              saveSession({ currentUser });
+            }}
+          />
+        );
+
       case 'scoreboard':
         return (
           <ScoreboardView
@@ -920,7 +942,7 @@ const App = () => {
             embedded={true}
           />
         );
-      
+
       // Vues admin
       case 'admin-dashboard':
       case 'admin-participants':
@@ -953,7 +975,7 @@ const App = () => {
         return (
           <MemeEditorTest />
         );
-      case 'meme-game-test': 
+      case 'meme-game-test':
         return <MemeGameTest />;
       case 'meme-game':
         return (
@@ -981,7 +1003,7 @@ const App = () => {
       {view === 'login' && (
         <AuthView onAuthed={handleAuthedToken} onLegacyLogin={handleLegacyLogin} onGuest={handleGuest} />
       )}
-      
+
       {/* Vues avec MainLayout */}
       {useMainLayout && (
         <MainLayout
@@ -998,7 +1020,7 @@ const App = () => {
           {renderLayoutContent()}
         </MainLayout>
       )}
-      
+
       {/* Vues sans MainLayout (jeu en cours) */}
       {view === 'lobby' && currentLobby && (
         <LobbyView
@@ -1008,7 +1030,7 @@ const App = () => {
           onLeaveLobby={handleLeaveLobby}
         />
       )}
-      
+
       {view === 'quiz' && (
         <QuizView
           lobby={currentLobby}
@@ -1023,7 +1045,7 @@ const App = () => {
           onPaste={handlePaste}
         />
       )}
-      
+
       {view === 'results' && (
         <QuizResultsView
           currentLobby={currentLobby}
@@ -1048,7 +1070,7 @@ const App = () => {
           }}
         />
       )}
-      
+
       {view === 'drawing-lobby' && currentDrawingLobby && (
         currentDrawingLobby.config?.gameType === 'relay' ? (
           <RelayLobbyView
@@ -1072,7 +1094,7 @@ const App = () => {
           />
         )
       )}
-      
+
       {/* Vue Mystery Game */}
       {view === 'mystery-game' && currentMysteryLobby && (
         <MysteryGameView
@@ -1091,7 +1113,7 @@ const App = () => {
           }}
         />
       )}
-      
+
       {/* Widget de Monitoring Flottant - visible pour les admins */}
       {(currentUser?.isAdmin || currentUser?.isSuperAdmin) && (
         <MonitoringWidget
@@ -1112,7 +1134,7 @@ const App = () => {
           }}
         />
       )}
-      
+
       {/* Prompt installation PWA */}
       <PWAInstallPrompt />
     </div>
