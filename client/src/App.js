@@ -29,8 +29,6 @@ import { supabase } from './services/supabase';
 import { API_URL } from './config';
 import './App.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
-
 const App = () => {
   const socket = useSocketContext();
   const toast = useToast();
