@@ -441,7 +441,7 @@ const MysteryGridManager = ({ socket, currentUser, onJoinLobby }) => {
                 value={newGrid.gridSize}
                 onChange={(e) => setNewGrid({ ...newGrid, gridSize: parseInt(e.target.value) || 1 })}
                 min="1"
-                max="100"
+                max="300"
                 className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
             </div>
@@ -631,7 +631,7 @@ const MysteryGridManager = ({ socket, currentUser, onJoinLobby }) => {
                         value={editingGrid.gridSize}
                         onChange={(e) => setEditingGrid({ ...editingGrid, gridSize: parseInt(e.target.value) || 1 })}
                         min="1"
-                        max="100"
+                        max="300"
                         className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       />
                     </div>
