@@ -16,7 +16,9 @@ const LobbyList = ({
   onJoinMemeLobby,
   onCreateMemeLobby,
   onCreateBurger,
-  onJoinBurger
+  onJoinBurger,
+  onCreateWilpost,
+  onJoinWilpost,
 }) => {
   const [gameSettings, setGameSettings] = useState([]);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -28,6 +30,8 @@ const LobbyList = ({
   const [loadingCreate, setLoadingCreate] = useState(false);
   const [burgerJoinCode, setBurgerJoinCode] = useState('');
   const [showBurgerJoin, setShowBurgerJoin] = useState(false);
+  const [wilpostJoinCode, setWilpostJoinCode] = useState('');
+  const [showWilpostJoin, setShowWilpostJoin] = useState(false);
 
   const availableLobbies = lobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
 
@@ -120,7 +124,8 @@ const LobbyList = ({
       'quiz': ['quiz', 'Quiz'],
       'mystery': ['mystery', 'cases_mysteres', 'Cases Mystères'],
       'meme': ['meme', 'make_it_meme', 'Make It Meme'],
-      'burger': ['burger', 'burger_quiz', 'Burger', 'Burger_Quiz']
+      'burger': ['burger', 'burger_quiz', 'Burger', 'Burger_Quiz'],
+      'wilpost': ['wilpost', 'Wilpost', 'wilpost-it', 'Wilpost-it'],
     };
     
     const variations = idVariations[gameId] || [gameId];
@@ -573,6 +578,71 @@ const LobbyList = ({
           )}
         </section>
       )}
+
+      {/* ==================== SECTION Wilpost-it ==================== */}
+      {isGameEnabled('wilpost') && (
+        <section className="mb-6 sm:mb-8">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
+            📝 Wilpost-it
+          </h2>
+
+          {currentUser && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
+              {canCreateLobby('wilpost') ? (
+                <button
+                  onClick={onCreateWilpost}
+                  disabled={loadingCreate}
+                  className={`bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
+                >
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="text-3xl">📝</div>
+                    <div>
+                      <h4 className="text-lg font-bold">{loadingCreate ? 'Création...' : 'Créer une partie'}</h4>
+                      <p className="text-white/80 text-sm">Fais deviner un mot à ta cible et devine le tien</p>
+                    </div>
+                  </div>
+                </button>
+              ) : (
+                <div></div>
+              )}
+
+              {showWilpostJoin ? (
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-xl p-4 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={wilpostJoinCode}
+                    onChange={(e) => setWilpostJoinCode(e.target.value.toUpperCase())}
+                    placeholder="CODE"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    maxLength={4}
+                    autoFocus
+                    onKeyPress={(e) => e.key === 'Enter' && wilpostJoinCode.trim() && onJoinWilpost(wilpostJoinCode)}
+                  />
+                  <button
+                    onClick={() => onJoinWilpost(wilpostJoinCode)}
+                    disabled={!wilpostJoinCode.trim()}
+                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                  >
+                    OK
+                  </button>
+                  <button onClick={() => { setShowWilpostJoin(false); setWilpostJoinCode(''); }} className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">✕</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowWilpostJoin(true)} className="bg-gradient-to-r from-gray-600 to-gray-700 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02]">
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="text-3xl">🔑</div>
+                    <div>
+                      <h4 className="text-lg font-bold">Rejoindre avec code</h4>
+                      <p className="text-white/80 text-sm">Entrez le code d'une partie privée</p>
+                    </div>
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
 
       {/* ==================== SECTION Burger Quiz ==================== */}
       {isGameEnabled('burger') && (

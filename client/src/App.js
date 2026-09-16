@@ -25,6 +25,7 @@ import MemeGameContainer from './components/MemeGameContainer';
 import BurgerGameContainer from './components/BurgerGameContainer';
 import ResetPasswordView from './components/ResetPasswordView';
 import CompleteAccountView from './components/CompleteAccountView';
+import WilpostGameContainer from './components/WilpostGameContainer';
 import { supabase } from './services/supabase';
 import { API_URL } from './config';
 import './App.css';
@@ -56,6 +57,7 @@ const App = () => {
   const myAnswerRef = useRef(''); // Ref pour avoir la valeur actuelle dans les event handlers
   const loggingInRef = useRef(false);
   const [burgerEntry, setBurgerEntry] = useState(null); // { entry:'create'|'join', code? }
+  const [wilpostEntry, setWilpostEntry] = useState(null);
 
   // Synchroniser myAnswerRef avec myAnswer
   useEffect(() => {
@@ -753,6 +755,9 @@ const App = () => {
     }
   };
 
+  const handleCreateWilpost = () => { setWilpostEntry({ entry: 'create' }); setView('wilpost-game'); };
+  const handleJoinWilpost = (code) => { setWilpostEntry({ entry: 'join', code }); setView('wilpost-game'); };
+
   const handleCreateBurger = () => { setBurgerEntry({ entry: 'create' }); setView('burger-game'); };
   const handleJoinBurger = (code) => { setBurgerEntry({ entry: 'join', code }); setView('burger-game'); };
 
@@ -798,7 +803,7 @@ const App = () => {
     'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
     'admin-monitoring', 'admin-validation', 'admin-users',
     'admin-game-settings', 'admin-meme-templates',
-    'meme-editor-test', 'meme-game-test', 'burger-game'
+    'meme-editor-test', 'meme-game-test', 'burger-game', 'wilpost-game'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -897,6 +902,8 @@ const App = () => {
             }}
             onCreateBurger={handleCreateBurger}
             onJoinBurger={handleJoinBurger}
+            onCreateWilpost={handleCreateWilpost}
+            onJoinWilpost={handleJoinWilpost}
           />
         );
 
@@ -1002,6 +1009,15 @@ const App = () => {
             entry={burgerEntry?.entry || 'join'}
             joinCode={burgerEntry?.code}
             onExit={() => { setBurgerEntry(null); setView('lobby-list'); }}
+          />
+        );
+      case 'wilpost-game':
+        return (
+          <WilpostGameContainer
+            currentUser={currentUser}
+            entry={wilpostEntry?.entry || 'join'}
+            joinCode={wilpostEntry?.code}
+            onExit={() => { setWilpostEntry(null); setView('lobby-list'); }}
           />
         );
       default:
