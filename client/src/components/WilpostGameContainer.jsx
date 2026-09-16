@@ -46,6 +46,7 @@ export default function WilpostGameContainer({ currentUser, entry, joinCode, onE
         lobby={lobby} currentUser={currentUser} isHost={game.isHost}
         onSetOrder={game.setOrder} onSetDuration={game.setRoundDuration}
         onSetWord={game.setWord} onStart={game.startGame} onBack={handleExit}
+        onStopGame={game.stopGame}
       />
     );
   }

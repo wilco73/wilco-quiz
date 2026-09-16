@@ -7,7 +7,7 @@ import Avatar from './Avatar';
  * - Saisie du mot pour sa cible (joueur suivant).
  * - Réglage de la durée de round + démarrage (hôte).
  */
-export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrder, onSetDuration, onSetWord, onStart, onBack }) {
+export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrder, onSetDuration, onSetWord, onStart, onBack, onStopGame }) {
   const [word, setWord] = useState('');
   const [dragIndex, setDragIndex] = useState(null);
 
