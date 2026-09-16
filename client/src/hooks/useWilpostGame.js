@@ -66,6 +66,8 @@ export default function useWilpostGame(currentUser) {
   const startGame = useCallback(() => emitAck('wilpost:startGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
   const leaveLobby = useCallback(() => emitAck('wilpost:leaveLobby', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
   const stopGame = useCallback(() => emitAck('wilpost:stopGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
+  const submitAnswer = useCallback((answer) => emitAck('wilpost:submitAnswer', { code: codeRef.current, odId: currentUser?.id, answer }), [emitAck, currentUser]);
+  const vote = useCallback((v) => emitAck('wilpost:vote', { code: codeRef.current, odId: currentUser?.id, vote: v }), [emitAck, currentUser]);
 
-  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setOrder, setRoundDuration, setWord, startGame, beginRound, endTurn, stopGame, leaveLobby, setError };
+  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setOrder, setRoundDuration, setWord, startGame, beginRound, endTurn, stopGame, submitAnswer, vote, leaveLobby, setError };
 }

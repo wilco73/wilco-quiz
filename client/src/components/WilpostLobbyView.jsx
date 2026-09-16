@@ -7,7 +7,7 @@ import Avatar from './Avatar';
  * - Saisie du mot pour sa cible (joueur suivant).
  * - Réglage de la durée de round + démarrage (hôte).
  */
-export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrder, onSetDuration, onSetWord, onStart, onBack, onStopGame }) {
+export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrder, onSetDuration, onSetWord, onStart, onStopGame, onBack }) {
   const [word, setWord] = useState('');
   const [dragIndex, setDragIndex] = useState(null);
 
@@ -32,12 +32,14 @@ export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrde
   };
 
   return (
-    <div className="fixed inset-0 z-60 overflow-y-auto bg-gradient-to-br from-yellow-900 via-gray-900 to-gray-900 text-white p-4">
+    <div className="min-h-full bg-gradient-to-br from-yellow-900 via-gray-900 to-gray-900 text-white rounded-xl p-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <button onClick={onBack} className="px-3 py-1.5 rounded-lg bg-gray-800/70 hover:bg-gray-700 text-sm">← Quitter</button>
-          {isHost && <button onClick={onStopGame} className="px-3 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800 text-sm">Fermer la partie</button>}
+          <div className="flex gap-2">
+            <button onClick={onBack} className="px-3 py-1.5 rounded-lg bg-gray-800/70 hover:bg-gray-700 text-sm">← Quitter</button>
+            {isHost && <button onClick={onStopGame} className="px-3 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800 text-sm">Fermer</button>}
+          </div>
           <h1 className="text-xl font-extrabold">📝 Wilpost-it</h1>
           <span className="bg-gray-800 rounded-lg px-3 py-1 font-mono font-bold tracking-widest">{lobby.code}</span>
         </div>
