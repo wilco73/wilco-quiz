@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Plus, Trash2, RotateCw, Move, Type, Bold, Italic, Underline, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, ChevronUp, ChevronDown, Download, Check, Undo,
-  Loader2
+  Loader2, Copy, Clipboard
 } from 'lucide-react';
 
 /**
@@ -55,6 +55,9 @@ const DEFAULT_TEXT = {
   strokeWidth: 2,
 };
 
+// Paramètres de style repris d'un texte à l'autre (mémoire des derniers réglages)
+const STYLE_KEYS = ['fontSize', 'fontFamily', 'fontColor', 'fontWeight', 'fontStyle', 'textDecoration', 'textAlign', 'strokeColor', 'strokeWidth'];
+
 export default function MemeEditor({
   template,
   onSave,
@@ -83,6 +86,8 @@ export default function MemeEditor({
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
+  const lastStyleRef = useRef({});   // derniers paramètres de style utilisés
+  const clipboardRef = useRef(null); // presse-papier de zone de texte
 
   // Charger les zones prédéfinies si présentes, sinon reset
   useEffect(() => {
@@ -137,7 +142,9 @@ export default function MemeEditor({
   const addTextLayer = () => {
     const newLayer = {
       ...DEFAULT_TEXT,
+      ...lastStyleRef.current, // reprend taille, police, couleur… du dernier texte
       id: `text-${Date.now()}`,
+      text: 'Votre texte',
       x: template.width / 2 - 100,
       y: template.height / 2 - 30,
     };
@@ -152,10 +159,42 @@ export default function MemeEditor({
     setSelectedLayerId(null);
   };
 
+  const copySelectedLayer = () => {
+    const layer = textLayersRef.current.find(l => l.id === selectedLayerId);
+    if (layer) clipboardRef.current = { ...layer };
+  };
+
+  const pasteLayer = () => {
+    const src = clipboardRef.current;
+    if (!src) return;
+    const newLayer = { ...src, id: `text-${Date.now()}`, x: (src.x || 0) + 20, y: (src.y || 0) + 20 };
+    setTextLayers(prev => [...prev, newLayer]);
+    setSelectedLayerId(newLayer.id);
+  };
+
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+        if (selectedLayerId) { e.preventDefault(); copySelectedLayer(); }
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
+        if (clipboardRef.current) { e.preventDefault(); pasteLayer(); }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLayerId]);
+
   // Mettre à jour une propriété du layer sélectionné
   const updateSelectedLayer = (updates) => {
     if (!selectedLayerId) return;
-    setTextLayers(textLayers.map(l => 
+    // Mémoriser les paramètres de style pour les prochains textes
+    const styleUpdate = {};
+    STYLE_KEYS.forEach((k) => { if (k in updates) styleUpdate[k] = updates[k]; });
+    if (Object.keys(styleUpdate).length) lastStyleRef.current = { ...lastStyleRef.current, ...styleUpdate };
+    setTextLayers(textLayers.map(l =>
       l.id === selectedLayerId ? { ...l, ...updates } : l
     ));
   };
@@ -524,6 +563,21 @@ export default function MemeEditor({
             title="Supprimer le texte"
           >
             <Trash2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={copySelectedLayer}
+            disabled={!selectedLayerId}
+            className="p-2 hover:bg-gray-700 rounded text-white disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Copier le texte (Ctrl+C)"
+          >
+            <Copy className="w-4 h-4" />
+          </button>
+          <button
+            onClick={pasteLayer}
+            className="p-2 hover:bg-gray-700 rounded text-white"
+            title="Coller le texte (Ctrl+V)"
+          >
+            <Clipboard className="w-4 h-4" />
           </button>
         </div>
 
