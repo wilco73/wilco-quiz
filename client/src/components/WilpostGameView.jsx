@@ -12,7 +12,7 @@ function fmt(ms) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export default function WilpostGameView({ lobby, currentUser, isHost, onEndTurn, onBack }) {
+export default function WilpostGameView({ lobby, currentUser, isHost, onEndTurn, onStopGame, onBack }) {
   const [remaining, setRemaining] = useState(lobby.roundRemainingMs ?? 0);
   const [notes, setNotes] = useState('');
   const endRef = useRef(null);
@@ -38,7 +38,7 @@ export default function WilpostGameView({ lobby, currentUser, isHost, onEndTurn,
   const canEndTurn = (isMyTurn || isHost);
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-gradient-to-b from-gray-900 to-black text-white overflow-hidden">
+    <div className="fixed inset-0 z-60 flex flex-col bg-gradient-to-b from-gray-900 to-black text-white overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 shrink-0">
         <button onClick={onBack} className="px-3 py-1.5 rounded-lg bg-gray-800/70 hover:bg-gray-700 text-sm">← Quitter</button>
@@ -99,13 +99,18 @@ export default function WilpostGameView({ lobby, currentUser, isHost, onEndTurn,
       </div>
 
       {/* Barre d'action */}
-      <div className="shrink-0 p-3 bg-gray-950/80 border-t border-gray-800 flex items-center justify-center gap-3">
+      <div className="shrink-0 p-3 bg-gray-950/80 border-t border-gray-800 flex flex-wrap items-center justify-center gap-3">
         {canEndTurn ? (
           <button onClick={onEndTurn} className="px-6 py-3 rounded-xl bg-red-700 hover:bg-red-600 font-bold">
             {isMyTurn ? '⏭ Fin de mon tour' : "⏭ Passer le tour (hôte)"}
           </button>
         ) : (
           <p className="text-sm text-gray-500">En attente… (les réponses arriveront à la Phase 3)</p>
+        )}
+        {isHost && (
+          <button onClick={onStopGame} className="px-4 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-red-300 font-semibold text-sm">
+            ⏹ Arrêter la partie
+          </button>
         )}
       </div>
     </div>

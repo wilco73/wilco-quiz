@@ -32,11 +32,12 @@ export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrde
   };
 
   return (
-    <div className="fixed inset-0 z-40 overflow-y-auto bg-gradient-to-br from-yellow-900 via-gray-900 to-gray-900 text-white p-4">
+    <div className="fixed inset-0 z-60 overflow-y-auto bg-gradient-to-br from-yellow-900 via-gray-900 to-gray-900 text-white p-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <button onClick={onBack} className="px-3 py-1.5 rounded-lg bg-gray-800/70 hover:bg-gray-700 text-sm">← Quitter</button>
+          {isHost && <button onClick={onStopGame} className="px-3 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800 text-sm">Fermer la partie</button>}
           <h1 className="text-xl font-extrabold">📝 Wilpost-it</h1>
           <span className="bg-gray-800 rounded-lg px-3 py-1 font-mono font-bold tracking-widest">{lobby.code}</span>
         </div>

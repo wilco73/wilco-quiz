@@ -248,6 +248,16 @@ function register(socket, io) {
     advanceTurn(io, lobby);
     cb?.({ success: true });
   });
+
+  // Arrêter la partie (hôte) : termine pour tout le monde + supprime le lobby
+  socket.on('wilpost:stopGame', (data, cb) => {
+    const lobby = wilpostLobbies.get(String(data?.code || '').trim());
+    if (!isHost(lobby, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
+    io.to(room(lobby.code)).emit('wilpost:gameEnded', { code: lobby.code });
+    clearTimer(lobby);
+    wilpostLobbies.delete(lobby.code);
+    cb?.({ success: true });
+  });
 }
 
 module.exports = { register };
