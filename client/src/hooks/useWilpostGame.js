@@ -10,8 +10,6 @@ export default function useWilpostGame(currentUser) {
   const [ended, setEnded] = useState(false);
   const codeRef = useRef(null);
 
-  const stopGame = useCallback(() => emitAck('wilpost:stopGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
-
   const emitAck = useCallback((event, payload) => new Promise((resolve) => {
     if (!socket) return resolve({ success: false, message: 'Socket indisponible' });
     socket.emit(event, payload, (res) => resolve(res || { success: false }));
@@ -67,6 +65,7 @@ export default function useWilpostGame(currentUser) {
   const setWord = useCallback((word) => emitAck('wilpost:setWord', { code: codeRef.current, odId: currentUser?.id, word }), [emitAck, currentUser]);
   const startGame = useCallback(() => emitAck('wilpost:startGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
   const leaveLobby = useCallback(() => emitAck('wilpost:leaveLobby', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
+  const stopGame = useCallback(() => emitAck('wilpost:stopGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
 
   return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setOrder, setRoundDuration, setWord, startGame, beginRound, endTurn, stopGame, leaveLobby, setError };
 }
