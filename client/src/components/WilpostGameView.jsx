@@ -81,9 +81,9 @@ export default function WilpostGameView({ lobby, currentUser, isHost, onEndTurn,
       )}
 
       {/* Corps */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col lg:flex-row gap-4">
         {/* Joueurs + mots + zone de réponse */}
-        <div className="lg:col-span-2 space-y-3">
+        <div className="lg:flex-[2] space-y-3">
           <div>
             <h2 className="font-bold mb-2 text-gray-300">Mots à deviner</h2>
             <div className="space-y-2">
@@ -124,7 +124,7 @@ export default function WilpostGameView({ lobby, currentUser, isHost, onEndTurn,
         </div>
 
         {/* Colonne droite : tentatives + notes */}
-        <div className="space-y-4">
+        <div className="lg:flex-1 flex flex-col gap-4 min-h-0">
           <div>
             <h2 className="font-bold mb-2 text-gray-300">Tentatives</h2>
             <div className="space-y-1 max-h-48 overflow-y-auto">
@@ -139,12 +139,12 @@ export default function WilpostGameView({ lobby, currentUser, isHost, onEndTurn,
           </div>
 
           {!isSpectator ? (
-            <div className="flex flex-col">
+            <div className="flex-1 flex flex-col min-h-0">
               <h2 className="font-bold mb-2 text-gray-300">Mes notes</h2>
               <textarea
                 value={notes} onChange={(e) => setNotes(e.target.value)}
                 placeholder="Note tes questions et pistes (visible seulement par toi)…"
-                className="min-h-[120px] w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:border-yellow-500 outline-none text-sm resize-none"
+                className="flex-1 min-h-[120px] w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:border-yellow-500 outline-none text-sm resize-none"
               />
             </div>
           ) : (
