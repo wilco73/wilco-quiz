@@ -57,11 +57,14 @@ export default function useWilpostGame(currentUser) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emitAck, currentUser]);
 
+  const beginRound = useCallback(() => emitAck('wilpost:beginRound', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
+  const endTurn = useCallback(() => emitAck('wilpost:endTurn', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
+
   const setOrder = useCallback((order) => emitAck('wilpost:setOrder', { code: codeRef.current, odId: currentUser?.id, order }), [emitAck, currentUser]);
   const setRoundDuration = useCallback((duration) => emitAck('wilpost:setRoundDuration', { code: codeRef.current, odId: currentUser?.id, duration }), [emitAck, currentUser]);
   const setWord = useCallback((word) => emitAck('wilpost:setWord', { code: codeRef.current, odId: currentUser?.id, word }), [emitAck, currentUser]);
   const startGame = useCallback(() => emitAck('wilpost:startGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
   const leaveLobby = useCallback(() => emitAck('wilpost:leaveLobby', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
 
-  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setOrder, setRoundDuration, setWord, startGame, leaveLobby, setError };
+  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setOrder, setRoundDuration, setWord, startGame, beginRound, endTurn, leaveLobby, setError };
 }

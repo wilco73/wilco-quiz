@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import useWilpostGame from '../hooks/useWilpostGame';
+import Avatar from './Avatar';
 import WilpostLobbyView from './WilpostLobbyView';
+import WilpostGameView from './WilpostGameView';
 
 export default function WilpostGameContainer({ currentUser, entry, joinCode, onExit }) {
   const game = useWilpostGame(currentUser);
@@ -35,27 +37,58 @@ export default function WilpostGameContainer({ currentUser, entry, joinCode, onE
     return <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-900 text-white"><p className="animate-pulse">Connexion à la partie…</p></div>;
   }
 
-  if (game.lobby.status === 'waiting') {
+  const lobby = game.lobby;
+
+  // Lobby
+  if (lobby.status === 'waiting') {
     return (
       <WilpostLobbyView
-        lobby={game.lobby}
-        currentUser={currentUser}
-        isHost={game.isHost}
-        onSetOrder={game.setOrder}
-        onSetDuration={game.setRoundDuration}
-        onSetWord={game.setWord}
-        onStart={game.startGame}
-        onBack={handleExit}
+        lobby={lobby} currentUser={currentUser} isHost={game.isHost}
+        onSetOrder={game.setOrder} onSetDuration={game.setRoundDuration}
+        onSetWord={game.setWord} onStart={game.startGame} onBack={handleExit}
       />
     );
   }
 
-  // Phase 2 : écran de jeu (placeholder)
+  // Intro : tout le monde se prépare, l'hôte lance le 1er round
+  if (lobby.phase === 'intro') {
+    const starter = lobby.players.find((p) => p.odId === lobby.currentPlayerId);
+    return (
+      <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-gradient-to-br from-yellow-900 via-gray-900 to-gray-900 text-white p-6 text-center gap-5">
+        <h1 className="text-3xl font-extrabold">📝 La partie commence !</h1>
+        {starter && (
+          <div className="flex flex-col items-center gap-2">
+            <Avatar avatarId={starter.avatar} avatarUrl={starter.avatarUrl} size="xl" />
+            <p className="text-xl">C'est <span className="font-bold text-yellow-300">{starter.pseudo}</span> qui commence.</p>
+          </div>
+        )}
+        <p className="text-gray-400 max-w-md">Chacun pose ses questions à voix haute pour deviner son mot. Le joueur en cours continue tant qu'il obtient des « oui », et termine son tour quand il veut (ou au bout du temps).</p>
+        {game.isHost ? (
+          <button onClick={game.beginRound} className="px-6 py-3 rounded-xl bg-green-600 hover:bg-green-500 font-bold text-lg">▶ Lancer le premier round</button>
+        ) : (
+          <p className="text-sm text-gray-400 animate-pulse">En attente que l'hôte lance le premier round…</p>
+        )}
+        <button onClick={handleExit} className="text-xs text-gray-500 hover:text-white mt-4">Quitter</button>
+      </div>
+    );
+  }
+
+  // Fin de partie (Phase 3 fera un vrai récap)
+  if (lobby.phase === 'finished') {
+    return (
+      <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-gray-900 text-white gap-4 text-center p-6">
+        <h1 className="text-3xl font-extrabold">🏁 Partie terminée !</h1>
+        <p className="text-gray-400">Le récap détaillé arrivera avec la Phase 3.</p>
+        <button onClick={handleExit} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg">Retour à l'accueil</button>
+      </div>
+    );
+  }
+
+  // Round en cours
   return (
-    <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-gray-900 text-white gap-4">
-      <p className="text-2xl font-bold">📝 La partie commence !</p>
-      <p className="text-gray-400">L'écran de jeu (tours, questions, réponses) arrive à la prochaine étape.</p>
-      <button onClick={handleExit} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg">Quitter</button>
-    </div>
+    <WilpostGameView
+      lobby={lobby} currentUser={currentUser} isHost={game.isHost}
+      onEndTurn={game.endTurn} onBack={handleExit}
+    />
   );
 }
