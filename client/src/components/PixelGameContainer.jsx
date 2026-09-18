@@ -4,6 +4,7 @@ import Avatar from './Avatar';
 import PixelLobbyView from './PixelLobbyView';
 import PixelPaintView from './PixelPaintView';
 import PixelDirectorView from './PixelDirectorView';
+import PixelRevealView from './PixelRevealView';
 
 export default function PixelGameContainer({ currentUser, entry, joinCode, onExit }) {
   const game = usePixelGame(currentUser);
@@ -66,24 +67,33 @@ export default function PixelGameContainer({ currentUser, entry, joinCode, onExi
   // Peinture
   if (l.phase === 'paint') {
     if (isDir) return <PixelDirectorView lobby={l} isHost={game.isHost} onLaunch={game.launchPaint} onEndRound={game.endRound} onStopGame={game.stopGame} onBack={handleExit} />;
-    return <PixelPaintView lobby={l} currentUser={currentUser} isHost={game.isHost} onPaintCell={game.paintCell} onClearGrid={game.clearGrid} onStopGame={game.stopGame} onBack={handleExit} />;
+    return <PixelPaintView lobby={l} currentUser={currentUser} isHost={game.isHost} onPaintCell={game.paintCell} onFillArea={game.fillArea} onFillAll={game.fillAll} onClearGrid={game.clearGrid} onStopGame={game.stopGame} onBack={handleExit} />;
   }
 
-  // Fin de manche (transition ; le reveal + score arrivent en Phase 3)
+  // Fin de manche : reveal + score
   if (l.phase === 'round-end') {
-    const last = l.currentRound >= l.rounds;
-    return (
-      <div className="h-full flex flex-col items-center justify-center bg-gray-900 text-white rounded-xl p-6 gap-4 text-center">
-        <h1 className="text-2xl font-extrabold">✅ Manche {l.currentRound} terminée !</h1>
-        <p className="text-gray-400">Le rendu de toutes les grilles + le score arriveront à la prochaine étape.</p>
-        {(isDir || game.isHost) ? (
-          <button onClick={game.continueRound} className="px-5 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 font-bold">{last ? '🏁 Voir la fin' : '▶ Manche suivante'}</button>
-        ) : <p className="text-sm text-gray-400 animate-pulse">En attente du Directeur…</p>}
-        {game.isHost && <button onClick={game.stopGame} className="text-xs text-red-400 hover:text-red-300">⏹ Arrêter la partie</button>}
-      </div>
-    );
+    return <PixelRevealView lobby={l} isDirector={isDir} isHost={game.isHost} onContinue={game.continueRound} onStopGame={game.stopGame} onBack={handleExit} />;
   }
 
-  // finished (placeholder Phase 3)
-  return shell(<div><p className="text-2xl font-extrabold mb-2">🏁 Partie terminée !</p><p className="text-gray-400 mb-4">Le récap et les scores arrivent en Phase 3.</p><button onClick={game.isHost ? game.stopGame : handleExit} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg">{game.isHost ? 'Fermer' : 'Retour'}</button></div>);
+  // Classement final
+  return (
+    <div className="h-full flex flex-col bg-gradient-to-b from-gray-900 to-black text-white rounded-xl overflow-hidden">
+      <div className="text-center py-5 shrink-0">
+        <h1 className="text-3xl font-extrabold">🏁 Partie terminée !</h1>
+        <p className="text-gray-400">Score d'équipe moyen : <span className="text-cyan-300 font-black text-xl">{l.totalScore}%</span></p>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 max-w-md mx-auto w-full space-y-2">
+        {(l.results || []).map((r) => (
+          <div key={r.round} className="flex items-center gap-3 rounded-lg p-3 bg-gray-800/60">
+            <span className="font-black text-gray-400">M{r.round}</span>
+            <div className="flex-1 min-w-0"><p className="text-sm truncate">Directeur : {r.directorPseudo}</p><p className="text-xs text-gray-500">{r.targetName}</p></div>
+            <span className={`font-black ${r.score >= 70 ? 'text-green-400' : r.score >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>{r.score}%</span>
+          </div>
+        ))}
+      </div>
+      <div className="shrink-0 p-4 flex justify-center">
+        <button onClick={game.isHost ? game.stopGame : handleExit} className="px-5 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold">{game.isHost ? 'Terminer et fermer' : "Retour à l'accueil"}</button>
+      </div>
+    </div>
+  );
 }

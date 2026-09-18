@@ -28,6 +28,17 @@ function publicLobby(l, viewerOdId) {
     target: showTargetToViewer ? l.target : null,
     players: l.order.map((id) => { const p = l.players[id]; return { odId: p.odId, pseudo: p.pseudo, avatar: p.avatar, avatarUrl: p.avatarUrl || null }; }),
     myGrid: (l.grids && viewerOdId && l.grids[viewerOdId]) ? l.grids[viewerOdId] : null,
+    reveal: (l.phase === 'round-end' && l.lastReveal) ? {
+      round: l.lastReveal.round,
+      score: l.lastReveal.score,
+      director: l.lastReveal.director,
+      directorPseudo: pseudoOf(l, l.lastReveal.director),
+      target: l.lastReveal.target,
+      merged: l.lastReveal.merged,
+      grids: l.order.filter((id) => id !== l.lastReveal.director).map((id) => ({ odId: id, pseudo: pseudoOf(l, id), grid: l.lastReveal.grids[id] || [] })),
+    } : null,
+    results: (l.phase === 'finished') ? (l.roundResults || []).map((r) => ({ round: r.round, score: r.score, directorPseudo: pseudoOf(l, r.director), targetName: r.target?.name })) : null,
+    totalScore: (l.phase === 'finished') ? Math.round(((l.roundResults || []).reduce((a, r) => a + r.score, 0)) / Math.max(1, (l.roundResults || []).length)) : null,
   };
 }
 async function broadcast(io, l) { try { const sockets = await io.in(room(l.code)).fetchSockets(); for (const s of sockets) s.emit('pixel:lobbyState', publicLobby(l, l.socketToPlayer?.[s.id] || null)); } catch (e) { console.error('[PIXEL] broadcast:', e.message); } }
@@ -57,10 +68,11 @@ function startPaint(io, l) {
 }
 function endRound(io, l) {
   clearTimer(l);
-  // Snapshot pour la Phase 3 (reveal + fusion + score)
   const gridsCopy = {}; Object.keys(l.grids || {}).forEach((id) => { gridsCopy[id] = [...l.grids[id]]; });
+  const { merged, score } = computeMergeAndScore(l, l.target, gridsCopy);
   l.roundResults = l.roundResults || [];
-  l.roundResults.push({ round: l.currentRound, director: l.director, target: l.target, grids: gridsCopy });
+  l.roundResults.push({ round: l.currentRound, director: l.director, target: l.target, grids: gridsCopy, merged, score });
+  l.lastReveal = { round: l.currentRound, director: l.director, target: l.target, grids: gridsCopy, merged, score };
   l.phase = 'round-end'; l.roundEndsAt = null;
   broadcast(io, l);
 }
@@ -68,6 +80,41 @@ function continueRound(io, l) {
   if (l.currentRound >= l.rounds) { l.phase = 'finished'; clearTimer(l); broadcast(io, l); return; }
   l.currentRound += 1;
   beginRoundSelection(io, l);
+}
+
+
+// Fusion majoritaire des grilles des ouvriers (le Directeur ne peint pas) + score vs cible
+function computeMergeAndScore(l, target, grids) {
+  const n = l.gridSize * l.gridSize;
+  const merged = new Array(n).fill(-1);
+  const painterIds = Object.keys(grids).filter((id) => id !== l.director);
+  for (let i = 0; i < n; i++) {
+    const counts = {};
+    for (const id of painterIds) { const c = grids[id][i]; if (c === -1) continue; counts[c] = (counts[c] || 0) + 1; }
+    let bestC = -1, bestN = 0;
+    for (const c in counts) { if (counts[c] > bestN) { bestN = counts[c]; bestC = parseInt(c, 10); } }
+    merged[i] = bestC; // -1 si personne n'a peint cette case
+  }
+  let match = 0;
+  for (let i = 0; i < n; i++) if (merged[i] === target.grid[i]) match++;
+  const score = Math.round((match / n) * 100);
+  return { merged, score };
+}
+
+function floodFill(g, size, start, newColor) {
+  const target = g[start];
+  if (target === newColor) return;
+  const stack = [start];
+  while (stack.length) {
+    const idx = stack.pop();
+    if (g[idx] !== target) continue;
+    g[idx] = newColor;
+    const x = idx % size, y = Math.floor(idx / size);
+    if (x > 0) stack.push(idx - 1);
+    if (x < size - 1) stack.push(idx + 1);
+    if (y > 0) stack.push(idx - size);
+    if (y < size - 1) stack.push(idx + size);
+  }
 }
 
 function register(socket, io) {
@@ -180,6 +227,27 @@ function register(socket, io) {
     const l = get(data); if (!l || l.phase !== 'paint') return cb?.({ success: false });
     if (data?.odId === l.director) return cb?.({ success: false });
     if (l.grids?.[data?.odId]) l.grids[data.odId] = blankGrid(l.gridSize);
+    cb?.({ success: true });
+  });
+
+  socket.on('pixel:fillArea', (data, cb) => {
+    const l = get(data); if (!l || l.phase !== 'paint') return cb?.({ success: false });
+    if (data?.odId === l.director) return cb?.({ success: false });
+    const g = l.grids?.[data?.odId]; if (!g) return cb?.({ success: false });
+    const i = data.index, color = data.color;
+    if (!Number.isInteger(i) || i < 0 || i >= g.length) return cb?.({ success: false });
+    if (color !== -1 && (!Number.isInteger(color) || color < 0 || color >= PALETTE.length)) return cb?.({ success: false });
+    floodFill(g, l.gridSize, i, color);
+    cb?.({ success: true });
+  });
+
+  socket.on('pixel:fillAll', (data, cb) => {
+    const l = get(data); if (!l || l.phase !== 'paint') return cb?.({ success: false });
+    if (data?.odId === l.director) return cb?.({ success: false });
+    const g = l.grids?.[data?.odId]; if (!g) return cb?.({ success: false });
+    const color = data.color;
+    if (color !== -1 && (!Number.isInteger(color) || color < 0 || color >= PALETTE.length)) return cb?.({ success: false });
+    for (let k = 0; k < g.length; k++) g[k] = color;
     cb?.({ success: true });
   });
 }
