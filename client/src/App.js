@@ -29,6 +29,7 @@ import WilpostGameContainer from './components/WilpostGameContainer';
 import ImpostorGameContainer from './components/ImpostorGameContainer';
 import PixelGameContainer from './components/PixelGameContainer';
 import PitchGameContainer from './components/PitchGameContainer';
+import MajorityGameContainer from './components/MajorityGameContainer';
 import { supabase } from './services/supabase';
 import { API_URL } from './config';
 import './App.css';
@@ -64,6 +65,7 @@ const App = () => {
   const [pixelEntry, setPixelEntry] = useState(null);
   const [impostorEntry, setImpostorEntry] = useState(null);
   const [pitchEntry, setPitchEntry] = useState(null);
+  const [majorityEntry, setMajorityEntry] = useState(null);
 
   // Synchroniser myAnswerRef avec myAnswer
   useEffect(() => {
@@ -89,6 +91,9 @@ const App = () => {
 
   const handleCreatePitch = () => { setPitchEntry({ entry: 'create'}); setView('pitch-game'); };
   const handleJoinPitch = (code) => { setPitchEntry({ entry: 'join', code}); setView('pitch-game'); };
+
+  const handleCreateMajority = () => { setMajorityEntry({ entry: 'create'}); setView('majority-game'); };
+  const handleJoinMajority = (code) => { setMajorityEntry({ entry: 'join', code}); setView('majority-game'); };
 
   // ========== SAUVEGARDE URGENTE QUAND TIMER BAS ==========
   // Envoyer immédiatement le brouillon quand il reste peu de temps
@@ -818,7 +823,7 @@ const App = () => {
     'admin-monitoring', 'admin-validation', 'admin-users',
     'admin-game-settings', 'admin-meme-templates',
     'meme-editor-test', 'meme-game-test', 'burger-game', 'wilpost-game', 'impostor-game',
-    'pixel-game', 'pitch-game'
+    'pixel-game', 'pitch-game', 'majority-game'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -839,6 +844,8 @@ const App = () => {
             onJoinPixel={handleJoinPixel}
             onCreatePitch={handleCreatePitch}
             onJoinPitch={handleJoinPitch}
+            onCreateMajority={handleCreateMajority}
+            onJoinMajority={handleJoinMajority}
             onJoinMysteryLobby={(lobby) => {
               setCurrentMysteryLobby(lobby);
               setView('mystery-game');
@@ -1066,6 +1073,15 @@ const App = () => {
             entry={pitchEntry?.entry || 'join'}
             joinCode={pitchEntry?.code}
             onExit={() => { setPitchEntry(null); setView('lobby-list'); }}
+          />
+        );
+      case 'majority-game':
+        return (
+          <MajorityGameContainer
+            currentUser={currentUser}
+            entry={majorityEntry?.entry || 'join'}
+            joinCode={majorityEntry?.code}
+            onExit={() => { setMajorityEntry(null); setView('lobby-list'); }}
           />
         );
       default:
