@@ -665,7 +665,7 @@ const LobbyList = ({
                   className={`bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
                 >
                   <div className="flex items-center gap-3 text-white">
-                    <div className="text-3xl">📝</div>
+                    <div className="text-3xl">🕵️</div>
                     <div>
                       <h4 className="text-lg font-bold">{loadingCreate ? 'Création...' : 'Créer une partie'}</h4>
                       <p className="text-white/80 text-sm">Trouve tes alliés et demasque l'imposteur</p>

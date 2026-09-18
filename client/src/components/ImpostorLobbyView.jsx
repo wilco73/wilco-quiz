@@ -50,6 +50,12 @@ export default function ImpostorLobbyView({ lobby, currentUser, isHost, onSetCon
                   <button onClick={()=>onSetConfig({impostorCount: lobby.impostorCount+1})} className="w-9 h-9 rounded bg-gray-700 hover:bg-gray-600 font-bold">+</button>
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-1">Durée par indice (secondes)</label>
+                <input type="number" min="15" max="300" defaultValue={lobby.clueDuration}
+                  onBlur={(e) => onSetConfig({ clueDuration: parseInt(e.target.value) || 60 })}
+                  className="w-32 px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 outline-none" />
+              </div>
               <div className="flex flex-wrap gap-4">
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={lobby.mrWhite} onChange={(e)=>onSetConfig({mrWhite:e.target.checked})} className="rounded"/> Mr White (joueur sans mot)</label>
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={lobby.stealWin} onChange={(e)=>onSetConfig({stealWin:e.target.checked})} className="rounded"/> Vol de victoire</label>
