@@ -135,7 +135,7 @@ const LobbyList = ({
       'burger': ['burger', 'burger_quiz', 'Burger', 'Burger_Quiz'],
       'wilpost': ['wilpost', 'Wilpost', 'wilpost-it', 'Wilpost-it'],
       'impostor': ['impostor','Mot Imposteur','mot-imposteur'],
-      'pixel': ['pixel','Pixel-Art','pixel-art'],
+      'pixelbuild': ['pixelbuild','Pixel-Art','pixel-art'],
     };
     
     const variations = idVariations[gameId] || [gameId];
@@ -719,7 +719,7 @@ const LobbyList = ({
       )}
 
       {/* ==================== SECTION pixel-art ==================== */}
-      {isGameEnabled('pixel') && (
+      {isGameEnabled('pixelbuild') && (
         <section className="mb-6 sm:mb-8">
           <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
             🎨 Pixel build
@@ -727,7 +727,7 @@ const LobbyList = ({
 
           {currentUser && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
-              {canCreateLobby('pixel') ? (
+              {canCreateLobby('pixelbuild') ? (
                 <button
                   onClick={onCreatePixel}
                   disabled={loadingCreate}
