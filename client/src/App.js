@@ -28,6 +28,7 @@ import CompleteAccountView from './components/CompleteAccountView';
 import WilpostGameContainer from './components/WilpostGameContainer';
 import ImpostorGameContainer from './components/ImpostorGameContainer';
 import PixelGameContainer from './components/PixelGameContainer';
+import PitchGameContainer from './components/PitchGameContainer';
 import { supabase } from './services/supabase';
 import { API_URL } from './config';
 import './App.css';
@@ -51,7 +52,6 @@ const App = () => {
   const [currentMysteryLobby, setCurrentMysteryLobby] = useState(null);
   const [currentMemeLobby, setCurrentMemeLobby] = useState(null);
   const [currentMemeLobbyCode, setCurrentMemeLobbyCode] = useState(null);
-  const [impostorEntry, setImpostorEntry] = useState(null);
 
   const hasReconnected = useRef(false);
   const draftTimeoutRef = useRef(null);
@@ -62,6 +62,8 @@ const App = () => {
   const [burgerEntry, setBurgerEntry] = useState(null); // { entry:'create'|'join', code? }
   const [wilpostEntry, setWilpostEntry] = useState(null);
   const [pixelEntry, setPixelEntry] = useState(null);
+  const [impostorEntry, setImpostorEntry] = useState(null);
+  const [pitchEntry, setPitchEntry] = useState(null);
 
   // Synchroniser myAnswerRef avec myAnswer
   useEffect(() => {
@@ -85,6 +87,8 @@ const App = () => {
   const handleCreatePixel = () => { setPixelEntry({ entry: 'create'}); setView('pixel-game'); };
   const handleJoinPixel = (code) => { setPixelEntry({ entry: 'join', code}); setView('pixel-game'); };
 
+  const handleCreatePitch = () => { setPitchEntry({ entry: 'create'}); setView('pitch-game'); };
+  const handleJoinPitch = (code) => { setPitchEntry({ entry: 'join', code}); setView('pitch-game'); };
 
   // ========== SAUVEGARDE URGENTE QUAND TIMER BAS ==========
   // Envoyer immédiatement le brouillon quand il reste peu de temps
@@ -814,7 +818,7 @@ const App = () => {
     'admin-monitoring', 'admin-validation', 'admin-users',
     'admin-game-settings', 'admin-meme-templates',
     'meme-editor-test', 'meme-game-test', 'burger-game', 'wilpost-game', 'impostor-game',
-    'pixel-game'
+    'pixel-game', 'pitch-game'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -833,6 +837,8 @@ const App = () => {
             onJoinDrawingLobby={handleJoinDrawingLobby}
             onCreatePixel={handleCreatePixel}
             onJoinPixel={handleJoinPixel}
+            onCreatePitch={handleCreatePitch}
+            onJoinPitch={handleJoinPitch}
             onJoinMysteryLobby={(lobby) => {
               setCurrentMysteryLobby(lobby);
               setView('mystery-game');
@@ -1051,6 +1057,15 @@ const App = () => {
             entry={pixelEntry?.entry || 'join'}
             joinCode={pixelEntry?.code}
             onExit={() => { setPixelEntry(null); setView('lobby-list'); }}
+          />
+        );
+      case 'pitch-game':
+        return (
+          <PitchGameContainer
+            currentUser={currentUser}
+            entry={pitchEntry?.entry || 'join'}
+            joinCode={pitchEntry?.code}
+            onExit={() => { setPitchEntry(null); setView('lobby-list'); }}
           />
         );
       default:

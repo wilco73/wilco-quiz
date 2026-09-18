@@ -23,6 +23,8 @@ const LobbyList = ({
   onJoinImpostor,
   onCreatePixel,
   onJoinPixel,
+  onCreatePitch,
+  onJoinPitch,
 }) => {
   const [gameSettings, setGameSettings] = useState([]);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -40,6 +42,9 @@ const LobbyList = ({
   const [showImpostorJoin, setShowImpostorJoin] = useState(false);
   const [pixelJoinCode, setPixelJoinCode] = useState('');
   const [showPixelJoin, setShowPixelJoin] = useState(false);
+  const [pitchJoinCode, setPitchJoinCode] = useState('');
+  const [showPitchJoin, setShowPitchJoin] = useState(false);
+
 
   const availableLobbies = lobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
 
@@ -136,6 +141,7 @@ const LobbyList = ({
       'wilpost': ['wilpost', 'Wilpost', 'wilpost-it', 'Wilpost-it'],
       'impostor': ['impostor','Mot Imposteur','mot-imposteur'],
       'pixelbuild': ['pixelbuild','Pixel-Art','pixel-art'],
+      'pitch': ['pitch','Match de Pitch'],
     };
     
     const variations = idVariations[gameId] || [gameId];
@@ -658,7 +664,7 @@ const LobbyList = ({
       {isGameEnabled('impostor') && (
         <section className="mb-6 sm:mb-8">
           <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
-            🕵️ Imposteur
+            🕵️ Wilposteur
           </h2>
 
           {currentUser && (
@@ -722,7 +728,7 @@ const LobbyList = ({
       {isGameEnabled('pixelbuild') && (
         <section className="mb-6 sm:mb-8">
           <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
-            🎨 Pixel build
+            🎨 Wilcorp Pixel's build
           </h2>
 
           {currentUser && (
@@ -782,6 +788,70 @@ const LobbyList = ({
         </section>
       )}
 
+      {/* ==================== SECTION pitch ========================= */}
+      {isGameEnabled('pitch') && (
+        <section className="mb-6 sm:mb-8">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
+            🚨 Wilco Trap
+          </h2>
+
+          {currentUser && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
+              {canCreateLobby('pitch') ? (
+                <button
+                  onClick={onCreatePitch}
+                  disabled={loadingCreate}
+                  className={`bg-gradient-to-r from-pink-500 to-blue-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
+                >
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="text-3xl">🚨</div>
+                    <div>
+                      <h4 className="text-lg font-bold">{loadingCreate ? 'Création...' : 'Créer une partie'}</h4>
+                      <p className="text-white/80 text-sm">Faites deviner le mot secret en évitant les pièges adverses</p>
+                    </div>
+                  </div>
+                </button>
+              ) : (
+                <div></div>
+              )}
+
+              {showPitchJoin ? (
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-xl p-4 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={pitchJoinCode}
+                    onChange={(e) => setPitchJoinCode(e.target.value.toUpperCase())}
+                    placeholder="CODE"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    maxLength={4}
+                    autoFocus
+                    onKeyPress={(e) => e.key === 'Enter' && pitchJoinCode.trim() && onJoinPitch(pitchJoinCode)}
+                  />
+                  <button
+                    onClick={() => onJoinPitch(pitchJoinCode)}
+                    disabled={!pitchJoinCode.trim()}
+                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                  >
+                    OK
+                  </button>
+                  <button onClick={() => { setShowPitchJoin(false); setPitchJoinCode(''); }} className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">✕</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowPitchJoin(true)} className="bg-gradient-to-r from-gray-600 to-gray-700 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02]">
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="text-3xl">🔑</div>
+                    <div>
+                      <h4 className="text-lg font-bold">Rejoindre avec code</h4>
+                      <p className="text-white/80 text-sm">Entrez le code d'une partie privée</p>
+                    </div>
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
 
       {/* ==================== SECTION Burger Quiz ==================== */}
       {isGameEnabled('burger') && (
@@ -798,7 +868,7 @@ const LobbyList = ({
                 <button
                   onClick={onCreateBurger}
                   disabled={loadingCreate}
-                  className={`bg-gradient-to-r from-pink-500 to-purple-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
+                  className={`bg-gradient-to-r from-red-500 to-yellow-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
                 >
                   <div className="flex items-center gap-3 text-white">
                     <div className="text-3xl">🍔</div>

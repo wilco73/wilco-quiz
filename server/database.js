@@ -4030,6 +4030,19 @@ async function generateUniqueCode() {
   return code;
 }
 
+// ==================== PITCH ======================
+async function getRandomPitchWord(theme) {
+  let q = supabase.from('pitch_words').select('word'); if (theme) q = q.eq('theme', theme);
+  const { data } = await q; if (!data || !data.length) return null;
+  return data[Math.floor(Math.random() * data.length)].word;
+}
+async function getPitchThemes() {
+  const { data } = await supabase.from('pitch_words').select('theme');
+  return [...new Set((data || []).map((d) => d.theme).filter(Boolean))].sort();
+}
+async function getAppSetting(key) { const { data } = await supabase.from('app_settings').select('value').eq('key', key).single(); return data?.value || null; }
+async function setAppSetting(key, value) { await supabase.from('app_settings').upsert({ key, value, updated_at: new Date().toISOString() }); }
+
 
 // ==================== EXPORTS ====================
 
@@ -4284,5 +4297,11 @@ module.exports = {
   createMemeAssignment,
   rotateMemeAssignment,
   undoMemeAssignment,
-  getAllAssignmentsForRound
+  getAllAssignmentsForRound,
+
+  // Pitch
+  getRandomPitchWord,
+  getPitchThemes, 
+  getAppSetting, 
+  setAppSetting,
 };
