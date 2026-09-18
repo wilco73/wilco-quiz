@@ -1,103 +1,103 @@
 /**
- * Génère des formes "cibles" pixelisées à n'importe quelle taille de grille.
- * Chaque forme renvoie un tableau plat de longueur size*size, où chaque case est
- * un index de couleur de la PALETTE (0 = fond/vide, voir PALETTE ci-dessous) ou -1 pour vide.
- * On garde ça simple et net : cercle, cœur, étoile, croix, carré, losange, smiley, maison, arbre, éclair.
+ * Cibles pixel-art générées procéduralement (plusieurs éléments, positions variées, couleurs multiples).
+ * randomTarget(size, exclude) -> { name, grid } ; grid = tableau plat size*size d'index palette (-1 = vide).
  */
 
-// Palette v1 (index -> hex). -1 = case vide (transparent/fond).
 const PALETTE = [
-  '#000000', // 0 noir
-  '#FFFFFF', // 1 blanc
-  '#E53935', // 2 rouge
-  '#FB8C00', // 3 orange
-  '#FDD835', // 4 jaune
-  '#43A047', // 5 vert
-  '#1E88E5', // 6 bleu
-  '#8E24AA', // 7 violet
-  '#EC407A', // 8 rose
-  '#6D4C41', // 9 marron
+  '#000000', '#FFFFFF', '#E53935', '#FB8C00', '#FDD835',
+  '#43A047', '#1E88E5', '#8E24AA', '#EC407A', '#6D4C41',
 ];
+// couleurs "vives" utilisables pour les éléments (on évite le blanc sur fond sombre par défaut)
+const FG = [0, 2, 3, 4, 5, 6, 7, 8, 9];
 
 function blank(size) { return new Array(size * size).fill(-1); }
-const idx = (size, x, y) => y * size + x;
+const I = (size, x, y) => y * size + x;
+const inb = (size, x, y) => x >= 0 && x < size && y >= 0 && y < size;
+const rnd = (a) => a[Math.floor(Math.random() * a.length)];
+const ri = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-function drawCircle(size, color) {
-  const g = blank(size); const c = (size - 1) / 2, r = size * 0.42;
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) { const d = Math.hypot(x - c, y - c); if (d <= r) g[idx(size, x, y)] = color; }
-  return g;
-}
-function drawSquare(size, color) {
-  const g = blank(size); const m = Math.max(1, Math.floor(size * 0.2));
-  for (let y = m; y < size - m; y++) for (let x = m; x < size - m; x++) g[idx(size, x, y)] = color;
-  return g;
-}
-function drawDiamond(size, color) {
-  const g = blank(size); const c = (size - 1) / 2, r = size * 0.5;
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (Math.abs(x - c) + Math.abs(y - c) <= r * 0.9) g[idx(size, x, y)] = color;
-  return g;
-}
-function drawCross(size, color) {
-  const g = blank(size); const a = Math.floor(size * 0.35), b = Math.ceil(size * 0.65);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if ((x >= a && x < b) || (y >= a && y < b)) g[idx(size, x, y)] = color;
-  return g;
-}
-function drawHeart(size, color) {
-  const g = blank(size);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const fx = (x / (size - 1)) * 2 - 1;
-    const fy = 1 - (y / (size - 1)) * 2 + 0.15;
-    const v = Math.pow(fx * fx + fy * fy - 0.5, 3) - fx * fx * fy * fy * fy;
-    if (v <= 0) g[idx(size, x, y)] = color;
+// --- primitives (dessinent dans g, dans une boîte [x0,y0]..[x0+w,y0+h]) ---
+function rect(g, size, x0, y0, w, h, color, filled = true) {
+  for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) {
+    if (!inb(size, x, y)) continue;
+    const edge = x === x0 || x === x0 + w - 1 || y === y0 || y === y0 + h - 1;
+    if (filled || edge) g[I(size, x, y)] = color;
   }
-  return g;
 }
-function drawStar(size, color) {
-  const g = blank(size); const cx = (size - 1) / 2, cy = (size - 1) / 2, R = size * 0.48, r = R * 0.45;
-  const pts = [];
-  for (let i = 0; i < 10; i++) { const ang = -Math.PI / 2 + (i * Math.PI) / 5; const rad = i % 2 === 0 ? R : r; pts.push([cx + rad * Math.cos(ang), cy + rad * Math.sin(ang)]); }
-  const inside = (px, py) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if (((yi > py) !== (yj > py)) && (px < ((xj - xi) * (py - yi)) / (yj - yi) + xi)) c = !c; } return c; };
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (inside(x, y)) g[idx(size, x, y)] = color;
-  return g;
+function disc(g, size, cx, cy, r, color) {
+  for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) if (inb(size, x, y) && Math.hypot(x - cx, y - cy) <= r + 0.2) g[I(size, x, y)] = color;
 }
-function drawSmiley(size) {
-  const g = drawCircle(size, 4); // visage jaune
-  const c = (size - 1) / 2;
-  const eyeY = Math.round(size * 0.38);
-  g[idx(size, Math.round(size * 0.35), eyeY)] = 0;
-  g[idx(size, Math.round(size * 0.65), eyeY)] = 0;
-  for (let x = 0; x < size; x++) { const my = Math.round(c + size * 0.22 + Math.pow((x - c) / (size * 0.5), 2) * -size * 0.12); if (Math.abs(x - c) < size * 0.28 && g[idx(size, x, my)] === 4) g[idx(size, x, my)] = 0; }
-  return g;
+function diamond(g, size, cx, cy, r, color) {
+  for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) if (inb(size, x, y) && Math.abs(x - cx) + Math.abs(y - cy) <= r) g[I(size, x, y)] = color;
 }
-function drawHouse(size) {
-  const g = blank(size);
-  const w = Math.floor(size * 0.6), x0 = Math.floor((size - w) / 2), yBase = Math.floor(size * 0.85), yWall = Math.floor(size * 0.45);
-  for (let y = yWall; y < yBase; y++) for (let x = x0; x < x0 + w; x++) g[idx(size, x, y)] = 9; // murs marron
-  const apex = Math.floor(size * 0.15);
-  for (let y = apex; y < yWall; y++) { const half = ((y - apex) / (yWall - apex)) * (w / 2 + 1); for (let x = Math.round(size / 2 - half); x <= Math.round(size / 2 + half); x++) if (x >= 0 && x < size) g[idx(size, x, y)] = 2; } // toit rouge
-  return g;
-}
-function drawLightning(size) {
-  const g = blank(size);
-  for (let y = 0; y < size; y++) { const cx = Math.round(size * 0.55 - (y / size) * size * 0.25 + (y > size / 2 ? size * 0.2 : 0)); for (let x = cx - 1; x <= cx + 1; x++) if (x >= 0 && x < size) g[idx(size, x, y)] = 4; }
-  return g;
-}
+function hline(g, size, x0, y, w, color, th = 1) { for (let t = 0; t < th; t++) for (let x = x0; x < x0 + w; x++) if (inb(size, x, y + t)) g[I(size, x, y + t)] = color; }
+function vline(g, size, x, y0, h, color, th = 1) { for (let t = 0; t < th; t++) for (let y = y0; y < y0 + h; y++) if (inb(size, x + t, y)) g[I(size, x + t, y)] = color; }
+function crossShape(g, size, x0, y0, s, color) { const a = Math.floor(s / 3); rect(g, size, x0 + a, y0, s - 2 * a, s, color); rect(g, size, x0, y0 + a, s, s - 2 * a, color); }
+function triangle(g, size, x0, y0, s, color) { for (let y = 0; y < s; y++) { const half = Math.round(((y + 1) / s) * (s / 2)); for (let x = -half; x <= half; x++) { const px = x0 + Math.floor(s / 2) + x, py = y0 + y; if (inb(size, px, py)) g[I(size, px, py)] = color; } } }
 
-const SHAPES = [
-  { name: 'Cercle', fn: (s) => drawCircle(s, 6) },
-  { name: 'Carré', fn: (s) => drawSquare(s, 5) },
-  { name: 'Losange', fn: (s) => drawDiamond(s, 7) },
-  { name: 'Croix', fn: (s) => drawCross(s, 2) },
-  { name: 'Cœur', fn: (s) => drawHeart(s, 8) },
-  { name: 'Étoile', fn: (s) => drawStar(s, 4) },
-  { name: 'Smiley', fn: (s) => drawSmiley(s) },
-  { name: 'Maison', fn: (s) => drawHouse(s) },
-  { name: 'Éclair', fn: (s) => drawLightning(s) },
+// éléments "poseables" (nom + fonction qui remplit une boîte de taille s au coin x0,y0)
+const ELEMENTS = [
+  { name: 'carré', fn: (g, sz, x, y, s, c) => rect(g, sz, x, y, s, s, c) },
+  { name: 'cercle', fn: (g, sz, x, y, s, c) => disc(g, sz, x + Math.floor(s / 2), y + Math.floor(s / 2), Math.floor(s / 2), c) },
+  { name: 'losange', fn: (g, sz, x, y, s, c) => diamond(g, sz, x + Math.floor(s / 2), y + Math.floor(s / 2), Math.floor(s / 2), c) },
+  { name: 'croix', fn: (g, sz, x, y, s, c) => crossShape(g, sz, x, y, s, c) },
+  { name: 'triangle', fn: (g, sz, x, y, s, c) => triangle(g, sz, x, y, s, c) },
+  { name: 'contour', fn: (g, sz, x, y, s, c) => rect(g, sz, x, y, s, s, c, false) },
 ];
 
-function randomTarget(size) {
-  const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-  return { name: shape.name, grid: shape.fn(size) };
+function pickColors(n) {
+  const pool = [...FG]; const out = [];
+  for (let i = 0; i < n && pool.length; i++) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  return out;
 }
 
-module.exports = { PALETTE, SHAPES, randomTarget };
+// Génère une cible composite : 2 à 4 éléments à des positions variées, couleurs différentes, parfois lignes/fond.
+function generateComposite(size) {
+  const g = blank(size);
+  const parts = [];
+
+  // fond léger occasionnel (grande grille seulement, couleur claire jaune/blanc)
+  if (size >= 16 && Math.random() < 0.25) { const bg = rnd([1, 4]); rect(g, size, 0, 0, size, size, bg); parts.push('fond ' + PALETTE[bg]); }
+
+  const nb = ri(2, size >= 24 ? 4 : 3);
+  const colors = pickColors(nb + 1);
+  const cells = size;
+  const usedCorners = [];
+  for (let k = 0; k < nb; k++) {
+    const el = rnd(ELEMENTS);
+    const s = ri(Math.max(3, Math.floor(cells * 0.22)), Math.floor(cells * 0.45));
+    // position variée : coins / bords / aléatoire, en évitant de retomber toujours au centre
+    let x0 = ri(0, size - s), y0 = ri(0, size - s);
+    const key = `${Math.round(x0 / 4)}-${Math.round(y0 / 4)}`;
+    if (usedCorners.includes(key)) { x0 = ri(0, size - s); y0 = ri(0, size - s); }
+    usedCorners.push(key);
+    el.fn(g, size, x0, y0, s, colors[k % colors.length]);
+    parts.push(el.name);
+  }
+
+  // une ligne traversante de temps en temps
+  if (Math.random() < 0.4) {
+    const c = colors[colors.length - 1];
+    if (Math.random() < 0.5) hline(g, size, 0, ri(2, size - 3), size, c, size >= 24 ? 2 : 1);
+    else vline(g, size, ri(2, size - 3), 0, size, c, size >= 24 ? 2 : 1);
+    parts.push('ligne');
+  }
+
+  const name = `${parts.length} éléments`;
+  return { name, grid: g };
+}
+
+// Tirage sans remise dans une partie (exclude = liste de "signatures" déjà sorties)
+function randomTarget(size, exclude = []) {
+  let best = null;
+  for (let i = 0; i < 12; i++) {
+    const t = generateComposite(size);
+    const sig = t.grid.join(',');
+    if (!exclude.includes(sig)) { t.signature = sig; return t; }
+    best = t;
+  }
+  best.signature = best.grid.join(',');
+  return best; // au pire on renvoie la dernière (très improbable d'épuiser)
+}
+
+module.exports = { PALETTE, randomTarget };

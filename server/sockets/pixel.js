@@ -45,7 +45,9 @@ function beginRoundSelection(io, l) {
   broadcast(io, l);
 }
 function startPaint(io, l) {
-  const t = randomTarget(l.gridSize);
+  const t = randomTarget(l.gridSize, l.usedTargets || []);
+  l.usedTargets = l.usedTargets || [];
+  l.usedTargets.push(t.signature);
   l.target = t;
   l.grids = {}; l.order.forEach((id) => { l.grids[id] = blankGrid(l.gridSize); }); // grille vierge par manche
   l.phase = 'paint';
@@ -121,7 +123,7 @@ function register(socket, io) {
   socket.on('pixel:startGame', (data, cb) => {
     const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
     if (l.order.length < MIN_PLAYERS) return cb?.({ success: false, message: `Minimum ${MIN_PLAYERS} joueurs` });
-    l.status = 'playing'; l.currentRound = 1; l.roundResults = []; l.lastDirector = null;
+    l.status = 'playing'; l.currentRound = 1; l.roundResults = []; l.lastDirector = null; l.usedTargets = [];
     beginRoundSelection(io, l); cb?.({ success: true });
   });
 
