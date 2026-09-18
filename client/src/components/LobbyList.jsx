@@ -702,7 +702,7 @@ const LobbyList = ({
                   <button
                     onClick={() => onJoinImpostor(impostorJoinCode)}
                     disabled={!impostorJoinCode.trim()}
-                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold disabled:opacity-50"
                   >
                     OK
                   </button>
@@ -766,7 +766,7 @@ const LobbyList = ({
                   <button
                     onClick={() => onJoinPixel(pixelJoinCode)}
                     disabled={!pixelJoinCode.trim()}
-                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-semibold disabled:opacity-50"
                   >
                     OK
                   </button>
@@ -830,7 +830,7 @@ const LobbyList = ({
                   <button
                     onClick={() => onJoinPitch(pitchJoinCode)}
                     disabled={!pitchJoinCode.trim()}
-                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                    className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-semibold disabled:opacity-50"
                   >
                     OK
                   </button>
@@ -899,7 +899,7 @@ const LobbyList = ({
                   <button
                     onClick={() => onJoinBurger(burgerJoinCode)}
                     disabled={!burgerJoinCode.trim()}
-                    className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold disabled:opacity-50"
                   >
                     OK
                   </button>
