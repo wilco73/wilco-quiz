@@ -58,48 +58,51 @@ function startAnswering(io, l) {
   l.timer = setTimeout(() => resolveRound(io, l), l.answerTime * 1000);
   broadcast(io, l);
 }
-function resolveRound(io, l) {
-  clearT(l);
-  // Regrouper par réponse normalisée (les non-réponses sont à part)
-  const groupsMap = {}; // norm -> { label, ids: [] }
+// Calcule groupes + scores à partir des réponses brutes + des fusions manuelles (remaps)
+function computeGroups(l) {
+  const remaps = l.remaps || {}; // normSource -> normCible
+  const keyOf = (raw) => { let k = normalize(raw); while (remaps[k] && remaps[k] !== k) k = remaps[k]; return k; };
+
+  const groupsMap = {}; // key -> { label, ids: [] }
   l.order.forEach((id) => {
-    const raw = (l.answers[id] || '').trim();
-    if (!raw) return; // pas de réponse -> pas dans les groupes
-    const key = normalize(raw);
-    if (!key) return;
-    if (!groupsMap[key]) groupsMap[key] = { label: raw, ids: [] };
+    const raw = (l.answers[id] || '').trim(); if (!raw) return;
+    const key = keyOf(raw); if (!key) return;
+    if (!groupsMap[key]) groupsMap[key] = { key, label: raw, ids: [] };
     groupsMap[key].ids.push(id);
   });
-    const groups = Object.values(groupsMap).sort((a, b) => b.ids.length - a.ids.length);
+  const groups = Object.values(groupsMap).sort((a, b) => b.ids.length - a.ids.length);
   const maxSize = groups.length ? groups[0].ids.length : 0;
-  // Nombre de joueurs ayant réellement répondu
   const answeredCount = l.order.reduce((n, id) => n + ((l.answers[id] || '').trim() ? 1 : 0), 0);
-  // Tout le monde a répondu pareil (un seul groupe qui contient tous les répondants) -> personne ne marque
   const unanimous = groups.length === 1 && maxSize === answeredCount && answeredCount > 1;
 
   const roundScores = {};
   l.order.forEach((id) => {
     const raw = (l.answers[id] || '').trim();
     if (!raw) { roundScores[id] = l.penalizeNoAnswer ? -1 : 0; return; }
-    const key = normalize(raw);
-    const g = groupsMap[key];
+    const g = groupsMap[keyOf(raw)];
     if (!g) { roundScores[id] = 0; return; }
-    if (g.ids.length === 1) roundScores[id] = -1;                          // intrus (seul)
-    else if (g.ids.length === maxSize) roundScores[id] = unanimous ? 0 : 1; // majorité : 0 si unanime, sinon +1
-    else roundScores[id] = 0;                                               // groupe intermédiaire
+    if (g.ids.length === 1) roundScores[id] = -1;
+    else if (g.ids.length === maxSize) roundScores[id] = unanimous ? 0 : 1;
+    else roundScores[id] = 0;
   });
-  // Appliquer au cumul
-  l.order.forEach((id) => { l.scores[id] = (l.scores[id] || 0) + roundScores[id]; });
 
-  // Exposer les groupes (avec pseudos) pour l'affichage
-  l.groups = groups.map((g) => ({ label: g.label, count: g.ids.length, isMajority: !unanimous && g.ids.length === maxSize && maxSize > 1, isLone: g.ids.length === 1, members: g.ids.map((id) => pseudoOf(l, id)) }));
+  l.groups = groups.map((g) => ({ key: g.key, label: g.label, count: g.ids.length, isMajority: !unanimous && g.ids.length === maxSize && maxSize > 1, isLone: g.ids.length === 1, members: g.ids.map((id) => pseudoOf(l, id)) }));
   l.unanimous = unanimous;
   l.roundScores = roundScores;
+}
+
+function resolveRound(io, l) {
+  clearT(l);
+  l.remaps = {};              // aucune fusion manuelle au départ
+  computeGroups(l);
   l.phase = 'reveal';
   l.answerEndsAt = null;
   broadcast(io, l);
 }
 function continueRound(io, l) {
+  // Appliquer les scores de la manche (recalculés avec les éventuelles fusions) au cumul
+  const rs = l.roundScores || {};
+  l.order.forEach((id) => { l.scores[id] = (l.scores[id] || 0) + (rs[id] || 0); });
   if (l.roundNumber >= l.rounds) { l.phase = 'finished'; clearT(l); broadcast(io, l); return; }
   l.roundNumber += 1;
   startRound(io, l);
@@ -180,6 +183,20 @@ function register(socket, io) {
     const l = get(data); if (!l || l.phase !== 'reveal') return cb?.({ success: false });
     if (!isHost(l, data?.odId) && data?.odId !== l.askerId) return cb?.({ success: false });
     continueRound(io, l); cb?.({ success: true });
+  });
+  // L'hôte fusionne le groupe "from" dans le groupe "to" (clés normalisées des groupes)
+  socket.on('majority:mergeGroups', (data, cb) => {
+    const l = get(data); if (!l || l.phase !== 'reveal') return cb?.({ success: false });
+    if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
+    const { from, to } = data; if (!from || !to || from === to) return cb?.({ success: false });
+    l.remaps = l.remaps || {}; l.remaps[from] = to;
+    computeGroups(l); broadcast(io, l); cb?.({ success: true });
+  });
+  // Annuler toutes les fusions de la manche
+  socket.on('majority:resetMerges', (data, cb) => {
+    const l = get(data); if (!l || l.phase !== 'reveal') return cb?.({ success: false });
+    if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
+    l.remaps = {}; computeGroups(l); broadcast(io, l); cb?.({ success: true });
   });
 }
 

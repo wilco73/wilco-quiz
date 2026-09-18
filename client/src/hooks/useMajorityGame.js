@@ -36,6 +36,8 @@ export default function useMajorityGame(currentUser) {
   const continueRound = useCallback(() => A('majority:continue'), [emitAck, currentUser]);
   const stopGame = useCallback(() => A('majority:stopGame'), [emitAck, currentUser]);
   const leaveLobby = useCallback(() => A('majority:leaveLobby'), [emitAck, currentUser]);
+  const mergeGroups = useCallback((from, to) => A('majority:mergeGroups', { from, to }), [emitAck, currentUser]);
+  const resetMerges = useCallback(() => A('majority:resetMerges', {}), [emitAck, currentUser]);
 
-  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setConfig, startGame, setQuestion, answer, continueRound, stopGame, leaveLobby, setError };
+  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setConfig, startGame, setQuestion, answer, continueRound, mergeGroups, resetMerges, stopGame, leaveLobby, setError };
 }

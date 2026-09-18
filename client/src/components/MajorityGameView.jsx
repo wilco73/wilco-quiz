@@ -5,10 +5,12 @@ function fmt(ms) { const x = Math.max(0, Math.ceil(ms / 1000)); return `${Math.f
 /**
  * MajorityGameView - phases 'ask' / 'answer' / 'reveal'.
  */
-export default function MajorityGameView({ lobby, currentUser, isHost, onSetQuestion, onAnswer, onContinue, onStopGame, onBack }) {
+export default function MajorityGameView({ lobby, currentUser, isHost, onSetQuestion, onAnswer, onContinue, onStopGame, onBack, onMerge, onResetMerges }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [remaining, setRemaining] = useState(lobby.answerRemainingMs ?? 0);
+  const [mergeFrom, setMergeFrom] = useState('');
+  const [mergeTo, setMergeTo] = useState('');
   const endRef = useRef(null);
 
   useEffect(() => { setRemaining(lobby.answerRemainingMs ?? 0); endRef.current = Date.now() + (lobby.answerRemainingMs ?? 0); }, [lobby.answerRemainingMs, lobby.roundNumber, lobby.phase]);
@@ -91,6 +93,24 @@ export default function MajorityGameView({ lobby, currentUser, isHost, onSetQues
               ))}
               {(!lobby.groups || lobby.groups.length === 0) && <p className="text-gray-500 text-sm">Aucune réponse.</p>}
             </div>
+            {isHost && (lobby.groups || []).length > 1 && (
+              <div className="mt-2 mb-3 p-2 rounded-lg bg-gray-800/60 text-left">
+                <p className="text-xs text-gray-400 mb-1">Arbitrage : fusionner une réponse (faute de frappe) dans une autre</p>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <select value={mergeFrom} onChange={(e)=>setMergeFrom(e.target.value)} className="px-2 py-1 rounded bg-gray-900 border border-gray-600 text-sm">
+                    <option value="">réponse…</option>
+                    {lobby.groups.map((g)=><option key={g.key} value={g.key}>{g.label} (×{g.count})</option>)}
+                  </select>
+                  <span className="text-gray-500 text-sm">→</span>
+                  <select value={mergeTo} onChange={(e)=>setMergeTo(e.target.value)} className="px-2 py-1 rounded bg-gray-900 border border-gray-600 text-sm">
+                    <option value="">vers…</option>
+                    {lobby.groups.map((g)=><option key={g.key} value={g.key}>{g.label} (×{g.count})</option>)}
+                  </select>
+                  <button onClick={()=>{ if(mergeFrom&&mergeTo&&mergeFrom!==mergeTo){ onMerge(mergeFrom, mergeTo); setMergeFrom(''); setMergeTo(''); } }} className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold">Fusionner</button>
+                  <button onClick={onResetMerges} className="px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-xs">Annuler fusions</button>
+                </div>
+              </div>
+            )}
             {(isHost || isAsker) ? (
               <button onClick={onContinue} className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 font-bold">{lobby.roundNumber >= lobby.rounds ? '🏁 Classement final' : '▶ Manche suivante'}</button>
             ) : <p className="text-sm text-gray-400 animate-pulse">En attente…</p>}

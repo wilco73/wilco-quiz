@@ -27,7 +27,7 @@ export default function MajorityGameContainer({ currentUser, entry, joinCode, on
     return <MajorityLobbyView lobby={l} currentUser={currentUser} isHost={game.isHost} onSetConfig={game.setConfig} onStart={game.startGame} onStopGame={game.stopGame} onBack={handleExit} />;
   }
   if (l.phase === 'ask' || l.phase === 'answer' || l.phase === 'reveal') {
-    return <MajorityGameView lobby={l} currentUser={currentUser} isHost={game.isHost} onSetQuestion={game.setQuestion} onAnswer={game.answer} onContinue={game.continueRound} onStopGame={game.stopGame} onBack={handleExit} />;
+    return <MajorityGameView lobby={l} currentUser={currentUser} isHost={game.isHost} onSetQuestion={game.setQuestion} onAnswer={game.answer} onContinue={game.continueRound} onMerge={game.mergeGroups} onResetMerges={game.resetMerges} onStopGame={game.stopGame} onBack={handleExit} />;
   }
   // finished
   return (
