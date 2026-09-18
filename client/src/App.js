@@ -27,6 +27,7 @@ import ResetPasswordView from './components/ResetPasswordView';
 import CompleteAccountView from './components/CompleteAccountView';
 import WilpostGameContainer from './components/WilpostGameContainer';
 import ImpostorGameContainer from './components/ImpostorGameContainer';
+import PixelGameContainer from './components/PixelGameContainer';
 import { supabase } from './services/supabase';
 import { API_URL } from './config';
 import './App.css';
@@ -60,6 +61,7 @@ const App = () => {
   const loggingInRef = useRef(false);
   const [burgerEntry, setBurgerEntry] = useState(null); // { entry:'create'|'join', code? }
   const [wilpostEntry, setWilpostEntry] = useState(null);
+  const [pixelEntry, setPixelEntry] = useState(null);
 
   // Synchroniser myAnswerRef avec myAnswer
   useEffect(() => {
@@ -79,6 +81,9 @@ const App = () => {
 
   const handleCreateImpostor = () => { setImpostorEntry({ entry: 'create' }); setView('impostor-game'); };
   const handleJoinImpostor = (code) => { setImpostorEntry({ entry: 'join', code }); setView('impostor-game'); };
+
+  const handleCreatePixel = () => { setPixelEntry({ entry: 'create'}); setView('pixel-game'); };
+  const handleJoinPixel = (code) => { setPixelEntry({ entry: 'join', code}); setView('pixel-game'); };
 
 
   // ========== SAUVEGARDE URGENTE QUAND TIMER BAS ==========
@@ -808,7 +813,8 @@ const App = () => {
     'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
     'admin-monitoring', 'admin-validation', 'admin-users',
     'admin-game-settings', 'admin-meme-templates',
-    'meme-editor-test', 'meme-game-test', 'burger-game', 'wilpost-game', 'impostor-game'
+    'meme-editor-test', 'meme-game-test', 'burger-game', 'wilpost-game', 'impostor-game',
+    'pixel-game'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -825,6 +831,8 @@ const App = () => {
             onCreateImpostor={handleCreateImpostor}
             onJoinImpostor={handleJoinImpostor}
             onJoinDrawingLobby={handleJoinDrawingLobby}
+            onCreatePixel={handleCreatePixel}
+            onJoinPixel={handleJoinPixel}
             onJoinMysteryLobby={(lobby) => {
               setCurrentMysteryLobby(lobby);
               setView('mystery-game');
@@ -1034,6 +1042,15 @@ const App = () => {
             entry={impostorEntry?.entry || 'join'}
             joinCode={impostorEntry?.code}
             onExit={() => { setImpostorEntry(null); setView('lobby-list'); }}
+          />
+        );
+      case 'pixel-game':
+        return (
+          <PixelGameContainer
+            currentUser={currentUser}
+            entry={pixelEntry?.entry || 'join'}
+            joinCode={pixelEntry?.code}
+            onExit={() => { setPixelEntry(null); setView('lobby-list'); }}
           />
         );
       default:

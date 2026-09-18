@@ -15,6 +15,7 @@ const mysteryHandlers = require('./mystery');
 const registerBurgerHandlers = require('./burger');
 const registerWilpostHandlers = require('./wilpost');
 const registerImpostorHandlers = require('./impostor');
+const registerPixelHandlers = require('./pixel');
 const db = require('../database');
 
 const registerMemeHandlers = require('./meme');
@@ -67,6 +68,7 @@ function setup(io) {
     registerBurgerHandlers.register(socket, io);
     registerWilpostHandlers.register(socket, io);
     registerImpostorHandlers.register(socket, io);
+    registerPixelHandlers.register(socket, io);
     mysteryHandlers(io, socket, db);
     
     registerMemeHandlers(io, socket, db);
