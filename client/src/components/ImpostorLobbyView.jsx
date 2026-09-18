@@ -5,7 +5,6 @@ export default function ImpostorLobbyView({ lobby, currentUser, isHost, onSetCon
   const [civil, setCivil] = useState('');
   const [impostor, setImpostor] = useState('');
   const enough = lobby.players.length >= lobby.minPlayers;
-  const addPair = () => { if (civil.trim() && impostor.trim()) { onAddPair(civil.trim(), impostor.trim()); setCivil(''); setImpostor(''); } };
 
   return (
     <div className="min-h-full bg-gradient-to-br from-purple-900 via-gray-900 to-gray-900 text-white rounded-xl p-4">
