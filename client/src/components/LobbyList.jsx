@@ -694,7 +694,7 @@ const LobbyList = ({
                     value={impostorJoinCode}
                     onChange={(e) => setImpostorJoinCode(e.target.value.toUpperCase())}
                     placeholder="CODE"
-                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
                     maxLength={4}
                     autoFocus
                     onKeyPress={(e) => e.key === 'Enter' && impostorJoinCode.trim() && onJoinImpostor(impostorJoinCode)}
@@ -758,7 +758,7 @@ const LobbyList = ({
                     value={pixelJoinCode}
                     onChange={(e) => setPixelJoinCode(e.target.value.toUpperCase())}
                     placeholder="CODE"
-                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-cyan-500"
                     maxLength={4}
                     autoFocus
                     onKeyPress={(e) => e.key === 'Enter' && pixelJoinCode.trim() && onJoinPixel(pixelJoinCode)}
@@ -822,7 +822,7 @@ const LobbyList = ({
                     value={pitchJoinCode}
                     onChange={(e) => setPitchJoinCode(e.target.value.toUpperCase())}
                     placeholder="CODE"
-                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-pink-500"
                     maxLength={4}
                     autoFocus
                     onKeyPress={(e) => e.key === 'Enter' && pitchJoinCode.trim() && onJoinPitch(pitchJoinCode)}
@@ -891,7 +891,7 @@ const LobbyList = ({
                     value={burgerJoinCode}
                     onChange={(e) => setBurgerJoinCode(e.target.value.toUpperCase())}
                     placeholder="CODE"
-                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-red-500"
                     maxLength={4}
                     autoFocus
                     onKeyPress={(e) => e.key === 'Enter' && burgerJoinCode.trim() && onJoinBurger(burgerJoinCode)}
