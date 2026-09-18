@@ -34,6 +34,10 @@ export default function usePixelGame(currentUser) {
   const leaveLobby = useCallback(() => emitAck('pixel:leaveLobby', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
   const paintCell = useCallback((index, color) => { if (socket) socket.emit('pixel:paintCell', { code: codeRef.current, odId: currentUser?.id, index, color }); }, [socket, currentUser]);
   const clearGrid = useCallback(() => emitAck('pixel:clearGrid', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
+  const voteDirector = useCallback((targetId) => emitAck('pixel:voteDirector', { code: codeRef.current, odId: currentUser?.id, targetId }), [emitAck, currentUser]);
+  const launchPaint = useCallback(() => emitAck('pixel:launchPaint', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
+  const endRound = useCallback(() => emitAck('pixel:endRound', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
+  const continueRound = useCallback(() => emitAck('pixel:continueRound', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
 
-  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setConfig, startGame, stopGame, leaveLobby, paintCell, clearGrid, setError };
+  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setConfig, startGame, stopGame, leaveLobby, paintCell, clearGrid, voteDirector, launchPaint, endRound, continueRound, setError };
 }

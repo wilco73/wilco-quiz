@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
+function fmt(ms){const x=Math.max(0,Math.ceil(ms/1000));return `${Math.floor(x/60)}:${String(x%60).padStart(2,'0')}`;}
+
 /**
  * PixelPaintView - grille de peinture (mode B : ta grille privée).
  * Palette + gomme, clic/glisser (souris + tactile), mise à jour optimiste + envoi au serveur.
@@ -8,10 +10,15 @@ export default function PixelPaintView({ lobby, currentUser, isHost, onPaintCell
   const size = lobby.gridSize;
   const [grid, setGrid] = useState(lobby.myGrid || new Array(size * size).fill(-1));
   const [selected, setSelected] = useState(0);
+  const [remaining, setRemaining] = useState(lobby.roundRemainingMs ?? 0);
+  const endTimeRef = useRef(null);
   const paintingRef = useRef(false);
 
   // reset au changement de manche / taille (repart d'une grille vierge côté serveur)
   useEffect(() => { setGrid(lobby.myGrid || new Array(size * size).fill(-1)); /* eslint-disable-next-line */ }, [lobby.currentRound, lobby.gridSize]);
+
+  useEffect(() => { setRemaining(lobby.roundRemainingMs ?? 0); endTimeRef.current = Date.now() + (lobby.roundRemainingMs ?? 0); }, [lobby.roundRemainingMs, lobby.currentRound]);
+  useEffect(() => { const t = setInterval(() => setRemaining(Math.max(0, endTimeRef.current - Date.now())), 250); return () => clearInterval(t); }, []);
 
   const paint = useCallback((i) => {
     setGrid((prev) => { if (prev[i] === selected) return prev; const ng = [...prev]; ng[i] = selected; return ng; });
@@ -36,11 +43,14 @@ export default function PixelPaintView({ lobby, currentUser, isHost, onPaintCell
     <div className="h-full flex flex-col bg-gradient-to-b from-gray-900 to-black text-white rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 shrink-0">
         <button onClick={onBack} className="px-3 py-1.5 rounded-lg bg-gray-800/70 hover:bg-gray-700 text-sm">← Quitter</button>
-        <h1 className="text-lg font-extrabold">🎨 Ta grille</h1>
+        <div className="text-center">
+          <p className="text-xs text-gray-400">Manche {lobby.currentRound}/{lobby.rounds}</p>
+          <p className="text-xl font-black font-mono tabular-nums">{fmt(remaining)}</p>
+        </div>
         <span className="bg-gray-800 rounded-lg px-3 py-1 font-mono font-bold tracking-widest text-sm">{lobby.code}</span>
       </div>
 
-      <p className="text-center text-xs text-gray-400 shrink-0 pb-1">Tu ne vois que ta grille. Suis les consignes du Directeur !</p>
+      <p className="text-center text-xs text-gray-400 shrink-0 pb-1">🎧 Suis les consignes de <span className="text-cyan-300 font-semibold">{lobby.directorPseudo}</span> — tu ne vois que ta grille.</p>
 
       {/* Grille */}
       <div className="flex-1 min-h-0 flex items-center justify-center p-3 overflow-auto">

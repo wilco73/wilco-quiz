@@ -1,7 +1,7 @@
 /**
  * Pixel-Art coopératif aveugle — état EN MÉMOIRE par lobby.
- * Mode B : chaque joueur a SA propre grille (qu'il est seul à voir). Fusion + score au reveal (Phase 3).
- * Phase 1 : lobby + config + peinture (palette + gomme). (Directeur/cible/timer : Phase 2 ; reveal : Phase 3.)
+ * Phase 1 : lobby + peinture (mode B). Phase 2 : Directeur (aléatoire/vote) + cible + timer + manches.
+ * (Reveal des grilles + fusion majoritaire + score : Phase 3.)
  */
 const { PALETTE, randomTarget } = require('./pixelShapes');
 
@@ -13,19 +13,59 @@ function generateCode() { let c; do { c = Math.floor(1000 + Math.random() * 9000
 function room(code) { return `pixel:${code}`; }
 function isHost(l, odId) { return l && l.hostId === odId; }
 function blankGrid(size) { return new Array(size * size).fill(-1); }
+function pseudoOf(l, id) { return l.players[id]?.pseudo || '?'; }
 
 function publicLobby(l, viewerOdId) {
+  const isDir = viewerOdId && viewerOdId === l.director;
+  const showTargetToViewer = isDir && (l.phase === 'prep' || l.phase === 'paint');
   return {
     code: l.code, hostId: l.hostId, status: l.status, phase: l.phase || null,
     palette: PALETTE, gridSize: l.gridSize, rounds: l.rounds, directorMode: l.directorMode,
     roundDuration: l.roundDuration, currentRound: l.currentRound || 0, minPlayers: MIN_PLAYERS, gridSizes: GRID_SIZES,
+    director: l.director || null, directorPseudo: l.director ? pseudoOf(l, l.director) : null,
+    roundRemainingMs: l.roundEndsAt ? Math.max(0, l.roundEndsAt - Date.now()) : null,
+    directorVotedIds: l.phase === 'director-vote' ? Object.keys(l.directorVotes || {}) : [],
+    target: showTargetToViewer ? l.target : null,
     players: l.order.map((id) => { const p = l.players[id]; return { odId: p.odId, pseudo: p.pseudo, avatar: p.avatar, avatarUrl: p.avatarUrl || null }; }),
     myGrid: (l.grids && viewerOdId && l.grids[viewerOdId]) ? l.grids[viewerOdId] : null,
   };
 }
-async function broadcast(io, l) {
-  try { const sockets = await io.in(room(l.code)).fetchSockets(); for (const s of sockets) s.emit('pixel:lobbyState', publicLobby(l, l.socketToPlayer?.[s.id] || null)); }
-  catch (e) { console.error('[PIXEL] broadcast:', e.message); }
+async function broadcast(io, l) { try { const sockets = await io.in(room(l.code)).fetchSockets(); for (const s of sockets) s.emit('pixel:lobbyState', publicLobby(l, l.socketToPlayer?.[s.id] || null)); } catch (e) { console.error('[PIXEL] broadcast:', e.message); } }
+function clearTimer(l) { if (l.roundTimer) { clearTimeout(l.roundTimer); l.roundTimer = null; } }
+
+function pickRandomDirector(l) {
+  let pool = l.order.filter((id) => id !== l.lastDirector);
+  if (!pool.length) pool = [...l.order];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+function beginRoundSelection(io, l) {
+  clearTimer(l); l.director = null; l.target = null; l.roundEndsAt = null;
+  if (l.directorMode === 'vote') { l.phase = 'director-vote'; l.directorVotes = {}; }
+  else { l.director = pickRandomDirector(l); l.lastDirector = l.director; l.phase = 'prep'; }
+  broadcast(io, l);
+}
+function startPaint(io, l) {
+  const t = randomTarget(l.gridSize);
+  l.target = t;
+  l.grids = {}; l.order.forEach((id) => { l.grids[id] = blankGrid(l.gridSize); }); // grille vierge par manche
+  l.phase = 'paint';
+  l.roundEndsAt = Date.now() + l.roundDuration * 1000;
+  l.roundTimer = setTimeout(() => endRound(io, l), l.roundDuration * 1000);
+  broadcast(io, l);
+}
+function endRound(io, l) {
+  clearTimer(l);
+  // Snapshot pour la Phase 3 (reveal + fusion + score)
+  const gridsCopy = {}; Object.keys(l.grids || {}).forEach((id) => { gridsCopy[id] = [...l.grids[id]]; });
+  l.roundResults = l.roundResults || [];
+  l.roundResults.push({ round: l.currentRound, director: l.director, target: l.target, grids: gridsCopy });
+  l.phase = 'round-end'; l.roundEndsAt = null;
+  broadcast(io, l);
+}
+function continueRound(io, l) {
+  if (l.currentRound >= l.rounds) { l.phase = 'finished'; clearTimer(l); broadcast(io, l); return; }
+  l.currentRound += 1;
+  beginRoundSelection(io, l);
 }
 
 function register(socket, io) {
@@ -36,9 +76,9 @@ function register(socket, io) {
     try {
       const { odId, pseudo, avatar, avatarUrl } = data || {};
       if (!odId) return cb?.({ success: false, message: 'Utilisateur invalide' });
-      for (const [c, l] of pixelLobbies) { if (l.hostId === odId) { socket.to(room(c)).emit('pixel:gameEnded', { code: c }); pixelLobbies.delete(c); } }
+      for (const [c, l] of pixelLobbies) { if (l.hostId === odId) { socket.to(room(c)).emit('pixel:gameEnded', { code: c }); clearTimer(l); pixelLobbies.delete(c); } }
       const code = generateCode();
-      const lobby = { code, hostId: odId, status: 'waiting', phase: null, gridSize: 16, rounds: 3, directorMode: 'random', roundDuration: 90, currentRound: 0, players: { [odId]: { odId, pseudo, avatar, avatarUrl: avatarUrl || null } }, order: [odId], grids: {}, socketToPlayer: {}, createdAt: Date.now() };
+      const lobby = { code, hostId: odId, status: 'waiting', phase: null, gridSize: 16, rounds: 3, directorMode: 'random', roundDuration: 90, currentRound: 0, players: { [odId]: { odId, pseudo, avatar, avatarUrl: avatarUrl || null } }, order: [odId], grids: {}, roundResults: [], socketToPlayer: {}, createdAt: Date.now() };
       pixelLobbies.set(code, lobby); socket.join(room(code)); mapSocket(lobby, odId);
       cb?.({ success: true, code, lobby: publicLobby(lobby, odId), isHost: true });
     } catch (e) { console.error('[PIXEL] create:', e); cb?.({ success: false, message: e.message }); }
@@ -72,24 +112,61 @@ function register(socket, io) {
 
   socket.on('pixel:leaveLobby', (data, cb) => {
     const l = get(data);
-    if (l) { const { odId } = data; if (l.socketToPlayer) delete l.socketToPlayer[socket.id]; if (l.players[odId] && l.status === 'waiting') { delete l.players[odId]; l.order = l.order.filter((id) => id !== odId); if (odId === l.hostId) { if (l.order.length) l.hostId = l.order[0]; else { pixelLobbies.delete(l.code); socket.leave(room(l.code)); return cb?.({ success: true }); } } broadcast(io, l); } socket.leave(room(l.code)); }
+    if (l) { const { odId } = data; if (l.socketToPlayer) delete l.socketToPlayer[socket.id]; if (l.players[odId] && l.status === 'waiting') { delete l.players[odId]; l.order = l.order.filter((id) => id !== odId); if (odId === l.hostId) { if (l.order.length) l.hostId = l.order[0]; else { clearTimer(l); pixelLobbies.delete(l.code); socket.leave(room(l.code)); return cb?.({ success: true }); } } broadcast(io, l); } socket.leave(room(l.code)); }
     cb?.({ success: true });
   });
 
-  socket.on('pixel:stopGame', (data, cb) => { const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" }); io.to(room(l.code)).emit('pixel:gameEnded', { code: l.code }); pixelLobbies.delete(l.code); cb?.({ success: true }); });
+  socket.on('pixel:stopGame', (data, cb) => { const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" }); io.to(room(l.code)).emit('pixel:gameEnded', { code: l.code }); clearTimer(l); pixelLobbies.delete(l.code); cb?.({ success: true }); });
 
-  // Phase 1 : démarrage -> phase peinture (chacun a sa grille vide). (Directeur/cible/timer : Phase 2)
   socket.on('pixel:startGame', (data, cb) => {
     const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
     if (l.order.length < MIN_PLAYERS) return cb?.({ success: false, message: `Minimum ${MIN_PLAYERS} joueurs` });
-    l.grids = {}; l.order.forEach((id) => { l.grids[id] = blankGrid(l.gridSize); });
-    l.currentRound = 1; l.status = 'playing'; l.phase = 'paint';
-    broadcast(io, l); cb?.({ success: true });
+    l.status = 'playing'; l.currentRound = 1; l.roundResults = []; l.lastDirector = null;
+    beginRoundSelection(io, l); cb?.({ success: true });
   });
 
-  // Peindre une case de SA grille (pas de diffusion : grille privée). color = index palette, ou -1 pour gomme.
+  // Vote pour le Directeur (mode 'vote')
+  socket.on('pixel:voteDirector', (data, cb) => {
+    const l = get(data); if (!l || l.phase !== 'director-vote') return cb?.({ success: false });
+    if (!l.players[data?.odId]) return cb?.({ success: false });
+    if (!data.targetId || !l.players[data.targetId]) return cb?.({ success: false, message: 'Cible invalide' });
+    l.directorVotes = l.directorVotes || {}; l.directorVotes[data.odId] = data.targetId;
+    if (Object.keys(l.directorVotes).length >= l.order.length) {
+      const tally = {}; Object.values(l.directorVotes).forEach((t) => { tally[t] = (tally[t] || 0) + 1; });
+      const max = Math.max(...Object.values(tally));
+      const top = Object.keys(tally).filter((id) => tally[id] === max);
+      l.director = top[Math.floor(Math.random() * top.length)]; // égalité -> tirage
+      l.lastDirector = l.director; l.phase = 'prep'; l.directorVotes = {};
+      broadcast(io, l);
+    } else broadcast(io, l);
+    cb?.({ success: true });
+  });
+
+  // Le Directeur lance la phase de peinture
+  socket.on('pixel:launchPaint', (data, cb) => {
+    const l = get(data); if (!l || l.phase !== 'prep') return cb?.({ success: false });
+    if (data?.odId !== l.director && !isHost(l, data?.odId)) return cb?.({ success: false, message: 'Réservé au Directeur' });
+    startPaint(io, l); cb?.({ success: true });
+  });
+
+  // Terminer la manche (Directeur ou hôte)
+  socket.on('pixel:endRound', (data, cb) => {
+    const l = get(data); if (!l || l.phase !== 'paint') return cb?.({ success: false });
+    if (data?.odId !== l.director && !isHost(l, data?.odId)) return cb?.({ success: false, message: 'Réservé au Directeur' });
+    endRound(io, l); cb?.({ success: true });
+  });
+
+  // Passer à la manche suivante (Directeur ou hôte)
+  socket.on('pixel:continueRound', (data, cb) => {
+    const l = get(data); if (!l || l.phase !== 'round-end') return cb?.({ success: false });
+    if (data?.odId !== l.director && !isHost(l, data?.odId)) return cb?.({ success: false, message: 'Réservé à l\'hôte/Directeur' });
+    continueRound(io, l); cb?.({ success: true });
+  });
+
+  // Peindre (les OUVRIERS uniquement : le Directeur ne peint pas)
   socket.on('pixel:paintCell', (data, cb) => {
     const l = get(data); if (!l || l.phase !== 'paint') return cb?.({ success: false });
+    if (data?.odId === l.director) return cb?.({ success: false, message: 'Le Directeur ne peint pas' });
     const g = l.grids?.[data?.odId]; if (!g) return cb?.({ success: false });
     const i = data.index, color = data.color;
     if (!Number.isInteger(i) || i < 0 || i >= g.length) return cb?.({ success: false });
@@ -97,9 +174,9 @@ function register(socket, io) {
     g[i] = color; cb?.({ success: true });
   });
 
-  // Effacer toute sa grille
   socket.on('pixel:clearGrid', (data, cb) => {
     const l = get(data); if (!l || l.phase !== 'paint') return cb?.({ success: false });
+    if (data?.odId === l.director) return cb?.({ success: false });
     if (l.grids?.[data?.odId]) l.grids[data.odId] = blankGrid(l.gridSize);
     cb?.({ success: true });
   });
