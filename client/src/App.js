@@ -26,6 +26,7 @@ import BurgerGameContainer from './components/BurgerGameContainer';
 import ResetPasswordView from './components/ResetPasswordView';
 import CompleteAccountView from './components/CompleteAccountView';
 import WilpostGameContainer from './components/WilpostGameContainer';
+import ImpostorGameContainer from './components/ImpostorGameContainer';
 import { supabase } from './services/supabase';
 import { API_URL } from './config';
 import './App.css';
@@ -49,6 +50,7 @@ const App = () => {
   const [currentMysteryLobby, setCurrentMysteryLobby] = useState(null);
   const [currentMemeLobby, setCurrentMemeLobby] = useState(null);
   const [currentMemeLobbyCode, setCurrentMemeLobbyCode] = useState(null);
+  const [impostorEntry, setImpostorEntry] = useState(null);
 
   const hasReconnected = useRef(false);
   const draftTimeoutRef = useRef(null);
@@ -74,6 +76,9 @@ const App = () => {
       return p.get('auth') === 'twitch';
     } catch { return false; }
   });
+
+  const handleCreateImpostor = () => { setImpostorEntry({ entry: 'create' }); setView('impostor-game'); };
+  const handleJoinImpostor = (code) => { setImpostorEntry({ entry: 'join', code }); setView('impostor-game'); };
 
 
   // ========== SAUVEGARDE URGENTE QUAND TIMER BAS ==========
@@ -803,7 +808,7 @@ const App = () => {
     'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
     'admin-monitoring', 'admin-validation', 'admin-users',
     'admin-game-settings', 'admin-meme-templates',
-    'meme-editor-test', 'meme-game-test', 'burger-game', 'wilpost-game'
+    'meme-editor-test', 'meme-game-test', 'burger-game', 'wilpost-game', 'impostor-game'
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -817,6 +822,8 @@ const App = () => {
             lobbies={lobbies}
             quizzes={quizzes}
             onJoinLobby={handleJoinLobby}
+            onCreateImpostor={handleCreateImpostor}
+            onJoinImpostor={handleJoinImpostor}
             onJoinDrawingLobby={handleJoinDrawingLobby}
             onJoinMysteryLobby={(lobby) => {
               setCurrentMysteryLobby(lobby);
@@ -1018,6 +1025,15 @@ const App = () => {
             entry={wilpostEntry?.entry || 'join'}
             joinCode={wilpostEntry?.code}
             onExit={() => { setWilpostEntry(null); setView('lobby-list'); }}
+          />
+        );
+      case 'impostor-game':
+        return (
+          <ImpostorGameContainer
+            currentUser={currentUser}
+            entry={impostorEntry?.entry || 'join'}
+            joinCode={impostorEntry?.code}
+            onExit={() => { setImpostorEntry(null); setView('lobby-list'); }}
           />
         );
       default:

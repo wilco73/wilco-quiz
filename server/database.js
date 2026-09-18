@@ -2344,6 +2344,31 @@ async function getDrawingLobbyResults(lobbyId) {
   return { lobby, drawings, scores, ranking };
 }
 
+// ==================== Imposteur  =================================
+
+async function getRandomImpostorPair(theme) {
+  let q = supabase.from('impostor_pairs').select('*');
+  if (theme) q = q.eq('theme', theme);
+  const { data } = await q;
+  if (!data || !data.length) return null;
+  const p = data[Math.floor(Math.random() * data.length)];
+  return { civil: p.word_civil, impostor: p.word_impostor, theme: p.theme };
+}
+async function getImpostorThemes() {
+  const { data } = await supabase.from('impostor_pairs').select('theme');
+  return [...new Set((data || []).map((d) => d.theme).filter(Boolean))].sort();
+}
+async function getAllImpostorPairs() {
+  const { data } = await supabase.from('impostor_pairs').select('*').order('theme').order('word_civil');
+  return (data || []).map((p) => ({ id: p.id, civil: p.word_civil, impostor: p.word_impostor, theme: p.theme }));
+}
+async function createImpostorPair({ word_civil, word_impostor, theme }) {
+  const id = Date.now().toString();
+  await supabase.from('impostor_pairs').insert({ id, word_civil, word_impostor, theme: theme || null });
+  return id;
+}
+async function deleteImpostorPair(id) { await supabase.from('impostor_pairs').delete().eq('id', id); }
+
 // ==================== MYSTERY GRID (Case Mystère) ====================
 
 // Récupérer toutes les grilles mystères
@@ -4200,6 +4225,13 @@ module.exports = {
   updateGameSetting,
   updateGameSettingsOrder,
   canCreateGameLobby,
+
+  // Imposteur
+  getRandomImpostorPair, 
+  getImpostorThemes, 
+  getAllImpostorPairs, 
+  createImpostorPair, 
+  deleteImpostorPair,
 
   // Meme Templates
   getAllMemeTemplates,
