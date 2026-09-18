@@ -38,7 +38,7 @@ export default function PitchLobbyView({ lobby, currentUser, isHost, onChooseTea
             <button onClick={onBack} className="px-3 py-1.5 rounded-lg bg-gray-800/70 hover:bg-gray-700 text-sm">← Quitter</button>
             {isHost && <button onClick={onStopGame} className="px-3 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800 text-sm">Fermer</button>}
           </div>
-          <h1 className="text-xl font-extrabold">🎤 Match de Pitch</h1>
+          <h1 className="text-xl font-extrabold">🚨 Wilco Trap</h1>
           <span className="bg-gray-800 rounded-lg px-3 py-1 font-mono font-bold tracking-widest">{lobby.code}</span>
         </div>
 
