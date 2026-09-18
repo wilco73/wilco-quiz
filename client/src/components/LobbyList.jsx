@@ -898,8 +898,8 @@ const LobbyList = ({
                   />
                   <button
                     onClick={() => onJoinMajority(majorityJoinCode)}
-                    disabled={!pitchJoinCode.trim()}
-                    className="px-4 py-2 bg-pink-600 hover:bg-emerald-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                    disabled={!majorityJoinCode.trim()}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold disabled:opacity-50"
                   >
                     OK
                   </button>
