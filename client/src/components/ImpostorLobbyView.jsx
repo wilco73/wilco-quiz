@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Avatar from './Avatar';
 
-export default function ImpostorLobbyView({ lobby, currentUser, isHost, onSetConfig, onAddPair, onRemovePair, onStart, onStopGame, onBack }) {
+export default function ImpostorLobbyView({ lobby, currentUser, isHost, onSetConfig, onAddWord, onRemoveWord, onStart, onStopGame, onBack }) {
   const [civil, setCivil] = useState('');
   const [impostor, setImpostor] = useState('');
   const enough = lobby.players.length >= lobby.minPlayers;

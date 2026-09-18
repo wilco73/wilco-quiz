@@ -30,7 +30,7 @@ export default function ImpostorGameContainer({ currentUser, entry, joinCode, on
   const pseudoOf = (id) => l.players.find((p) => p.odId === id)?.pseudo || '?';
 
   if (l.status === 'waiting') {
-    return <ImpostorLobbyView lobby={l} currentUser={currentUser} isHost={game.isHost} onSetConfig={game.setConfig} onAddPair={game.addCustomPair} onRemovePair={game.removeCustomPair} onStart={game.startGame} onStopGame={game.stopGame} onBack={handleExit} />;
+        return <ImpostorLobbyView lobby={l} currentUser={currentUser} isHost={game.isHost} onSetConfig={game.setConfig} onAddWord={game.addCustomWord} onRemoveWord={game.removeCustomWord} onStart={game.startGame} onStopGame={game.stopGame} onBack={handleExit} />;
   }
 
   if (l.phase === 'reveal') {
