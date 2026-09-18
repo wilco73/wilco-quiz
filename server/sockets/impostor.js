@@ -27,7 +27,7 @@ function publicLobby(l, viewerOdId) {
   return {
     code: l.code, hostId: l.hostId, status: l.status, phase: l.phase || null,
     mode: l.mode, impostorCount: l.impostorCount, mrWhite: l.mrWhite, stealWin: l.stealWin,
-    theme: l.theme, themes: l.themes || [], customPairs: l.customPairs || [],
+    theme: l.theme, themes: l.themes || [], customWords: l.customWords || [],
     minPlayers: MIN_PLAYERS, recommendedImpostors: recommendedImpostors(l.order.length),
     clueDuration: l.clueDuration, clueRound: l.clueRound || 0,
     currentCluePlayerId: currentCluePlayer(l),
@@ -41,6 +41,8 @@ function publicLobby(l, viewerOdId) {
     guessPlayerId: l.phase === 'guess' ? (l.pendingElim || null) : null,
     pair: finished ? (l.pair || null) : null,
     eliminatedOrder: l.eliminatedOrder || [],
+    themes: [...(l.themes || []), 'Custom'],
+    customWords: l.customWords || [],
     players: l.order.map((id) => {
       const p = l.players[id];
       const reveal = finished || id === viewerOdId;
@@ -119,7 +121,7 @@ function register(socket, io) {
       for (const [c, l] of impostorLobbies) { if (l.hostId === odId) { socket.to(room(c)).emit('impostor:gameEnded', { code: c }); clearClueTimer(l); impostorLobbies.delete(c); } }
       let themes = []; try { themes = await db.getImpostorThemes(); } catch (e) {}
       const code = generateCode();
-      const lobby = { code, hostId: odId, status: 'waiting', phase: null, mode: 'quick', impostorCount: 1, mrWhite: false, stealWin: false, theme: null, clueDuration: 60, themes, customPairs: [], players: { [odId]: { odId, pseudo, avatar, avatarUrl: avatarUrl || null } }, order: [odId], socketToPlayer: {}, createdAt: Date.now() };
+      const lobby = { code, hostId: odId, status: 'waiting', phase: null, mode: 'quick', impostorCount: 1, mrWhite: false, stealWin: false, theme: null, clueDuration: 60, themes, customWords: [], players: { [odId]: { odId, pseudo, avatar, avatarUrl: avatarUrl || null } }, order: [odId], socketToPlayer: {}, createdAt: Date.now() };
       impostorLobbies.set(code, lobby); socket.join(room(code)); mapSocket(lobby, odId);
       cb?.({ success: true, code, lobby: publicLobby(lobby, odId), isHost: true });
     } catch (e) { console.error('[IMPOSTOR] create:', e); cb?.({ success: false, message: e.message }); }
@@ -153,9 +155,18 @@ function register(socket, io) {
     broadcast(io, l); cb?.({ success: true });
   });
 
-  socket.on('impostor:addCustomPair', (data, cb) => { const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" }); const civil = (data.civil || '').trim(), impostor = (data.impostor || '').trim(); if (!civil || !impostor) return cb?.({ success: false, message: 'Les deux mots sont requis' }); l.customPairs.push({ civil, impostor }); broadcast(io, l); cb?.({ success: true }); });
-  socket.on('impostor:removeCustomPair', (data, cb) => { const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" }); if (Number.isInteger(data.index)) l.customPairs.splice(data.index, 1); broadcast(io, l); cb?.({ success: true }); });
-
+  socket.on('impostor:addCustomWord', (data, cb) => {
+    const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
+    const word = (data.word || '').trim(); const theme = (data.theme || 'Custom').trim() || 'Custom';
+    if (!word) return cb?.({ success: false, message: 'Mot requis' });
+    l.customWords.push({ word, theme });
+    broadcast(io, l); cb?.({ success: true });
+  });
+  socket.on('impostor:removeCustomWord', (data, cb) => {
+    const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
+    if (Number.isInteger(data.index)) l.customWords.splice(data.index, 1);
+    broadcast(io, l); cb?.({ success: true });
+  });
   socket.on('impostor:leaveLobby', (data, cb) => {
     const l = get(data);
     if (l) { const { odId } = data; if (l.socketToPlayer) delete l.socketToPlayer[socket.id]; if (l.players[odId] && l.status === 'waiting') { delete l.players[odId]; l.order = l.order.filter((id) => id !== odId); if (odId === l.hostId) { if (l.order.length) l.hostId = l.order[0]; else { clearClueTimer(l); impostorLobbies.delete(l.code); socket.leave(room(l.code)); return cb?.({ success: true }); } } broadcast(io, l); } socket.leave(room(l.code)); }
@@ -171,15 +182,39 @@ function register(socket, io) {
       if (n < MIN_PLAYERS) return cb?.({ success: false, message: `Minimum ${MIN_PLAYERS} joueurs` });
       const extra = l.impostorCount + (l.mrWhite ? 1 : 0);
       if (n - extra < 2) return cb?.({ success: false, message: "Trop d'imposteurs (il faut au moins 2 civils)" });
-      let bankPairs = []; try { const p = await db.getRandomImpostorPair(l.theme); if (p) bankPairs = [p]; } catch (e) {}
-      const pool = [...(l.customPairs || []), ...bankPairs];
-      if (!pool.length) return cb?.({ success: false, message: 'Aucune paire disponible (ajoutez-en ou changez de thème)' });
-      const pair = pool[Math.floor(Math.random() * pool.length)];
+
+      // Mots groupés par thème : banque + mots custom de la partie
+      let grouped = {};
+      try { grouped = await db.getImpostorWordsGrouped(); } catch (e) {}
+      (l.customWords || []).forEach((c) => { const t = c.theme || 'Custom'; (grouped[t] = grouped[t] || []).push(c.word); });
+
+      // Choix du thème : imposé par l'hôte, sinon aléatoire parmi ceux ayant >= 2 mots
+      let theme = l.theme || null;
+      if (!theme) {
+        const valid = Object.keys(grouped).filter((t) => grouped[t].length >= 2);
+        if (!valid.length) return cb?.({ success: false, message: 'Pas assez de mots pour lancer (ajoutez-en)' });
+        theme = valid[Math.floor(Math.random() * valid.length)];
+      }
+      const pool = grouped[theme] || [];
+      if (pool.length < 2) return cb?.({ success: false, message: `Il faut au moins 2 mots dans le thème « ${theme} »` });
+
+      // 2 mots distincts au hasard, ordre civil/imposteur aléatoire
+      const i = Math.floor(Math.random() * pool.length);
+      let j = Math.floor(Math.random() * (pool.length - 1)); if (j >= i) j++;
+      const [civil, impostor] = Math.random() < 0.5 ? [pool[i], pool[j]] : [pool[j], pool[i]];
+
+      // Attribution des rôles
       const ids = shuffle([...l.order]);
       const impostors = ids.slice(0, l.impostorCount);
       const mrWhiteId = l.mrWhite ? ids[l.impostorCount] : null;
-      l.order.forEach((id) => { const p = l.players[id]; if (impostors.includes(id)) { p.role = 'impostor'; p.word = pair.impostor; } else if (id === mrWhiteId) { p.role = 'mrwhite'; p.word = null; } else { p.role = 'civil'; p.word = pair.civil; } });
-      l.pair = pair; l.alive = {}; l.order.forEach((id) => { l.alive[id] = true; });
+      l.order.forEach((id) => {
+        const p = l.players[id];
+        if (impostors.includes(id)) { p.role = 'impostor'; p.word = impostor; }
+        else if (id === mrWhiteId) { p.role = 'mrwhite'; p.word = null; }
+        else { p.role = 'civil'; p.word = civil; }
+      });
+      l.pair = { civil, impostor, theme };
+      l.alive = {}; l.order.forEach((id) => { l.alive[id] = true; });
       l.clues = []; l.clueRound = 0; l.eliminatedOrder = []; l.winner = null; l.result = null; l.pendingGuess = null; l.pendingElim = null;
       l.status = 'playing'; l.phase = 'reveal';
       broadcast(io, l); cb?.({ success: true });

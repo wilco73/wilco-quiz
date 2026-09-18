@@ -72,18 +72,20 @@ export default function ImpostorLobbyView({ lobby, currentUser, isHost, onSetCon
             </div>
 
             <div className="bg-gray-800/60 rounded-xl p-4 mb-4">
-              <h2 className="font-bold mb-2">Paires personnalisées <span className="text-xs text-gray-500">(optionnel)</span></h2>
+              <h2 className="font-bold mb-2">Mots personnalisés <span className="text-xs text-gray-500">(mot + thème)</span></h2>
               <div className="flex flex-wrap gap-2 mb-2">
-                <input value={civil} onChange={(e)=>setCivil(e.target.value)} placeholder="Mot civil (ex: chat)" className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 outline-none text-sm"/>
-                <input value={impostor} onChange={(e)=>setImpostor(e.target.value)} placeholder="Mot imposteur (ex: chien)" className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 outline-none text-sm"/>
-                <button onClick={addPair} className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 font-semibold text-sm">Ajouter</button>
+                <input value={civil} onChange={(e) => setCivil(e.target.value)} placeholder="Un mot (ex: pseudo, objet…)" className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 outline-none text-sm" />
+                <select value={impostor || 'Custom'} onChange={(e) => setImpostor(e.target.value)} className="px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 outline-none text-sm">
+                  {(lobby.themes || ['Custom']).map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <button onClick={() => { if (civil.trim()) { onAddWord(civil.trim(), impostor || 'Custom'); setCivil(''); } }} className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 font-semibold text-sm">Ajouter</button>
               </div>
-              {lobby.customPairs?.length > 0 && (
+              {lobby.customWords?.length > 0 && (
                 <div className="space-y-1">
-                  {lobby.customPairs.map((p,i)=>(
+                  {lobby.customWords.map((w, i) => (
                     <div key={i} className="flex items-center justify-between text-sm bg-gray-900/60 rounded px-2 py-1">
-                      <span>{p.civil} / {p.impostor}</span>
-                      <button onClick={()=>onRemovePair(i)} className="text-red-400 hover:text-red-300 text-xs">✕</button>
+                      <span>{w.word} <span className="text-xs text-gray-500">({w.theme})</span></span>
+                      <button onClick={() => onRemoveWord(i)} className="text-red-400 hover:text-red-300 text-xs">✕</button>
                     </div>
                   ))}
                 </div>

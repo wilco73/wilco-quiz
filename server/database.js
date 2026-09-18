@@ -2346,18 +2346,48 @@ async function getDrawingLobbyResults(lobbyId) {
 
 // ==================== Imposteur  =================================
 
+// Tire un thème valide (>= 2 mots) puis 2 mots distincts dedans -> { civil, impostor, theme }
 async function getRandomImpostorPair(theme) {
-  let q = supabase.from('impostor_pairs').select('*');
-  if (theme) q = q.eq('theme', theme);
-  const { data } = await q;
-  if (!data || !data.length) return null;
-  const p = data[Math.floor(Math.random() * data.length)];
-  return { civil: p.word_civil, impostor: p.word_impostor, theme: p.theme };
+  const { data } = await supabase.from('impostor_words').select('word, theme');
+  const rows = data || [];
+  // regrouper par thème
+  const byTheme = {};
+  for (const r of rows) { (byTheme[r.theme] = byTheme[r.theme] || []).push(r.word); }
+  let chosenTheme = theme;
+  if (!chosenTheme) {
+    const valid = Object.keys(byTheme).filter((t) => byTheme[t].length >= 2);
+    if (!valid.length) return null;
+    chosenTheme = valid[Math.floor(Math.random() * valid.length)];
+  }
+  const pool = byTheme[chosenTheme] || [];
+  if (pool.length < 2) return null;
+  // 2 mots distincts au hasard
+  const i = Math.floor(Math.random() * pool.length);
+  let j = Math.floor(Math.random() * (pool.length - 1)); if (j >= i) j++;
+  const a = pool[i], b = pool[j];
+  // ordre aléatoire civil/imposteur
+  return Math.random() < 0.5 ? { civil: a, impostor: b, theme: chosenTheme } : { civil: b, impostor: a, theme: chosenTheme };
 }
+
+// Renvoie tous les mots groupés par thème : { theme: [mot, ...] }
+async function getImpostorWordsGrouped() {
+  const { data } = await supabase.from('impostor_words').select('word, theme');
+  const grouped = {};
+  for (const r of (data || [])) { (grouped[r.theme] = grouped[r.theme] || []).push(r.word); }
+  return grouped;
+}
+
 async function getImpostorThemes() {
-  const { data } = await supabase.from('impostor_pairs').select('theme');
-  return [...new Set((data || []).map((d) => d.theme).filter(Boolean))].sort();
+  const { data } = await supabase.from('impostor_words').select('theme');
+  const themes = [...new Set((data || []).map((d) => d.theme).filter(Boolean))];
+  // ne garder que les thèmes ayant assez de mots est calculé au tirage ; ici on renvoie juste la liste
+  return themes.sort();
 }
+
+// Admin (pour plus tard) : gestion de la banque de mots
+async function getAllImpostorWords() { const { data } = await supabase.from('impostor_words').select('*').order('theme').order('word'); return (data || []).map((w) => ({ id: w.id, word: w.word, theme: w.theme })); }
+async function createImpostorWord({ word, theme }) { const id = Date.now().toString() + Math.random().toString(36).slice(2, 6); await supabase.from('impostor_words').insert({ id, word, theme: theme || 'Divers' }); return id; }
+async function deleteImpostorWord(id) { await supabase.from('impostor_words').delete().eq('id', id); }
 async function getAllImpostorPairs() {
   const { data } = await supabase.from('impostor_pairs').select('*').order('theme').order('word_civil');
   return (data || []).map((p) => ({ id: p.id, civil: p.word_civil, impostor: p.word_impostor, theme: p.theme }));
@@ -4241,10 +4271,14 @@ module.exports = {
 
   // Imposteur
   getRandomImpostorPair, 
-  getImpostorThemes, 
+  getImpostorThemes,
+  getImpostorWordsGrouped,
   getAllImpostorPairs, 
   createImpostorPair, 
   deleteImpostorPair,
+  getAllImpostorWords, 
+  createImpostorWord, 
+  deleteImpostorWord,
 
   // Meme Templates
   getAllMemeTemplates,

@@ -29,8 +29,8 @@ export default function useImpostorGame(currentUser) {
   const createLobby = useCallback(async () => { setLoading(true); const r = await emitAck('impostor:createLobby', identity()); setLoading(false); if (r.success){setLobby(r.lobby);setIsHost(!!r.isHost);codeRef.current=r.lobby.code;} else setError(r.message); return r; /* eslint-disable-next-line */ }, [emitAck, currentUser]);
   const joinLobby = useCallback(async (code) => { setLoading(true); const r = await emitAck('impostor:joinLobby', { code, ...identity() }); setLoading(false); if (r.success){setLobby(r.lobby);setIsHost(!!r.isHost);codeRef.current=r.lobby.code;} else setError(r.message); return r; /* eslint-disable-next-line */ }, [emitAck, currentUser]);
   const setConfig = useCallback((config) => emitAck('impostor:setConfig', { code: codeRef.current, odId: currentUser?.id, config }), [emitAck, currentUser]);
-  const addCustomPair = useCallback((civil, impostor) => emitAck('impostor:addCustomPair', { code: codeRef.current, odId: currentUser?.id, civil, impostor }), [emitAck, currentUser]);
-  const removeCustomPair = useCallback((index) => emitAck('impostor:removeCustomPair', { code: codeRef.current, odId: currentUser?.id, index }), [emitAck, currentUser]);
+  const addCustomWord = useCallback((word, theme) => emitAck('impostor:addCustomWord', { code: codeRef.current, odId: currentUser?.id, word, theme }), [emitAck, currentUser]);
+  const removeCustomWord = useCallback((index) => emitAck('impostor:removeCustomWord', { code: codeRef.current, odId: currentUser?.id, index }), [emitAck, currentUser]);
   const startGame = useCallback(() => emitAck('impostor:startGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
   const stopGame = useCallback(() => emitAck('impostor:stopGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
   const leaveLobby = useCallback(() => emitAck('impostor:leaveLobby', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
@@ -39,6 +39,7 @@ export default function useImpostorGame(currentUser) {
   const vote = useCallback((targetId) => emitAck('impostor:vote', { code: codeRef.current, odId: currentUser?.id, targetId }), [emitAck, currentUser]);
   const submitGuess = useCallback((answer) => emitAck('impostor:submitGuess', { code: codeRef.current, odId: currentUser?.id, answer }), [emitAck, currentUser]);
   const voteGuess = useCallback((v) => emitAck('impostor:voteGuess', { code: codeRef.current, odId: currentUser?.id, vote: v }), [emitAck, currentUser]);
+  
 
-  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setConfig, addCustomPair, removeCustomPair, startGame, beginClues, submitClue, vote, submitGuess, voteGuess, stopGame, leaveLobby, setError };
+  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setConfig, addCustomWord, removeCustomWord, startGame, beginClues, submitClue, vote, submitGuess, voteGuess, stopGame, leaveLobby, setError };
 }
