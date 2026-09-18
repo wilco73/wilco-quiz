@@ -868,7 +868,7 @@ const LobbyList = ({
                 <button
                   onClick={onCreateBurger}
                   disabled={loadingCreate}
-                  className={`bg-gradient-to-r from-red-900 to-yellow-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
+                  className={`bg-gradient-to-r from-red-200 to-yellow-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
                 >
                   <div className="flex items-center gap-3 text-white">
                     <div className="text-3xl">🍔</div>
