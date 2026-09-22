@@ -19,8 +19,7 @@ import MysteryGridManager from './MysteryGridManager';
 import MediaLibrary from './MediaLibrary';
 import GameSettingsManager from './GameSettingsManager';
 import MemeTemplateManager from './MemeTemplateManager';
-import AuctionItemsManager from './AuctionItemsManager';
-import AuctionCardsManager from './AuctionCardsManager';
+import AuctionAdmin from './AuctionAdmin';
 
 /**
  * AdminContent - Contenu de l'interface admin (sans le layout)
@@ -632,8 +631,8 @@ const AdminContent = ({
         <MediaLibrary />
       );
       
-    case 'admin-auction-items':
-      return <AuctionItemsManager />;
+    case 'admin-auction':
+      return <AuctionAdmin />;
 
     case 'admin-game-settings':
       return (
@@ -644,11 +643,6 @@ const AdminContent = ({
       return (
         <MemeTemplateManager />
       );
-
-    case 'admin-auction-cards': 
-      return (
-      <AuctionCardsManager />
-    );
 
     default:
       return (

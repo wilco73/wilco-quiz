@@ -67,8 +67,7 @@ const MainLayout = ({
     { id: 'admin-media', label: 'Médiathèque', icon: Image },
     { id: 'admin-monitoring', label: 'Suivi Direct', icon: Monitor },
     { id: 'admin-validation', label: 'Validation', icon: Check },
-    { id: 'admin-auction-items', label: 'Objets Encan', icon: Gem },
-    { id: 'admin-auction-cards', label: 'Cartes Encan', icon: Sparkles },
+    { id: 'admin-auction', label: 'Encan', icon: Gem },
   ];
   
   // Ajouter gestion utilisateurs pour superadmin
