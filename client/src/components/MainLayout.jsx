@@ -3,7 +3,7 @@ import {
   Menu, X, Home, Trophy, User, History, Settings, LogOut, 
   Users, Star, Crown, ChevronDown, ChevronRight,
   FileQuestion, Palette, Trash, Monitor, Check, Eye, EyeOff, Grid, Image,
-  Gamepad2, Smile
+  Gamepad2, Smile, Gem
 } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 import Avatar from './Avatar';
