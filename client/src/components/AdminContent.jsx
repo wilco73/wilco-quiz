@@ -20,6 +20,7 @@ import MediaLibrary from './MediaLibrary';
 import GameSettingsManager from './GameSettingsManager';
 import MemeTemplateManager from './MemeTemplateManager';
 import AuctionItemsManager from './AuctionItemsManager';
+import AuctionCardsManager from './AuctionCardsManager';
 
 /**
  * AdminContent - Contenu de l'interface admin (sans le layout)
@@ -643,6 +644,11 @@ const AdminContent = ({
       return (
         <MemeTemplateManager />
       );
+
+    case 'admin-auction-cards': 
+      return (
+      <AuctionCardsManager />
+    );
 
     default:
       return (

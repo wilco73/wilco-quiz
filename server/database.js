@@ -3857,6 +3857,22 @@ async function getRandomAuctionItems(n) {
   return items.slice(0, n);
 }
 
+async function getAuctionCards() {
+  const { data } = await supabase.from('auction_cards').select('*').order('created_at');
+  return (data || []).map((c) => ({ id: c.id, name: c.name, imageUrl: c.image_url, effects: c.effects || [], bonusCount: c.bonus_count, malusCount: c.malus_count }));
+}
+async function createAuctionCard({ name, imageUrl, effects, bonusCount, malusCount }) {
+  const id = Date.now().toString() + Math.random().toString(36).slice(2, 6);
+  await supabase.from('auction_cards').insert({ id, name, image_url: imageUrl || null, effects: effects || [], bonus_count: parseInt(bonusCount) || 0, malus_count: parseInt(malusCount) || 0 });
+  return { id };
+}
+async function updateAuctionCard(id, { name, imageUrl, effects, bonusCount, malusCount }) {
+  const upd = {}; if (name !== undefined) upd.name = name; if (imageUrl !== undefined) upd.image_url = imageUrl; if (effects !== undefined) upd.effects = effects;
+  if (bonusCount !== undefined) upd.bonus_count = parseInt(bonusCount) || 0; if (malusCount !== undefined) upd.malus_count = parseInt(malusCount) || 0;
+  await supabase.from('auction_cards').update(upd).eq('id', id); return { id };
+}
+async function deleteAuctionCard(id) { await supabase.from('auction_cards').delete().eq('id', id); }
+
 // ==================== MEME TEMPLATES ====================
 
 async function getAllMemeTemplates(includeInactive = false) {
@@ -4362,6 +4378,10 @@ module.exports = {
   updateAuctionItem, 
   deleteAuctionItem, 
   getRandomAuctionItems,
+  getAuctionCards, 
+  createAuctionCard, 
+  updateAuctionCard, 
+  deleteAuctionCard,
 
   // Pitch
   getRandomPitchWord,

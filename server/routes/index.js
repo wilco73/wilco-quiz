@@ -13,6 +13,7 @@ const drawingRoutes = require('./drawing');
 const mysteryRoutes = require('./mystery');
 const mediaRoutes = require('./media');
 const auctionItemsRoutes = require('./auction-items');
+const auctionCardsRoutes = require('./auction-cards');
 
 const gameSettingsRoutes = require('./game-settings');
 const memeTemplatesRoutes = require('./meme-templates');
@@ -93,6 +94,7 @@ function setup(app, dependencies) {
   app.use('/api/meme-creations', memeCreationsRoutes);
   app.use('/api/auction-items', auctionItemsRoutes);
   app.use('/api/app-settings', appSettingsRoutes);
+  app.use('/api/auction-cards', auctionCardsRoutes);
 }
 
 module.exports = { setup };

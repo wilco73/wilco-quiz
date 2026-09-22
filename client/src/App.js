@@ -826,7 +826,7 @@ const App = () => {
     'admin-dashboard', 'admin-participants', 'admin-questions',
     'admin-drawing', 'admin-lobbies', 'admin-mystery', 'admin-media',
     'admin-monitoring', 'admin-validation', 'admin-users',
-    'admin-game-settings', 'admin-meme-templates', 'admin-auction-items',
+    'admin-game-settings', 'admin-meme-templates', 'admin-auction-items', 'admin-auction-cards',
     'meme-editor-test', 'meme-game-test', 'burger-game', 'wilpost-game', 'impostor-game',
     'pixel-game', 'pitch-game', 'majority-game', 'auction-game',
   ];
@@ -1010,6 +1010,7 @@ const App = () => {
       case 'admin-game-settings':
       case 'admin-meme-templates':
       case 'admin-auction-items':
+      case 'admin-auction-cards':
         return (
           <AdminContent
             activeTab={view}

@@ -3,7 +3,7 @@ import {
   Menu, X, Home, Trophy, User, History, Settings, LogOut, 
   Users, Star, Crown, ChevronDown, ChevronRight,
   FileQuestion, Palette, Trash, Monitor, Check, Eye, EyeOff, Grid, Image,
-  Gamepad2, Smile, Gem
+  Gamepad2, Smile, Gem, Sparkles
 } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 import Avatar from './Avatar';
@@ -68,6 +68,7 @@ const MainLayout = ({
     { id: 'admin-monitoring', label: 'Suivi Direct', icon: Monitor },
     { id: 'admin-validation', label: 'Validation', icon: Check },
     { id: 'admin-auction-items', label: 'Objets Encan', icon: Gem },
+    { id: 'admin-auction-cards', label: 'Cartes Encan', icon: Sparkles },
   ];
   
   // Ajouter gestion utilisateurs pour superadmin
