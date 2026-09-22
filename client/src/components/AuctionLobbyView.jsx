@@ -38,6 +38,10 @@ export default function AuctionLobbyView({ lobby, currentUser, isHost, onSetConf
                 </div>
               ))}
             </div>
+            <label className="flex items-center gap-2 text-sm mb-4 dark:text-gray-200">
+              <input type="checkbox" checked={lobby.cardsEnabled} onChange={(e) => onSetConfig({ cardsEnabled: e.target.checked })} className="rounded" />
+              Activer les cartes bonus/malus (pioche : mise 0 → bonus, 2e enchérisseur → malus)
+            </label>
             <button onClick={onStart} disabled={!enough} className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 font-bold disabled:opacity-40 disabled:cursor-not-allowed">
               {enough ? '▶ Démarrer la partie' : `Minimum ${lobby.minPlayers} joueurs`}
             </button>

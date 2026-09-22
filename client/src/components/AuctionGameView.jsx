@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Avatar from './Avatar';
 import TCGCard from './TCGCard';
+import { effectLabel, effectGood, cardKind } from './auctionEffects';
 import useCardTheme from '../hooks/useCardTheme';
 
 function fmt(ms) { const x = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, '0')}`; }
@@ -48,9 +49,13 @@ export default function AuctionGameView({ lobby, currentUser, isHost, onBid, onT
         {/* BID */}
         {lobby.phase === 'bid' && (
           isSpectator ? <p className="text-gray-500">👁 Enchère en cours — {lobby.bidSubmittedIds.length}/{lobby.players.length} ont misé</p>
+          : lobby.mySkipped ? <p className="text-rose-300 font-semibold">🚫 Interdit d'enchérir ce tour (carte malus).</p>
           : lobby.myBid != null ? <p className="text-green-400">✅ Mise enregistrée ({lobby.myBid} 💰) — {lobby.bidSubmittedIds.length}/{lobby.players.length}</p>
           : (
             <div className="w-full max-w-xs">
+              {lobby.myPending && (lobby.myPending.discount > 0 || lobby.myPending.overpay > 0) && (
+                <p className="text-xs mb-1">{lobby.myPending.discount > 0 ? <span className="text-emerald-300">🎟️ −{lobby.myPending.discount}% sur ta prochaine enchère gagnée</span> : <span className="text-rose-300">💸 +{lobby.myPending.overpay}% sur ta prochaine enchère gagnée</span>}</p>
+              )}
               <input type="range" min="0" max={myCoins} value={amount} onChange={(e)=>setAmount(parseInt(e.target.value))} className="w-full" />
               <div className="flex items-center gap-2 my-2">
                 <input type="number" min="0" max={myCoins} value={amount} onChange={(e)=>setAmount(Math.max(0, Math.min(myCoins, parseInt(e.target.value)||0)))} className="flex-1 px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 outline-none text-center text-xl font-bold" />
@@ -103,6 +108,20 @@ export default function AuctionGameView({ lobby, currentUser, isHost, onBid, onT
                 </div>
               ))}
             </div>
+            {lobby.result.draws && lobby.result.draws.length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm text-gray-400 mb-2">Cartes piochées :</p>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  {lobby.result.draws.map((d, i) => (
+                    <div key={i} className="flex flex-col items-center">
+                      <TCGCard name={d.name} imageUrl={d.imageUrl} kind={cardKind(d.effects)} effects={(d.effects || []).map((e) => ({ good: effectGood(e), label: effectLabel(e) }))} size="sm" />
+                      <p className="text-[11px] mt-1"><span className={d.deck === 'bonus' ? 'text-emerald-300' : 'text-rose-300'}>{d.deck === 'bonus' ? '🟢 bonus' : '🔴 malus'}</span> · {d.pseudo}</p>
+                      {(d.applied || []).length > 0 && <p className="text-[10px] text-gray-500 max-w-[150px] text-center">{d.applied.join(' · ')}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {isHost ? <button onClick={onContinue} className="w-full mt-4 py-3 rounded-xl bg-green-600 hover:bg-green-500 font-bold">{lobby.itemNumber >= lobby.totalItems ? '🏁 Classement final' : '▶ Objet suivant'}</button> : <p className="text-sm text-gray-400 animate-pulse mt-3">En attente de l'hôte…</p>}
           </div>
         )}

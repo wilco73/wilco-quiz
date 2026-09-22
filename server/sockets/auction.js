@@ -6,6 +6,7 @@
  */
 
 const db = require('../database');
+const { effectLabel, effectGood } = require('./auctionEffects');
 
 const auctionLobbies = new Map();
 const MIN_PLAYERS = 3;
@@ -32,7 +33,9 @@ function publicLobby(l, viewerOdId) {
   const coins = l.players[viewerOdId]?.coins;
   return {
     code: l.code, hostId: l.hostId, status: l.status, phase: l.phase || null,
-    minPlayers: MIN_PLAYERS, startCoins: l.startCoins, itemCount: l.itemCount, bidTime: l.bidTime,
+    minPlayers: MIN_PLAYERS, startCoins: l.startCoins, itemCount: l.itemCount, bidTime: l.bidTime, cardsEnabled: l.cardsEnabled,
+    myPending: l.players[viewerOdId]?.pending || null,
+    mySkipped: !!(l.skipped && l.skipped[viewerOdId]) && l.phase === 'bid',
     itemNumber: (l.currentItemIndex || 0) + 1, totalItems: l.itemCount,
     item: it ? { name: it.name, pv: it.pv, imageUrl: it.imageUrl || null, rarity: it.rarity || null } : null,
     bidRemainingMs: (l.phase === 'bid' && l.bidEndsAt) ? Math.max(0, l.bidEndsAt - Date.now()) : null,
@@ -55,7 +58,8 @@ function clearT(l) { if (l.timer) { clearTimeout(l.timer); l.timer = null; } }
 
 function startItem(io, l) {
   clearT(l);
-  l.bids = {}; l.tiedPlayers = []; l.tieBids = {}; l.tieRound = 0; l.result = null;
+  l.bids = {}; l.tiedPlayers = []; l.tieBids = {}; l.tieRound = 0; l.result = null; l.skipped = {};
+  l.order.forEach((id) => { const p = l.players[id]; if (p.pending && p.pending.skip) { l.bids[id] = 0; p.pending.skip = false; l.skipped[id] = true; } });
   l.phase = 'bid';
   l.bidEndsAt = Date.now() + l.bidTime * 1000;
   l.timer = setTimeout(() => resolveBids(io, l), l.bidTime * 1000);
@@ -97,11 +101,41 @@ function resolveTiebreak(io, l) {
 function finalizeWin(io, l, winnerId, byDraw = false) {
   clearT(l);
   const it = currentItem(l);
-  if (winnerId) { const w = l.players[winnerId]; const paid = l.bids[winnerId] || 0; w.coins -= paid; w.pv += it.pv; }
+  let paid = 0;
+  if (winnerId) {
+    const w = l.players[winnerId];
+    paid = l.bids[winnerId] || 0;
+    if (w.pending) {
+      if (w.pending.discount) paid = Math.round(paid * (1 - w.pending.discount / 100));
+      if (w.pending.overpay) paid = Math.round(paid * (1 + w.pending.overpay / 100));
+      w.pending.discount = 0; w.pending.overpay = 0;
+    }
+    paid = Math.max(0, Math.min(paid, w.coins));
+    w.coins -= paid; w.pv += it.pv;
+  }
+  const draws = [];
+  if (l.cardsEnabled) {
+    l.order.forEach((id) => {
+      if (id === winnerId) return;
+      if ((l.bids[id] || 0) === 0) {
+        const card = drawCard(l, 'bonus');
+        if (card) { const applied = applyCard(l, id, card); draws.push({ odId: id, pseudo: pseudoOf(l, id), deck: 'bonus', name: card.name, imageUrl: card.imageUrl, effects: card.effects, applied }); }
+      }
+    });
+    const cand = l.order.filter((id) => id !== winnerId && (l.bids[id] || 0) > 0);
+    if (cand.length) {
+      const maxR = Math.max(...cand.map((id) => l.bids[id]));
+      const runners = cand.filter((id) => l.bids[id] === maxR);
+      const runnerId = runners[Math.floor(Math.random() * runners.length)];
+      const card = drawCard(l, 'malus');
+      if (card) { const applied = applyCard(l, runnerId, card); draws.push({ odId: runnerId, pseudo: pseudoOf(l, runnerId), deck: 'malus', name: card.name, imageUrl: card.imageUrl, effects: card.effects, applied }); }
+    }
+  }
   l.result = {
     winnerId: winnerId || null, winnerPseudo: winnerId ? pseudoOf(l, winnerId) : null,
-    paid: winnerId ? (l.bids[winnerId] || 0) : 0, item: { name: it.name, pv: it.pv }, byDraw,
+    paid, item: { name: it.name, pv: it.pv }, byDraw,
     bids: l.order.map((id) => ({ odId: id, pseudo: pseudoOf(l, id), amount: l.bids[id] || 0 })).sort((a, b) => b.amount - a.amount),
+    draws,
   };
   l.phase = 'result';
   broadcast(io, l);
@@ -110,6 +144,55 @@ function continueItem(io, l) {
   if (l.currentItemIndex >= l.itemCount - 1) { l.phase = 'finished'; clearT(l); broadcast(io, l); return; }
   l.currentItemIndex += 1;
   startItem(io, l);
+}
+
+
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+async function buildDecks(l) {
+  l.bonusTpl = []; l.malusTpl = [];
+  if (l.cardsEnabled) {
+    let cards = []; try { cards = await db.getAuctionCards(); } catch (e) {}
+    for (const c of cards) {
+      const card = { name: c.name, imageUrl: c.imageUrl || null, effects: c.effects || [] };
+      for (let i = 0; i < (c.bonusCount || 0); i++) l.bonusTpl.push(card);
+      for (let i = 0; i < (c.malusCount || 0); i++) l.malusTpl.push(card);
+    }
+  }
+  l.bonusDeck = shuffle([...l.bonusTpl]);
+  l.malusDeck = shuffle([...l.malusTpl]);
+}
+function drawCard(l, deckName) {
+  const key = deckName === 'bonus' ? 'bonusDeck' : 'malusDeck';
+  const tpl = deckName === 'bonus' ? l.bonusTpl : l.malusTpl;
+  if (!l[key] || !l[key].length) { if (!tpl || !tpl.length) return null; l[key] = shuffle([...tpl]); }
+  return l[key].pop();
+}
+function richestOther(l, exceptId) {
+  const others = l.order.filter((id) => id !== exceptId);
+  if (!others.length) return null;
+  const max = Math.max(...others.map((id) => l.players[id].coins));
+  const top = others.filter((id) => l.players[id].coins === max);
+  return top[Math.floor(Math.random() * top.length)];
+}
+function applyCard(l, playerId, card) {
+  const p = l.players[playerId]; const applied = [];
+  for (const e of (card.effects || [])) {
+    const v = e.value || 0;
+    switch (e.type) {
+      case 'gain_coins': p.coins += v; break;
+      case 'lose_coins': p.coins = Math.max(0, p.coins - v); break;
+      case 'gain_pv': p.pv += v; break;
+      case 'lose_pv': p.pv = Math.max(0, p.pv - v); break;
+      case 'steal_coins': { const victim = richestOther(l, playerId); if (victim) { const amt = Math.min(v, l.players[victim].coins); l.players[victim].coins -= amt; p.coins += amt; applied.push('Vole ' + amt + ' pieces a ' + pseudoOf(l, victim)); } continue; }
+      case 'discount_next': p.pending.discount = Math.max(p.pending.discount || 0, v); break;
+      case 'overpay_next': p.pending.overpay = Math.max(p.pending.overpay || 0, v); break;
+      case 'skip_next': p.pending.skip = true; break;
+      default: break;
+    }
+    applied.push(effectLabel(e));
+  }
+  return applied;
 }
 
 function register(socket, io) {
@@ -122,7 +205,7 @@ function register(socket, io) {
       if (!odId) return cb?.({ success: false, message: 'Utilisateur invalide' });
       for (const [c, l] of auctionLobbies) { if (l.hostId === odId) { socket.to(room(c)).emit('auction:gameEnded', { code: c }); clearT(l); auctionLobbies.delete(c); } }
       const code = generateCode();
-      const lobby = { code, hostId: odId, status: 'waiting', phase: null, startCoins: 100, itemCount: 8, bidTime: 20, players: { [odId]: { odId, pseudo, avatar, avatarUrl: avatarUrl || null, coins: 100, pv: 0 } }, order: [odId], socketToPlayer: {}, createdAt: Date.now() };
+      const lobby = { code, hostId: odId, status: 'waiting', phase: null, startCoins: 100, itemCount: 8, bidTime: 20, cardsEnabled: true, players: { [odId]: { odId, pseudo, avatar, avatarUrl: avatarUrl || null, coins: 100, pv: 0, pending: { discount: 0, overpay: 0, skip: false } } }, order: [odId], socketToPlayer: {}, createdAt: Date.now() };
       auctionLobbies.set(code, lobby); socket.join(room(code)); mapSocket(lobby, odId);
       cb?.({ success: true, code, lobby: publicLobby(lobby, odId), isHost: true });
     } catch (e) { console.error('[AUCTION] create:', e); cb?.({ success: false, message: e.message }); }
@@ -135,7 +218,7 @@ function register(socket, io) {
       if (!l) return cb?.({ success: false, message: 'Partie introuvable' });
       if (!odId) return cb?.({ success: false, message: 'Utilisateur invalide' });
       const host = isHost(l, odId); const existing = l.players[odId]; let spectator = false;
-      if (!host) { if (l.status === 'waiting') { if (!existing) { l.players[odId] = { odId, pseudo, avatar, avatarUrl: avatarUrl || null, coins: l.startCoins, pv: 0 }; l.order.push(odId); } } else spectator = !existing; }
+      if (!host) { if (l.status === 'waiting') { if (!existing) { l.players[odId] = { odId, pseudo, avatar, avatarUrl: avatarUrl || null, coins: l.startCoins, pv: 0, pending: { discount: 0, overpay: 0, skip: false } }; l.order.push(odId); } } else spectator = !existing; }
       socket.join(room(code)); mapSocket(l, odId); broadcast(io, l);
       cb?.({ success: true, lobby: publicLobby(l, odId), isHost: host, spectator });
     } catch (e) { console.error('[AUCTION] join:', e); cb?.({ success: false, message: e.message }); }
@@ -150,6 +233,7 @@ function register(socket, io) {
     if (Number.isInteger(c.startCoins)) l.startCoins = Math.max(10, Math.min(1000, c.startCoins));
     if (Number.isInteger(c.itemCount)) l.itemCount = Math.max(1, Math.min(30, c.itemCount));
     if (Number.isInteger(c.bidTime)) l.bidTime = Math.max(10, Math.min(120, c.bidTime));
+    if (typeof c.cardsEnabled === 'boolean') l.cardsEnabled = c.cardsEnabled;
     l.order.forEach((id) => { l.players[id].coins = l.startCoins; }); // resync capital
     broadcast(io, l); cb?.({ success: true });
   });
@@ -165,7 +249,8 @@ function register(socket, io) {
     let items = (bank || []).map((i) => ({ id: i.id, name: i.name, pv: i.pv, imageUrl: i.imageUrl || null, rarity: i.rarity || null }));
     if (items.length < l.itemCount) items = items.concat(genItems(l.itemCount - items.length));
     l.items = items; l.currentItemIndex = 0;
-    l.order.forEach((id) => { l.players[id].coins = l.startCoins; l.players[id].pv = 0; });
+    l.order.forEach((id) => { l.players[id].coins = l.startCoins; l.players[id].pv = 0; l.players[id].pending = { discount: 0, overpay: 0, skip: false }; });
+    await buildDecks(l);
     l.status = 'playing'; l.phase = 'intro';
     broadcast(io, l); cb?.({ success: true });
   });
@@ -175,6 +260,7 @@ function register(socket, io) {
   socket.on('auction:bid', (data, cb) => {
     const l = get(data); if (!l || l.phase !== 'bid') return cb?.({ success: false });
     const p = l.players[data?.odId]; if (!p) return cb?.({ success: false });
+    if (l.skipped && l.skipped[data.odId]) return cb?.({ success: false, message: 'Interdit d encherir ce tour (carte)' });
     let amount = parseInt(data.amount, 10); if (!Number.isInteger(amount) || amount < 0) return cb?.({ success: false, message: 'Mise invalide' });
     amount = Math.min(amount, p.coins);
     l.bids[data.odId] = amount;
