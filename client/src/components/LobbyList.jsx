@@ -27,6 +27,8 @@ const LobbyList = ({
   onJoinPitch,
   onCreateMajority,
   onJoinMajority,
+  onCreateAuction,
+  onJoinAuction,
 }) => {
   const [gameSettings, setGameSettings] = useState([]);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -48,6 +50,8 @@ const LobbyList = ({
   const [showPitchJoin, setShowPitchJoin] = useState(false);
   const [majorityJoinCode, setMajorityJoinCode] = useState('');
   const [showMajorityJoin, setShowMajorityJoin] = useState(false);
+  const [auctionJoinCode, setAuctionJoinCode] = useState('');
+  const [showAuctionJoin, setShowAuctionJoin] = useState(false);
 
 
   const availableLobbies = lobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
@@ -147,6 +151,7 @@ const LobbyList = ({
       'pixelbuild': ['pixelbuild','Pixel-Art','pixel-art'],
       'pitch': ['pitch','Match de Pitch'],
       'majority': ['majority','Majorité'],
+      'auction': ['auction','Encan Clandestin','encan'],
     };
     
     const variations = idVariations[gameId] || [gameId];
@@ -907,6 +912,71 @@ const LobbyList = ({
                 </div>
               ) : (
                 <button onClick={() => setShowMajorityJoin(true)} className="bg-gradient-to-r from-gray-600 to-gray-700 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02]">
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="text-3xl">🔑</div>
+                    <div>
+                      <h4 className="text-lg font-bold">Rejoindre avec code</h4>
+                      <p className="text-white/80 text-sm">Entrez le code d'une partie privée</p>
+                    </div>
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+
+      {/* ==================== SECTION Encan Clandestin ========================= */}
+      {isGameEnabled('auction') && (
+        <section className="mb-6 sm:mb-8">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
+            💰 Encan Clandestin
+          </h2>
+
+          {currentUser && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
+              {canCreateLobby('auction') ? (
+                <button
+                  onClick={onCreateAuction}
+                  disabled={loadingCreate}
+                  className={`bg-gradient-to-r from-amber-800 to-amber-200 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
+                >
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="text-3xl">💰</div>
+                    <div>
+                      <h4 className="text-lg font-bold">{loadingCreate ? 'Création...' : 'Créer une partie'}</h4>
+                      <p className="text-white/80 text-sm">Misez bien et remporter le plus d'objets rares</p>
+                    </div>
+                  </div>
+                </button>
+              ) : (
+                <div></div>
+              )}
+
+              {showAuctionJoin ? (
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-xl p-4 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={auctionJoinCode}
+                    onChange={(e) => setAuctionJoinCode(e.target.value.toUpperCase())}
+                    placeholder="CODE"
+                    className="dark:text-white flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-amber-800"
+                    maxLength={4}
+                    autoFocus
+                    onKeyPress={(e) => e.key === 'Enter' && auctionJoinCode.trim() && onJoinAuction(auctionJoinCode)}
+                  />
+                  <button
+                    onClick={() => onJoinAuction(auctionJoinCode)}
+                    disabled={!auctionJoinCode.trim()}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                  >
+                    OK
+                  </button>
+                  <button onClick={() => { setShowAuctionJoin(false); setAuctionJoinCode(''); }} className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">✕</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowAuctionJoin(true)} className="bg-gradient-to-r from-gray-600 to-gray-700 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02]">
                   <div className="flex items-center gap-3 text-white">
                     <div className="text-3xl">🔑</div>
                     <div>

@@ -30,6 +30,7 @@ import ImpostorGameContainer from './components/ImpostorGameContainer';
 import PixelGameContainer from './components/PixelGameContainer';
 import PitchGameContainer from './components/PitchGameContainer';
 import MajorityGameContainer from './components/MajorityGameContainer';
+import AuctionGameContainer from './components/AuctionGameContainer';
 import { supabase } from './services/supabase';
 import { API_URL } from './config';
 import './App.css';
@@ -66,6 +67,7 @@ const App = () => {
   const [impostorEntry, setImpostorEntry] = useState(null);
   const [pitchEntry, setPitchEntry] = useState(null);
   const [majorityEntry, setMajorityEntry] = useState(null);
+  const [auctionEntry, setAuctionEntry] = useState(null);
 
   // Synchroniser myAnswerRef avec myAnswer
   useEffect(() => {
@@ -94,6 +96,9 @@ const App = () => {
 
   const handleCreateMajority = () => { setMajorityEntry({ entry: 'create'}); setView('majority-game'); };
   const handleJoinMajority = (code) => { setMajorityEntry({ entry: 'join', code}); setView('majority-game'); };
+
+  const handleCreateAuction = () => { setAuctionEntry({ entry: 'create'}); setView('auction-game'); };
+  const handleJoinAuction = (code) => { setAuctionEntry({ entry: 'join', code}); setView('auction-game'); };  
 
   // ========== SAUVEGARDE URGENTE QUAND TIMER BAS ==========
   // Envoyer immédiatement le brouillon quand il reste peu de temps
@@ -823,7 +828,7 @@ const App = () => {
     'admin-monitoring', 'admin-validation', 'admin-users',
     'admin-game-settings', 'admin-meme-templates',
     'meme-editor-test', 'meme-game-test', 'burger-game', 'wilpost-game', 'impostor-game',
-    'pixel-game', 'pitch-game', 'majority-game'
+    'pixel-game', 'pitch-game', 'majority-game', 'auction-game',
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -846,6 +851,8 @@ const App = () => {
             onJoinPitch={handleJoinPitch}
             onCreateMajority={handleCreateMajority}
             onJoinMajority={handleJoinMajority}
+            onCreateAuction={handleCreateAuction}
+            onJoinAuction={handleJoinAuction}
             onJoinMysteryLobby={(lobby) => {
               setCurrentMysteryLobby(lobby);
               setView('mystery-game');
@@ -1082,6 +1089,15 @@ const App = () => {
             entry={majorityEntry?.entry || 'join'}
             joinCode={majorityEntry?.code}
             onExit={() => { setMajorityEntry(null); setView('lobby-list'); }}
+          />
+        );
+      case 'auction-game':
+        return (
+          <AuctionGameContainer
+            currentUser={currentUser}
+            entry={auctionEntry?.entry || 'join'}
+            joinCode={auctionEntry?.code}
+            onExit={() => { setAuctionEntry(null); setView('lobby-list'); }}
           />
         );
       default:

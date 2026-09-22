@@ -18,6 +18,7 @@ const registerImpostorHandlers = require('./impostor');
 const registerPixelHandlers = require('./pixel');
 const registerPitchHandlers = require('./pitch');
 const registerMajorityHandlers = require('./majority');
+const registerAuctionHandlers = require('./auction');
 const db = require('../database');
 
 const registerMemeHandlers = require('./meme');
@@ -73,6 +74,7 @@ function setup(io) {
     registerPixelHandlers.register(socket, io);
     registerPitchHandlers.register(socket, io);
     registerMajorityHandlers.register(socket, io);
+    registerAuctionHandlers.register(socket, io);
     mysteryHandlers(io, socket, db);
     
     registerMemeHandlers(io, socket, db);
