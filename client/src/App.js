@@ -1009,6 +1009,7 @@ const App = () => {
       case 'admin-users':
       case 'admin-game-settings':
       case 'admin-meme-templates':
+      case 'admin-auction-items':
         return (
           <AdminContent
             activeTab={view}

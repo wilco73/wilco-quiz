@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Avatar from './Avatar';
+import TCGCard from './TCGCard';
 
 function fmt(ms) { const x = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, '0')}`; }
 
@@ -31,10 +32,8 @@ export default function AuctionGameView({ lobby, currentUser, isHost, onBid, onT
   );
 
   const Item = lobby.item && (
-    <div className="text-center mb-2">
-      {lobby.item.imageUrl && <img src={lobby.item.imageUrl} alt="" className="max-h-32 mx-auto rounded-lg mb-2" />}
-      <p className="text-2xl font-black">{lobby.item.name}</p>
-      <p className="text-amber-300 font-bold">{lobby.item.pv} points de victoire</p>
+    <div className="flex justify-center mb-2">
+      <TCGCard name={lobby.item.name} imageUrl={lobby.item.imageUrl} pv={lobby.item.pv} rarity={lobby.item.rarity} kind="item" size="md" />
     </div>
   );
 

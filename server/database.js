@@ -3834,6 +3834,29 @@ async function getAllAssignmentsForRound(lobbyId, roundNumber) {
   return data || [];
 }
 
+
+// ==================== Auction actions ====================
+
+async function getAuctionItems() {
+  const { data } = await supabase.from('auction_items').select('*').order('created_at');
+  return (data || []).map((i) => ({ id: i.id, name: i.name, imageUrl: i.image_url, pv: i.pv, rarity: i.rarity }))
+}
+async function createAuctionItem({ name, imageUrl, pv, rarity }) {
+  const id = Date.now().toString() + Math.random().toString(36).slice(2, 6);
+  await supabase.from('auction_items').insert({ id, name, image_url: imageUrl || null, pv: parseInt(pv) || 1, rarity: rarity || null });
+  return { id, name, imageUrl: imageUrl || null, pv: parseInt(pv) || 1 };
+}
+async function updateAuctionItem(id, { name, imageUrl, pv, rarity }) {
+  const upd = {}; if (name !== undefined) upd.name = name; if (imageUrl !== undefined) upd.image_url = imageUrl; if (pv !== undefined) upd.pv = parseInt(pv) || 1; if (rarity !== undefined) upd.rarity = rarity || null;
+  await supabase.from('auction_items').update(upd).eq('id', id); return { id };
+}
+async function deleteAuctionItem(id) { await supabase.from('auction_items').delete().eq('id', id); }
+async function getRandomAuctionItems(n) {
+  const items = await getAuctionItems();
+  for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
+  return items.slice(0, n);
+}
+
 // ==================== MEME TEMPLATES ====================
 
 async function getAllMemeTemplates(includeInactive = false) {
@@ -4332,6 +4355,13 @@ module.exports = {
   rotateMemeAssignment,
   undoMemeAssignment,
   getAllAssignmentsForRound,
+
+  // Auction actions
+  getAuctionItems, 
+  createAuctionItem, 
+  updateAuctionItem, 
+  deleteAuctionItem, 
+  getRandomAuctionItems,
 
   // Pitch
   getRandomPitchWord,

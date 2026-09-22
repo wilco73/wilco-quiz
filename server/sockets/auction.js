@@ -5,6 +5,8 @@
  * (Cartes bonus/malus : Phase 2.)
  */
 
+const db = require('../database');
+
 const auctionLobbies = new Map();
 const MIN_PLAYERS = 3;
 
@@ -17,7 +19,7 @@ function genItems(n) {
   const adj = ['Ancien', 'Précieux', 'Mystérieux', 'Royal', 'Maudit', 'Doré', 'Rare', 'Antique', 'Sacré', 'Oublié'];
   const noun = ['Vase', 'Trésor', 'Grimoire', 'Joyau', 'Artefact', 'Tableau', 'Relique', 'Sceptre', 'Masque', 'Cristal'];
   const items = [];
-  for (let i = 0; i < n; i++) items.push({ id: `auto_${i}`, name: `${adj[i % adj.length]} ${noun[Math.floor(Math.random() * noun.length)]}`, pv: 1 + Math.floor(Math.random() * 10), imageUrl: null });
+  for (let i = 0; i < n; i++) items.push({ id: `auto_${i}`, name: `${adj[i % adj.length]} ${noun[Math.floor(Math.random() * noun.length)]}`, pv: 1 + Math.floor(Math.random() * 10), imageUrl: null, rarity: null });
   return items;
 }
 function currentItem(l) { return (l.items && l.currentItemIndex != null) ? l.items[l.currentItemIndex] : null; }
@@ -32,7 +34,7 @@ function publicLobby(l, viewerOdId) {
     code: l.code, hostId: l.hostId, status: l.status, phase: l.phase || null,
     minPlayers: MIN_PLAYERS, startCoins: l.startCoins, itemCount: l.itemCount, bidTime: l.bidTime,
     itemNumber: (l.currentItemIndex || 0) + 1, totalItems: l.itemCount,
-    item: it ? { name: it.name, pv: it.pv, imageUrl: it.imageUrl || null } : null,
+    item: it ? { name: it.name, pv: it.pv, imageUrl: it.imageUrl || null, rarity: it.rarity || null } : null,
     bidRemainingMs: (l.phase === 'bid' && l.bidEndsAt) ? Math.max(0, l.bidEndsAt - Date.now()) : null,
     tieRemainingMs: (l.phase === 'tiebreak' && l.tieEndsAt) ? Math.max(0, l.tieEndsAt - Date.now()) : null,
     bidSubmittedIds: l.phase === 'bid' ? Object.keys(l.bids || {}) : [],
@@ -155,10 +157,14 @@ function register(socket, io) {
   socket.on('auction:leaveLobby', (data, cb) => { const l = get(data); if (l) { const { odId } = data; if (l.socketToPlayer) delete l.socketToPlayer[socket.id]; if (l.players[odId] && l.status === 'waiting') { delete l.players[odId]; l.order = l.order.filter((id) => id !== odId); if (odId === l.hostId) { if (l.order.length) l.hostId = l.order[0]; else { clearT(l); auctionLobbies.delete(l.code); socket.leave(room(l.code)); return cb?.({ success: true }); } } broadcast(io, l); } socket.leave(room(l.code)); } cb?.({ success: true }); });
   socket.on('auction:stopGame', (data, cb) => { const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" }); io.to(room(l.code)).emit('auction:gameEnded', { code: l.code }); clearT(l); auctionLobbies.delete(l.code); cb?.({ success: true }); });
 
-  socket.on('auction:startGame', (data, cb) => {
+  socket.on('auction:startGame', async (data, cb) => {
     const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
     if (l.order.length < MIN_PLAYERS) return cb?.({ success: false, message: `Minimum ${MIN_PLAYERS} joueurs` });
-    l.items = genItems(l.itemCount); l.currentItemIndex = 0;
+    // Objets : banque admin (R2) en priorité, complétée par des objets génériques si besoin
+    let bank = []; try { bank = await db.getRandomAuctionItems(l.itemCount); } catch (e) {}
+    let items = (bank || []).map((i) => ({ id: i.id, name: i.name, pv: i.pv, imageUrl: i.imageUrl || null, rarity: i.rarity || null }));
+    if (items.length < l.itemCount) items = items.concat(genItems(l.itemCount - items.length));
+    l.items = items; l.currentItemIndex = 0;
     l.order.forEach((id) => { l.players[id].coins = l.startCoins; l.players[id].pv = 0; });
     l.status = 'playing'; l.phase = 'intro';
     broadcast(io, l); cb?.({ success: true });
