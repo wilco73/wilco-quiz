@@ -946,7 +946,7 @@ const LobbyList = ({
                     <div className="text-3xl">💰</div>
                     <div>
                       <h4 className="text-lg font-bold">{loadingCreate ? 'Création...' : 'Créer une partie'}</h4>
-                      <p className="text-white/80 text-sm">Misez bien et remporter le plus d'objets rares</p>
+                      <p className="text-white/80 text-sm">Misez bien et remportez le plus d'objets rares</p>
                     </div>
                   </div>
                 </button>
