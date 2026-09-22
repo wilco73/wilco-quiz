@@ -45,14 +45,22 @@ async function broadcast(io, l) { try { const sockets = await io.in(room(l.code)
 function clearTimer(l) { if (l.roundTimer) { clearTimeout(l.roundTimer); l.roundTimer = null; } }
 
 function pickRandomDirector(l) {
-  let pool = l.order.filter((id) => id !== l.lastDirector);
+  l.directorCounts = l.directorCounts || {};
+  // nombre de fois où chacun a déjà été Directeur (0 si jamais)
+  const counts = l.order.map((id) => ({ id, n: l.directorCounts[id] || 0 }));
+  const min = Math.min(...counts.map((c) => c.n));
+  // candidats = ceux qui ont été Directeur le moins souvent
+  let pool = counts.filter((c) => c.n === min).map((c) => c.id);
+  // éviter de reprendre le même deux fois de suite si possible
+  if (pool.length > 1) pool = pool.filter((id) => id !== l.lastDirector) || pool;
+  if (!pool.length) pool = l.order.filter((id) => id !== l.lastDirector);
   if (!pool.length) pool = [...l.order];
   return pool[Math.floor(Math.random() * pool.length)];
 }
 function beginRoundSelection(io, l) {
   clearTimer(l); l.director = null; l.target = null; l.roundEndsAt = null;
   if (l.directorMode === 'vote') { l.phase = 'director-vote'; l.directorVotes = {}; }
-  else { l.director = pickRandomDirector(l); l.lastDirector = l.director; l.phase = 'prep'; }
+  else { l.director = pickRandomDirector(l); l.lastDirector = l.director; l.directorCounts = l.directorCounts || {}; l.directorCounts[l.director] = (l.directorCounts[l.director] || 0) + 1; l.phase = 'prep'; }
   broadcast(io, l);
 }
 function startPaint(io, l) {
@@ -170,7 +178,7 @@ function register(socket, io) {
   socket.on('pixel:startGame', (data, cb) => {
     const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
     if (l.order.length < MIN_PLAYERS) return cb?.({ success: false, message: `Minimum ${MIN_PLAYERS} joueurs` });
-    l.status = 'playing'; l.currentRound = 1; l.roundResults = []; l.lastDirector = null; l.usedTargets = [];
+    l.status = 'playing'; l.currentRound = 1; l.roundResults = []; l.lastDirector = null; l.usedTargets = []; l.directorCounts = {};
     beginRoundSelection(io, l); cb?.({ success: true });
   });
 
@@ -185,6 +193,7 @@ function register(socket, io) {
       const max = Math.max(...Object.values(tally));
       const top = Object.keys(tally).filter((id) => tally[id] === max);
       l.director = top[Math.floor(Math.random() * top.length)]; // égalité -> tirage
+      l.directorCounts = l.directorCounts || {}; l.directorCounts[l.director] = (l.directorCounts[l.director] || 0) + 1;
       l.lastDirector = l.director; l.phase = 'prep'; l.directorVotes = {};
       broadcast(io, l);
     } else broadcast(io, l);
