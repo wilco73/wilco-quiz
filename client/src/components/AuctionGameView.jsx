@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Avatar from './Avatar';
 import TCGCard from './TCGCard';
+import useCardTheme from '../hooks/useCardTheme';
 
 function fmt(ms) { const x = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, '0')}`; }
 
@@ -8,6 +9,7 @@ function fmt(ms) { const x = Math.max(0, Math.ceil(ms / 1000)); return `${Math.f
  * AuctionGameView - phases 'bid' / 'tiebreak' / 'result'.
  */
 export default function AuctionGameView({ lobby, currentUser, isHost, onBid, onTieBid, onContinue, onStopGame, onBack }) {
+  const cardTheme = useCardTheme();
   const [amount, setAmount] = useState(0);
   const remMs = lobby.phase === 'bid' ? lobby.bidRemainingMs : lobby.tieRemainingMs;
   const [remaining, setRemaining] = useState(remMs ?? 0);
@@ -33,7 +35,7 @@ export default function AuctionGameView({ lobby, currentUser, isHost, onBid, onT
 
   const Item = lobby.item && (
     <div className="flex justify-center mb-2">
-      <TCGCard name={lobby.item.name} imageUrl={lobby.item.imageUrl} pv={lobby.item.pv} rarity={lobby.item.rarity} kind="item" size="md" />
+      <TCGCard name={lobby.item.name} imageUrl={lobby.item.imageUrl} pv={lobby.item.pv} rarity={lobby.item.rarity} kind="item" size="md" theme={cardTheme} />
     </div>
   );
 

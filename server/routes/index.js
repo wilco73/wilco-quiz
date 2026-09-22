@@ -18,6 +18,7 @@ const gameSettingsRoutes = require('./game-settings');
 const memeTemplatesRoutes = require('./meme-templates');
 const memeLobbiesRoutes = require('./meme-lobbies');
 const memeCreationsRoutes = require('./meme-creations');
+const appSettingsRoutes = require('./app-settings');
 
 /**
  * Configure toutes les routes avec les dépendances nécessaires
@@ -91,6 +92,7 @@ function setup(app, dependencies) {
   app.use('/api/meme-lobbies', memeLobbiesRoutes);
   app.use('/api/meme-creations', memeCreationsRoutes);
   app.use('/api/auction-items', auctionItemsRoutes);
+  app.use('/api/app-settings', appSettingsRoutes);
 }
 
 module.exports = { setup };
