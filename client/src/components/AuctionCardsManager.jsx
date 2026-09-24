@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_URL } from '../config';
 import TCGCard from './TCGCard';
+import TCGCardZoom from './TCGCardZoom';
 import { EFFECTS, effectLabel, effectGood, cardKind } from './auctionEffects';
 
 const EFFECT_ENTRIES = Object.entries(EFFECTS);
@@ -103,7 +104,7 @@ export default function AuctionCardsManager() {
         <div className="flex flex-wrap gap-4">
           {cards.map((c) => (
             <div key={c.id} className="flex flex-col items-center">
-              <TCGCard name={c.name} imageUrl={c.imageUrl} kind={cardKind(c.effects)} effects={(c.effects || []).map((e) => ({ good: effectGood(e), label: effectLabel(e) }))} size="sm" />
+              <TCGCardZoom name={c.name} imageUrl={c.imageUrl} kind={cardKind(c.effects)} effects={(c.effects || []).map((e) => ({ good: effectGood(e), label: effectLabel(e) }))} size="sm" />
               <p className="text-[11px] text-gray-500 mt-1">🟢×{c.bonusCount} · 🔴×{c.malusCount}</p>
               <div className="flex gap-2"><button onClick={() => edit(c)} className="text-xs text-blue-500 hover:underline">Modifier</button><button onClick={() => remove(c.id)} className="text-xs text-red-500 hover:underline">Suppr.</button></div>
             </div>

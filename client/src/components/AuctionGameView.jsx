@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Avatar from './Avatar';
 import TCGCard from './TCGCard';
+import TCGCardZoom from './TCGCardZoom';
 import { effectLabel, effectGood, cardKind } from './auctionEffects';
 import useCardTheme from '../hooks/useCardTheme';
 
@@ -36,7 +37,7 @@ export default function AuctionGameView({ lobby, currentUser, isHost, onBid, onT
 
   const Item = lobby.item && (
     <div className="flex justify-center mb-2">
-      <TCGCard name={lobby.item.name} imageUrl={lobby.item.imageUrl} pv={lobby.item.pv} rarity={lobby.item.rarity} kind="item" size="md" theme={cardTheme} />
+      <TCGCardZoom name={lobby.item.name} imageUrl={lobby.item.imageUrl} pv={lobby.item.pv} rarity={lobby.item.rarity} kind="item" size="md" theme={cardTheme} />
     </div>
   );
 
@@ -114,7 +115,7 @@ export default function AuctionGameView({ lobby, currentUser, isHost, onBid, onT
                 <div className="flex flex-wrap gap-3 justify-center">
                   {lobby.result.draws.map((d, i) => (
                     <div key={i} className="flex flex-col items-center">
-                      <TCGCard name={d.name} imageUrl={d.imageUrl} kind={cardKind(d.effects)} effects={(d.effects || []).map((e) => ({ good: effectGood(e), label: effectLabel(e) }))} size="sm" />
+                      <TCGCardZoom name={d.name} imageUrl={d.imageUrl} kind={cardKind(d.effects)} effects={(d.effects || []).map((e) => ({ good: effectGood(e), label: effectLabel(e) }))} size="md" theme={cardTheme} />
                       <p className="text-[11px] mt-1"><span className={d.deck === 'bonus' ? 'text-emerald-300' : 'text-rose-300'}>{d.deck === 'bonus' ? '🟢 bonus' : '🔴 malus'}</span> · {d.pseudo}</p>
                       {(d.applied || []).length > 0 && <p className="text-[10px] text-gray-500 max-w-[150px] text-center">{d.applied.join(' · ')}</p>}
                     </div>

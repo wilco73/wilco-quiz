@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_URL } from '../config';
 import TCGCard, { DEFAULT_THEME } from './TCGCard';
+import TCGCardZoom from './TCGCardZoom';
 
 const RARITY_OPTS = [['', 'Auto (selon PV)'], ['common', 'Commun'], ['rare', 'Rare'], ['epic', 'Épique'], ['legendary', 'Légendaire']];
 const RARITIES = [['common', 'Commun'], ['rare', 'Rare'], ['epic', 'Épique'], ['legendary', 'Légendaire']];
@@ -58,7 +59,7 @@ export default function AuctionItemsManager() {
             <div className="flex flex-wrap gap-6 justify-center">
               {RARITIES.map(([rar, label]) => (
                 <div key={rar} className="flex flex-col items-center gap-2">
-                  <TCGCard name={label} pv={SAMPLE_PV[rar]} rarity={rar} kind="item" size="sm" theme={theme} />
+                  <TCGCardZoom name={label} pv={SAMPLE_PV[rar]} rarity={rar} kind="item" size="sm" theme={theme} />
                   <div className="grid grid-cols-2 gap-1">
                     {FIELDS.map(([f, flabel]) => (
                       <label key={f} className="flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-300">
@@ -111,7 +112,7 @@ export default function AuctionItemsManager() {
           <div className="flex flex-wrap gap-4">
             {items.map((it) => (
               <div key={it.id} className="flex flex-col items-center">
-                <TCGCard name={it.name} imageUrl={it.imageUrl} pv={it.pv} rarity={it.rarity} kind="item" size="sm" theme={theme} />
+                <TCGCardZoom name={it.name} imageUrl={it.imageUrl} pv={it.pv} rarity={it.rarity} kind="item" size="sm" theme={theme} />
                 <div className="flex gap-2 mt-1"><button onClick={() => edit(it)} className="text-xs text-blue-500 hover:underline">Modifier</button><button onClick={() => remove(it.id)} className="text-xs text-red-500 hover:underline">Suppr.</button></div>
               </div>
             ))}
