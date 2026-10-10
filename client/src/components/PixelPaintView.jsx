@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { gridLineColor } from './PixelGrid';
 
 function fmt(ms) { const x = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, '0')}`; }
 
 /**
- * PixelPaintView - grille de peinture (ouvriers). Outils : pinceau (taille 1/2/3), pot de zone, remplir le fond, gomme.
+ * PixelPaintView - grille de peinture (ouvriers).
+ * Outils : pinceau (1/2/3), pot de zone, remplir le fond (cases vides uniquement), gomme, annuler (Ctrl+Z).
  */
-export default function PixelPaintView({ lobby, currentUser, isHost, onPaintCell, onFillArea, onFillAll, onClearGrid, onStopGame, onBack }) {
+export default function PixelPaintView({ lobby, currentUser, isHost, onPaintCell, onFillArea, onFillAll, onClearGrid, onSetGrid, onStopGame, onBack }) {
   const size = lobby.gridSize;
   const [grid, setGrid] = useState(lobby.myGrid || new Array(size * size).fill(-1));
   const [selected, setSelected] = useState(0);
@@ -14,11 +16,47 @@ export default function PixelPaintView({ lobby, currentUser, isHost, onPaintCell
   const [remaining, setRemaining] = useState(lobby.roundRemainingMs ?? 0);
   const endTimeRef = useRef(null);
   const paintingRef = useRef(false);
+  const gridRef = useRef(grid);
+  const historyRef = useRef([]);
+  const [canUndo, setCanUndo] = useState(false);
 
-  useEffect(() => { setGrid(lobby.myGrid || new Array(size * size).fill(-1)); /* eslint-disable-next-line */ }, [lobby.currentRound, lobby.gridSize]);
+  useEffect(() => { gridRef.current = grid; }, [grid]);
+
+  // reset au changement de manche / taille (grille vierge + historique vidé)
+  useEffect(() => {
+    setGrid(lobby.myGrid || new Array(size * size).fill(-1));
+    historyRef.current = []; setCanUndo(false);
+    /* eslint-disable-next-line */
+  }, [lobby.currentRound, lobby.gridSize]);
+
   useEffect(() => { setRemaining(lobby.roundRemainingMs ?? 0); endTimeRef.current = Date.now() + (lobby.roundRemainingMs ?? 0); }, [lobby.roundRemainingMs, lobby.currentRound]);
   useEffect(() => { const t = setInterval(() => setRemaining(Math.max(0, endTimeRef.current - Date.now())), 250); return () => clearInterval(t); }, []);
   useEffect(() => { const up = () => { paintingRef.current = false; }; window.addEventListener('mouseup', up); window.addEventListener('touchend', up); return () => { window.removeEventListener('mouseup', up); window.removeEventListener('touchend', up); }; }, []);
+
+  // --- historique (annuler) : on empile un snapshot AVANT chaque action ---
+  const pushHistory = useCallback(() => {
+    historyRef.current.push([...gridRef.current]);
+    if (historyRef.current.length > 60) historyRef.current.shift();
+    setCanUndo(true);
+  }, []);
+  const undo = useCallback(() => {
+    const prev = historyRef.current.pop();
+    if (!prev) { setCanUndo(false); return; }
+    setGrid(prev); gridRef.current = prev;
+    onSetGrid && onSetGrid(prev);
+    setCanUndo(historyRef.current.length > 0);
+  }, [onSetGrid]);
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        const tag = (e.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
+        e.preventDefault(); undo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo]);
 
   const brushCells = useCallback((i) => {
     const cx = i % size, cy = Math.floor(i / size), out = [];
@@ -43,12 +81,13 @@ export default function PixelPaintView({ lobby, currentUser, isHost, onPaintCell
     onFillArea(start, selected);
   }, [selected, size, onFillArea]);
 
-  const onDown = (i) => { if (tool === 'fill') { floodLocal(i); } else { paintingRef.current = true; paintBrush(i); } };
+  const onDown = (i) => { if (tool === 'fill') { pushHistory(); floodLocal(i); } else { pushHistory(); paintingRef.current = true; paintBrush(i); } };
   const onEnter = (i) => { if (paintingRef.current && tool === 'brush') paintBrush(i); };
   const cellFromTouch = (t) => { const el = document.elementFromPoint(t.clientX, t.clientY); const idx = el?.getAttribute?.('data-idx'); if (idx != null) paintBrush(parseInt(idx, 10)); };
 
-  const fillAll = () => { setGrid(new Array(size * size).fill(selected)); onFillAll(selected); };
-  const clear = () => { setGrid(new Array(size * size).fill(-1)); onClearGrid(); };
+  // Remplir le fond : uniquement les cases encore vides (-1)
+  const fillAll = () => { pushHistory(); setGrid((prev) => prev.map((c) => (c === -1 ? selected : c))); onFillAll(selected); };
+  const clear = () => { pushHistory(); setGrid(new Array(size * size).fill(-1)); onClearGrid(); };
 
   const btn = (active) => `px-2.5 h-8 rounded-md text-sm border ${active ? 'border-cyan-400 bg-cyan-400/10' : 'border-gray-600 bg-gray-800 hover:bg-gray-700'}`;
 
@@ -65,14 +104,17 @@ export default function PixelPaintView({ lobby, currentUser, isHost, onPaintCell
       <p className="text-center text-xs text-gray-400 shrink-0 pb-1">🎧 Suis les consignes de <span className="text-cyan-300 font-semibold">{lobby.directorPseudo}</span> — tu ne vois que ta grille.</p>
 
       <div className="flex-1 min-h-0 flex items-center justify-center p-3 overflow-auto">
-        <div className="grid touch-none select-none border border-gray-700" style={{ gridTemplateColumns: `repeat(${size}, 1fr)`, width: 'min(80vmin, 520px)', aspectRatio: '1 / 1' }}
+        <div className="grid touch-none select-none rounded-sm overflow-hidden" style={{ gridTemplateColumns: `repeat(${size}, 1fr)`, width: 'min(80vmin, 520px)', aspectRatio: '1 / 1', background: '#4b5563', padding: '1px' }}
           onTouchMove={(e) => { if (paintingRef.current && tool === 'brush') cellFromTouch(e.touches[0]); }}>
-          {grid.map((c, i) => (
-            <div key={i} data-idx={i}
-              onMouseDown={() => onDown(i)} onMouseEnter={() => onEnter(i)}
-              onTouchStart={() => onDown(i)}
-              style={{ backgroundColor: c === -1 ? '#1f2937' : lobby.palette[c], outline: '1px solid rgba(255,255,255,0.04)' }} />
-          ))}
+          {grid.map((c, i) => {
+            const bg = c === -1 ? '#1f2937' : lobby.palette[c];
+            return (
+              <div key={i} data-idx={i}
+                onMouseDown={() => onDown(i)} onMouseEnter={() => onEnter(i)}
+                onTouchStart={() => onDown(i)}
+                style={{ backgroundColor: bg, boxShadow: `inset 0 0 0 1px ${gridLineColor(bg)}` }} />
+            );
+          })}
         </div>
       </div>
 
@@ -89,7 +131,8 @@ export default function PixelPaintView({ lobby, currentUser, isHost, onPaintCell
           {tool === 'brush' && [1, 2, 3].map((b) => <button key={b} onClick={() => setBrush(b)} className={btn(brush === b)}>{b}×{b}</button>)}
           <button onClick={() => setTool('fill')} className={btn(tool === 'fill')}>🪣 Pot</button>
           <span className="mx-1 h-6 w-px bg-gray-700" />
-          <button onClick={fillAll} className="px-2.5 h-8 rounded-md bg-gray-700 hover:bg-gray-600 text-sm">Remplir le fond</button>
+          <button onClick={undo} disabled={!canUndo} title="Annuler (Ctrl+Z)" className="px-2.5 h-8 rounded-md bg-gray-700 hover:bg-gray-600 text-sm disabled:opacity-40 disabled:cursor-not-allowed">↶ Annuler</button>
+          <button onClick={fillAll} title="Remplit seulement les cases encore vides" className="px-2.5 h-8 rounded-md bg-gray-700 hover:bg-gray-600 text-sm">Remplir le fond</button>
           <button onClick={clear} className="px-2.5 h-8 rounded-md bg-gray-700 hover:bg-gray-600 text-sm">Tout effacer</button>
           {isHost && <button onClick={onStopGame} className="px-2.5 h-8 rounded-md bg-gray-800 hover:bg-gray-700 text-red-300 text-sm">⏹</button>}
         </div>

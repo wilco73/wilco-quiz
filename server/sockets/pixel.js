@@ -256,7 +256,19 @@ function register(socket, io) {
     const g = l.grids?.[data?.odId]; if (!g) return cb?.({ success: false });
     const color = data.color;
     if (color !== -1 && (!Number.isInteger(color) || color < 0 || color >= PALETTE.length)) return cb?.({ success: false });
-    for (let k = 0; k < g.length; k++) g[k] = color;
+    for (let k = 0; k < g.length; k++) if (g[k] === -1) g[k] = color; // uniquement les cases vides
+    cb?.({ success: true });
+  });
+
+  // Remplacer toute la grille (utilisé par l'annulation Ctrl+Z côté client)
+  socket.on('pixel:setGrid', (data, cb) => {
+    const l = get(data); if (!l || l.phase !== 'paint') return cb?.({ success: false });
+    if (data?.odId === l.director) return cb?.({ success: false });
+    const g = l.grids?.[data?.odId]; if (!g) return cb?.({ success: false });
+    const ng = data.grid;
+    if (!Array.isArray(ng) || ng.length !== g.length) return cb?.({ success: false });
+    for (let k = 0; k < ng.length; k++) { const c = ng[k]; if (c !== -1 && (!Number.isInteger(c) || c < 0 || c >= PALETTE.length)) return cb?.({ success: false }); }
+    l.grids[data.odId] = ng.slice();
     cb?.({ success: true });
   });
 }

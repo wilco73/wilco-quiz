@@ -52,7 +52,7 @@ function publicLobby(lobby, viewerOdId) {
     minPlayers: MIN_PLAYERS,
     turnNumber: lobby.turnNumber || 0,
     currentPlayerId: (lobby.status === 'playing') ? currentPlayerId(lobby) : null,
-    roundRemainingMs: lobby.roundEndsAt ? Math.max(0, lobby.roundEndsAt - Date.now()) : null,
+    roundRemainingMs: lobby.pendingVote ? (lobby.frozenRemainingMs ?? 0) : (lobby.roundEndsAt ? Math.max(0, lobby.roundEndsAt - Date.now()) : null),
     attempts: lobby.attempts || [],
     pendingVote: pv ? {
       guesserId: pv.guesserId, answer: pv.answer, hint: pv.hint, voters: pv.voters,
@@ -62,12 +62,15 @@ function publicLobby(lobby, viewerOdId) {
     } : null,
     players: lobby.order.map((id) => {
       const p = lobby.players[id];
+      const revealWord = lobby.status === 'playing' && (lobby.phase === 'finished' || id !== viewerOdId || !!(lobby.guessed && lobby.guessed[id]));
       return {
         odId: p.odId, pseudo: p.pseudo, avatar: p.avatar, avatarUrl: p.avatarUrl || null,
         hasWord: !!p.word,
+        hasImage: !!p.wordImage,
         guessed: !!(lobby.guessed && lobby.guessed[id]),
         guessedAtTurn: p.guessedAtTurn || null,
-        guessWord: (lobby.status === 'playing' && (lobby.phase === 'finished' || id !== viewerOdId)) ? (p.guessWord || null) : null,
+        guessWord: revealWord ? (p.guessWord || null) : null,
+        guessImage: revealWord ? (p.guessWordImage || null) : null,
       };
     }),
   };
@@ -87,6 +90,7 @@ function clearTimer(lobby) { if (lobby.timer) { clearTimeout(lobby.timer); lobby
 
 function startRound(io, lobby) {
   clearTimer(lobby);
+  lobby.frozenRemainingMs = null;
   lobby.phase = 'round';
   lobby.roundStartedAt = Date.now();
   lobby.roundEndsAt = Date.now() + lobby.roundDuration * 1000;
@@ -204,6 +208,7 @@ function register(socket, io) {
     const p = lobby.players[data?.odId];
     if (!p) return cb?.({ success: false, message: 'Joueur introuvable' });
     p.word = (data.word || '').trim() || null;
+    p.wordImage = (data.wordImage || '').trim() || null;
     broadcast(io, lobby); cb?.({ success: true });
   });
 
@@ -232,7 +237,7 @@ function register(socket, io) {
     if (lobby.order.length < MIN_PLAYERS) return cb?.({ success: false, message: `Minimum ${MIN_PLAYERS} joueurs` });
     if (lobby.order.some((id) => !lobby.players[id].word)) return cb?.({ success: false, message: 'Tous les joueurs doivent saisir un mot' });
     const n = lobby.order.length;
-    lobby.order.forEach((id, j) => { lobby.players[id].guessWord = lobby.players[lobby.order[(j - 1 + n) % n]].word; });
+    lobby.order.forEach((id, j) => { const src = lobby.players[lobby.order[(j - 1 + n) % n]]; lobby.players[id].guessWord = src.word; lobby.players[id].guessWordImage = src.wordImage || null; });
     lobby.guessed = {}; lobby.attempts = []; lobby.pendingVote = null;
     lobby.startIndex = Math.floor(Math.random() * n);
     lobby.currentIndex = lobby.startIndex;
@@ -266,6 +271,7 @@ function register(socket, io) {
     if (!answer) return cb?.({ success: false, message: 'Réponse vide' });
     const hint = fuzzyMatch(answer, lobby.players[data.odId].guessWord);
     const voters = lobby.order.filter((id) => id !== data.odId); // tous sauf le devineur
+    lobby.frozenRemainingMs = lobby.roundEndsAt ? Math.max(0, lobby.roundEndsAt - Date.now()) : null;
     clearTimer(lobby); // on gèle le timer pendant le vote
     lobby.pendingVote = { guesserId: data.odId, answer, hint, votes: {}, voters };
     broadcast(io, lobby); cb?.({ success: true });

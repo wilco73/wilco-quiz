@@ -62,7 +62,7 @@ export default function useWilpostGame(currentUser) {
 
   const setOrder = useCallback((order) => emitAck('wilpost:setOrder', { code: codeRef.current, odId: currentUser?.id, order }), [emitAck, currentUser]);
   const setRoundDuration = useCallback((duration) => emitAck('wilpost:setRoundDuration', { code: codeRef.current, odId: currentUser?.id, duration }), [emitAck, currentUser]);
-  const setWord = useCallback((word) => emitAck('wilpost:setWord', { code: codeRef.current, odId: currentUser?.id, word }), [emitAck, currentUser]);
+  const setWord = useCallback((word, wordImage) => emitAck('wilpost:setWord', { code: codeRef.current, odId: currentUser?.id, word, wordImage }), [emitAck, currentUser]);
   const startGame = useCallback(() => emitAck('wilpost:startGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
   const leaveLobby = useCallback(() => emitAck('wilpost:leaveLobby', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
   const stopGame = useCallback(() => emitAck('wilpost:stopGame', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);

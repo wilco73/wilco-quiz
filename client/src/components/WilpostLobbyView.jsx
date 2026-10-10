@@ -4,11 +4,12 @@ import Avatar from './Avatar';
 /**
  * WilpostLobbyView - lobby de Wilpost-it.
  * - Ordre des joueurs (chaîne des mots + rotation des tours), réordonnable en drag-and-drop par l'hôte.
- * - Saisie du mot pour sa cible (joueur suivant).
+ * - Saisie du mot pour sa cible (joueur suivant) + image optionnelle du personnage.
  * - Réglage de la durée de round + démarrage (hôte).
  */
 export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrder, onSetDuration, onSetWord, onStart, onStopGame, onBack }) {
   const [word, setWord] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [dragIndex, setDragIndex] = useState(null);
 
   const me = lobby.players.find((p) => p.odId === currentUser?.id);
@@ -20,7 +21,7 @@ export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrde
   const allHaveWords = lobby.players.every((p) => p.hasWord);
   const canStart = isHost && enoughPlayers && allHaveWords;
 
-  const saveWord = () => { if (word.trim()) onSetWord(word.trim()); };
+  const saveWord = () => { if (word.trim()) onSetWord(word.trim(), imageUrl.trim()); };
 
   const handleDrop = (index) => {
     if (dragIndex === null || dragIndex === index) { setDragIndex(null); return; }
@@ -71,7 +72,7 @@ export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrde
                     </p>
                     <p className="text-xs text-gray-400 truncate">donne à {next?.pseudo}</p>
                   </div>
-                  <span className={`text-xs shrink-0 ${p.hasWord ? 'text-green-400' : 'text-gray-500'}`}>{p.hasWord ? '✓ mot' : '… mot'}</span>
+                  <span className={`text-xs shrink-0 ${p.hasWord ? 'text-green-400' : 'text-gray-500'}`}>{p.hasWord ? `✓ mot${p.hasImage ? ' 🖼' : ''}` : '… mot'}</span>
                 </div>
               );
             })}
@@ -82,7 +83,7 @@ export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrde
         <div className="bg-gray-800/60 rounded-xl p-4 mb-4">
           <h2 className="font-bold mb-1">Ton mot pour {target?.pseudo || '…'}</h2>
           <p className="text-xs text-gray-400 mb-3">Choisis le mot / personnage que {target?.pseudo || 'ta cible'} devra faire deviner.</p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-2">
             <input
               type="text" value={word} onChange={(e) => setWord(e.target.value)} onBlur={saveWord}
               placeholder="Ex : Batman, une licorne…" maxLength={60}
@@ -90,7 +91,12 @@ export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrde
             />
             <button onClick={saveWord} className="px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-500 font-semibold">Valider</button>
           </div>
-          {me?.hasWord && <p className="text-xs text-green-400 mt-2">✓ Ton mot est enregistré (tu peux le modifier).</p>}
+          <input
+            type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} onBlur={saveWord}
+            placeholder="Image du personnage (URL, optionnel) — visible par les autres, pas par la cible"
+            className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 focus:border-yellow-500 outline-none text-sm"
+          />
+          {me?.hasWord && <p className="text-xs text-green-400 mt-2">✓ Ton mot est enregistré{me?.hasImage ? ' (avec image)' : ''} — tu peux le modifier.</p>}
         </div>
 
         {/* Réglages hôte + démarrage */}

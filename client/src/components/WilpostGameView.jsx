@@ -14,17 +14,20 @@ export default function WilpostGameView({ lobby, currentUser, isHost, onEndTurn,
   const [remaining, setRemaining] = useState(lobby.roundRemainingMs ?? 0);
   const [notes, setNotes] = useState('');
   const [answer, setAnswer] = useState('');
+  const [zoomImg, setZoomImg] = useState(null);
   const endRef = useRef(null);
+  const voting = !!lobby.pendingVote;
 
   useEffect(() => {
     setRemaining(lobby.roundRemainingMs ?? 0);
     endRef.current = Date.now() + (lobby.roundRemainingMs ?? 0);
-  }, [lobby.roundRemainingMs, lobby.currentPlayerId, lobby.turnNumber]);
+  }, [lobby.roundRemainingMs, lobby.currentPlayerId, lobby.turnNumber, voting]);
 
   useEffect(() => {
+    if (voting) return; // timer gelé pendant un vote
     const t = setInterval(() => setRemaining(Math.max(0, endRef.current - Date.now())), 250);
     return () => clearInterval(t);
-  }, []);
+  }, [voting]);
 
   const me = lobby.players.find((p) => p.odId === currentUser?.id);
   const isSpectator = !me;
@@ -46,8 +49,8 @@ export default function WilpostGameView({ lobby, currentUser, isHost, onEndTurn,
       <div className="flex items-center justify-between px-4 py-2 shrink-0">
         <button onClick={onBack} className="px-3 py-1.5 rounded-lg bg-gray-800/70 hover:bg-gray-700 text-sm">← Quitter</button>
         <div className="text-center">
-          <p className="text-xs text-gray-400">Tour {lobby.turnNumber}</p>
-          <p className="text-2xl font-black font-mono tabular-nums">{fmt(remaining)}</p>
+          <p className="text-xs text-gray-400">Tour {lobby.turnNumber}{voting && <span className="text-blue-300"> · vote en cours</span>}</p>
+          <p className={`text-2xl font-black font-mono tabular-nums ${voting ? 'text-blue-300' : ''}`}>{fmt(remaining)}{voting && ' ⏸'}</p>
         </div>
         <span className="bg-gray-800 rounded-lg px-3 py-1 font-mono font-bold tracking-widest text-sm">{lobby.code}</span>
       </div>
@@ -95,10 +98,17 @@ export default function WilpostGameView({ lobby, currentUser, isHost, onEndTurn,
                     <Avatar avatarId={p.avatar} avatarUrl={p.avatarUrl} size="sm" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{p.pseudo} {mine && <span className="text-xs text-gray-400">(toi)</span>}</p>
-                      <p className={`text-lg font-bold truncate ${mine ? 'text-gray-500 italic' : 'text-white'}`}>
-                        {mine ? '??? (à toi de deviner)' : (p.guessed ? `✅ trouvé (tour ${p.guessedAtTurn})` : (p.guessWord || '—'))}
+                      <p className={`text-lg font-bold truncate ${mine && !p.guessed ? 'text-gray-500 italic' : (p.guessed ? 'text-green-300' : 'text-white')}`}>
+                        {mine
+                          ? (p.guessed ? `✅ ${p.guessWord || ''} (trouvé tour ${p.guessedAtTurn})` : '??? (à toi de deviner)')
+                          : (p.guessed ? `✅ ${p.guessWord || 'trouvé'} (tour ${p.guessedAtTurn})` : (p.guessWord || '—'))}
                       </p>
                     </div>
+                    {/* Œil : image du personnage (jamais sur son propre mot à deviner) */}
+                    {p.guessImage && (
+                      <button onClick={() => setZoomImg(p.guessImage)} title="Voir l'image du personnage"
+                        className="shrink-0 w-8 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center">👁</button>
+                    )}
                   </div>
                 );
               })}
@@ -164,6 +174,14 @@ export default function WilpostGameView({ lobby, currentUser, isHost, onEndTurn,
           <button onClick={onStopGame} className="px-4 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-red-300 font-semibold text-sm">⏹ Arrêter la partie</button>
         )}
       </div>
+
+      {/* Zoom image personnage */}
+      {zoomImg && (
+        <div className="fixed inset-0 z-[80] bg-black/85 flex items-center justify-center p-4" onClick={() => setZoomImg(null)}>
+          <button onClick={() => setZoomImg(null)} className="absolute top-3 right-3 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white text-xl leading-none">✕</button>
+          <img src={zoomImg} alt="" onClick={(e) => e.stopPropagation()} className="max-w-[90vw] max-h-[85vh] rounded-lg object-contain" />
+        </div>
+      )}
     </div>
   );
 }

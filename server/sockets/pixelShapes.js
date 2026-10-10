@@ -1,13 +1,15 @@
 /**
- * Cibles pixel-art générées procéduralement (plusieurs éléments, positions variées, couleurs multiples).
- * randomTarget(size, exclude) -> { name, grid } ; grid = tableau plat size*size d'index palette (-1 = vide).
+ * Cibles pixel-art générées procéduralement :
+ *  - composites géométriques (carrés, ronds, losanges, croix, triangles, lignes…)
+ *  - OBJETS reconnaissables en pixel (épée, maison, cœur, étoile, clé, champignon, poisson, fusée, ampoule)
+ *    définis comme des "patterns" (chars -> couleurs) et mis à l'échelle sur la grille.
+ * randomTarget(size, exclude) -> { name, grid, signature }.
  */
 
 const PALETTE = [
   '#000000', '#FFFFFF', '#E53935', '#FB8C00', '#FDD835',
   '#43A047', '#1E88E5', '#8E24AA', '#EC407A', '#6D4C41',
 ];
-// couleurs "vives" utilisables pour les éléments (on évite le blanc sur fond sombre par défaut)
 const FG = [0, 2, 3, 4, 5, 6, 7, 8, 9];
 
 function blank(size) { return new Array(size * size).fill(-1); }
@@ -16,7 +18,7 @@ const inb = (size, x, y) => x >= 0 && x < size && y >= 0 && y < size;
 const rnd = (a) => a[Math.floor(Math.random() * a.length)];
 const ri = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-// --- primitives (dessinent dans g, dans une boîte [x0,y0]..[x0+w,y0+h]) ---
+// --- primitives géométriques ---
 function rect(g, size, x0, y0, w, h, color, filled = true) {
   for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) {
     if (!inb(size, x, y)) continue;
@@ -35,7 +37,6 @@ function vline(g, size, x, y0, h, color, th = 1) { for (let t = 0; t < th; t++) 
 function crossShape(g, size, x0, y0, s, color) { const a = Math.floor(s / 3); rect(g, size, x0 + a, y0, s - 2 * a, s, color); rect(g, size, x0, y0 + a, s, s - 2 * a, color); }
 function triangle(g, size, x0, y0, s, color) { for (let y = 0; y < s; y++) { const half = Math.round(((y + 1) / s) * (s / 2)); for (let x = -half; x <= half; x++) { const px = x0 + Math.floor(s / 2) + x, py = y0 + y; if (inb(size, px, py)) g[I(size, px, py)] = color; } } }
 
-// éléments "poseables" (nom + fonction qui remplit une boîte de taille s au coin x0,y0)
 const ELEMENTS = [
   { name: 'carré', fn: (g, sz, x, y, s, c) => rect(g, sz, x, y, s, s, c) },
   { name: 'cercle', fn: (g, sz, x, y, s, c) => disc(g, sz, x + Math.floor(s / 2), y + Math.floor(s / 2), Math.floor(s / 2), c) },
@@ -51,14 +52,145 @@ function pickColors(n) {
   return out;
 }
 
-// Génère une cible composite : 2 à 4 éléments à des positions variées, couleurs différentes, parfois lignes/fond.
+// ============================================================
+//   OBJETS (patterns) — chars -> index palette ; ' '/'.' = vide
+//   K noir  W blanc  R rouge  O orange  Y jaune  G vert
+//   B bleu  P violet N rose   M marron
+// ============================================================
+const CHARMAP = { K: 0, W: 1, R: 2, O: 3, Y: 4, G: 5, B: 6, P: 7, N: 8, M: 9 };
+
+const OBJECTS = {
+  'Cœur': [
+    '.RR.RR.',
+    'RRRRRRR',
+    'RRRRRRR',
+    'RRRRRRR',
+    '.RRRRR.',
+    '..RRR..',
+    '...R...',
+  ],
+  'Étoile': [
+    '...Y...',
+    '...Y...',
+    '..YYY..',
+    'YYYYYYY',
+    '.YYYYY.',
+    '..YYY..',
+    '.YY.YY.',
+    'Y.....Y',
+  ],
+  'Maison': [
+    '...R...',
+    '..RRR..',
+    '.RRRRR.',
+    'RRRRRRR',
+    '.MMMMM.',
+    '.MBMBM.',
+    '.MMKMM.',
+    '.MMKMM.',
+  ],
+  'Épée': [
+    '..WWW..',
+    '..WWW..',
+    '..WWW..',
+    '..WWW..',
+    '..WWW..',
+    '..WWW..',
+    '.WWWWW.',
+    'YYYYYYY',
+    '...M...',
+    '...M...',
+    '..MMM..',
+  ],
+  'Clé': [
+    '.YYY...',
+    'Y...Y..',
+    'Y...Y..',
+    '.YYY...',
+    '..Y....',
+    '..Y....',
+    '..YY...',
+    '..Y....',
+    '..YYY..',
+  ],
+  'Champignon': [
+    '..RRRR..',
+    '.RRRRRR.',
+    'RRRRRRRR',
+    'RRWRRWRR',
+    'RRRRRRRR',
+    '..WWWW..',
+    '..WWWW..',
+    '..WWWW..',
+  ],
+  'Poisson': [
+    '.BBBBB..',
+    'BBBBBBB.',
+    'BBBKBBBB',
+    'BBBBBBB.',
+    '.BBBBB..',
+  ],
+  'Fusée': [
+    '...W...',
+    '..WWW..',
+    '..WRW..',
+    '..WWW..',
+    '..WWW..',
+    '.WWWWW.',
+    'W.WWW.W',
+    '...O...',
+    '..OOO..',
+    '...O...',
+  ],
+  'Ampoule': [
+    '..YYY..',
+    '.YYYYY.',
+    'YYYYYYY',
+    'YYYYYYY',
+    'YYYYYYY',
+    '.YYYYY.',
+    '..KKK..',
+    '..KKK..',
+    '...K...',
+  ],
+};
+
+function stampPattern(g, size, pattern, pad = 1) {
+  const ph = pattern.length, pw = Math.max(...pattern.map((r) => r.length));
+  const avail = size - 2 * pad;
+  const scale = Math.max(1, Math.floor(avail / Math.max(pw, ph)));
+  const dw = pw * scale, dh = ph * scale;
+  const ox = Math.floor((size - dw) / 2), oy = Math.floor((size - dh) / 2);
+  for (let py = 0; py < ph; py++) {
+    const row = pattern[py];
+    for (let px = 0; px < pw; px++) {
+      const ch = row[px] || ' ';
+      if (ch === ' ' || ch === '.') continue;
+      const col = CHARMAP[ch];
+      if (col == null) continue;
+      for (let sy = 0; sy < scale; sy++) for (let sx = 0; sx < scale; sx++) {
+        const x = ox + px * scale + sx, y = oy + py * scale + sy;
+        if (inb(size, x, y)) g[I(size, x, y)] = col;
+      }
+    }
+  }
+}
+
+function generateObject(size) {
+  const g = blank(size);
+  const names = Object.keys(OBJECTS);
+  const name = names[Math.floor(Math.random() * names.length)];
+  // fond clair occasionnel pour varier (grande grille)
+  if (size >= 20 && Math.random() < 0.2) { const bg = rnd([1, 4]); rect(g, size, 0, 0, size, size, bg); }
+  stampPattern(g, size, OBJECTS[name], 1);
+  return { name, grid: g };
+}
+
+// Génère une cible composite géométrique.
 function generateComposite(size) {
   const g = blank(size);
   const parts = [];
-
-  // fond léger occasionnel (grande grille seulement, couleur claire jaune/blanc)
   if (size >= 16 && Math.random() < 0.25) { const bg = rnd([1, 4]); rect(g, size, 0, 0, size, size, bg); parts.push('fond ' + PALETTE[bg]); }
-
   const nb = ri(2, size >= 24 ? 4 : 3);
   const colors = pickColors(nb + 1);
   const cells = size;
@@ -66,7 +198,6 @@ function generateComposite(size) {
   for (let k = 0; k < nb; k++) {
     const el = rnd(ELEMENTS);
     const s = ri(Math.max(3, Math.floor(cells * 0.22)), Math.floor(cells * 0.45));
-    // position variée : coins / bords / aléatoire, en évitant de retomber toujours au centre
     let x0 = ri(0, size - s), y0 = ri(0, size - s);
     const key = `${Math.round(x0 / 4)}-${Math.round(y0 / 4)}`;
     if (usedCorners.includes(key)) { x0 = ri(0, size - s); y0 = ri(0, size - s); }
@@ -74,30 +205,32 @@ function generateComposite(size) {
     el.fn(g, size, x0, y0, s, colors[k % colors.length]);
     parts.push(el.name);
   }
-
-  // une ligne traversante de temps en temps
   if (Math.random() < 0.4) {
     const c = colors[colors.length - 1];
     if (Math.random() < 0.5) hline(g, size, 0, ri(2, size - 3), size, c, size >= 24 ? 2 : 1);
     else vline(g, size, ri(2, size - 3), 0, size, c, size >= 24 ? 2 : 1);
     parts.push('ligne');
   }
-
-  const name = `${parts.length} éléments`;
-  return { name, grid: g };
+  return { name: `${parts.length} éléments`, grid: g };
 }
 
-// Tirage sans remise dans une partie (exclude = liste de "signatures" déjà sorties)
+function generateTarget(size) {
+  // Les objets ne sont lisibles qu'à partir de 16 de côté
+  if (size >= 16 && Math.random() < 0.5) return generateObject(size);
+  return generateComposite(size);
+}
+
+// Tirage sans remise dans une partie (exclude = signatures déjà sorties)
 function randomTarget(size, exclude = []) {
   let best = null;
-  for (let i = 0; i < 12; i++) {
-    const t = generateComposite(size);
+  for (let i = 0; i < 14; i++) {
+    const t = generateTarget(size);
     const sig = t.grid.join(',');
     if (!exclude.includes(sig)) { t.signature = sig; return t; }
     best = t;
   }
   best.signature = best.grid.join(',');
-  return best; // au pire on renvoie la dernière (très improbable d'épuiser)
+  return best;
 }
 
 module.exports = { PALETTE, randomTarget };
