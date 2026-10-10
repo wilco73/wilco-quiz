@@ -361,6 +361,21 @@ const LiveMonitoring = ({ lobbies, quizzes, socket, onNextQuestion, onStopQuiz }
               ) : (
                 <p className="font-bold text-green-700 dark:text-green-400 text-sm sm:text-base">{currentQuestion?.answer}</p>
               )}
+              {currentQuestion?.answerMedia && currentQuestion?.answerMediaType && (
+                <div className="mt-2">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Média de réponse :</p>
+                  {currentQuestion.answerMediaType === 'image' && (
+                    <img src={currentQuestion.answerMedia} alt="Réponse" onClick={() => setZoomedImage(currentQuestion.answerMedia)} style={{ cursor: 'zoom-in' }}
+                      className="max-h-32 w-auto rounded border border-green-300 dark:border-green-600" />
+                  )}
+                  {currentQuestion.answerMediaType === 'video' && (
+                    <video src={currentQuestion.answerMedia} controls playsInline className="max-h-40 w-auto rounded border border-green-300 dark:border-green-600" />
+                  )}
+                  {currentQuestion.answerMediaType === 'audio' && (
+                    <audio src={currentQuestion.answerMedia} controls className="w-full max-w-xs" />
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 rounded p-2">

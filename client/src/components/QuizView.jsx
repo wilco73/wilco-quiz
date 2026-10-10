@@ -230,6 +230,8 @@ const QuizView = ({
     : hasAnswered; // Si pas d'équipe, juste vérifier si l'utilisateur a répondu
   
   const shouldRevealSilhouette = !isSilhouetteMode || isTimeExpired || allAnswered || allTeammatesAnswered;
+  // Révéler la bonne réponse en fin de question : timer écoulé OU tout le monde a répondu (jamais avant)
+  const revealAnswer = isTimeExpired || allAnswered;
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-2 sm:p-4">
@@ -401,6 +403,32 @@ const QuizView = ({
                     >
                       🎵 Lancer la musique
                     </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Réponse révélée en fin de question (timer écoulé ou tout le monde a répondu) */}
+          {revealAnswer && question && (
+            <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-500 dark:border-green-600 rounded-lg p-4 mb-3 text-center">
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">✅ La bonne réponse était :</p>
+              {question.type === 'image_order'
+                ? <div className="flex justify-center"><ImageOrderDisplay images={question.choices || []} /></div>
+                : <p className="font-bold text-green-700 dark:text-green-400 text-lg sm:text-xl break-all">{question.answer}</p>}
+              {question.answerMedia && question.answerMediaType && (
+                <div className="mt-3 flex justify-center">
+                  {question.answerMediaType === 'image' && (
+                    <img src={question.answerMedia} alt="Réponse" onClick={() => setZoomedImage(question.answerMedia)}
+                      style={{ cursor: 'zoom-in' }}
+                      className="max-h-48 w-auto rounded border border-green-300 dark:border-green-600" />
+                  )}
+                  {question.answerMediaType === 'video' && (
+                    <video src={question.answerMedia} controls playsInline
+                      className="max-h-56 w-auto rounded border border-green-300 dark:border-green-600" />
+                  )}
+                  {question.answerMediaType === 'audio' && (
+                    <audio src={question.answerMedia} controls className="w-full max-w-xs" />
                   )}
                 </div>
               )}
