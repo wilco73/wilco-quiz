@@ -96,6 +96,15 @@ export default function WilpostLobbyView({ lobby, currentUser, isHost, onSetOrde
             placeholder="Image du personnage (URL, optionnel) — visible par les autres, pas par la cible"
             className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 focus:border-yellow-500 outline-none text-sm"
           />
+          {imageUrl.trim() && (
+            <div className="mt-2">
+              <p className="text-xs text-gray-400 mb-1">Aperçu (si rien ne s'affiche, le lien est invalide) :</p>
+              <img src={imageUrl.trim()} alt="aperçu"
+                className="max-h-32 rounded-lg border border-gray-700"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                onLoad={(e) => { e.currentTarget.style.display = ''; }} />
+            </div>
+          )}
           {me?.hasWord && <p className="text-xs text-green-400 mt-2">✓ Ton mot est enregistré{me?.hasImage ? ' (avec image)' : ''} — tu peux le modifier.</p>}
         </div>
 

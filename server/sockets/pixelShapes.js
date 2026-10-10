@@ -180,8 +180,6 @@ function generateObject(size) {
   const g = blank(size);
   const names = Object.keys(OBJECTS);
   const name = names[Math.floor(Math.random() * names.length)];
-  // fond clair occasionnel pour varier (grande grille)
-  if (size >= 20 && Math.random() < 0.2) { const bg = rnd([1, 4]); rect(g, size, 0, 0, size, size, bg); }
   stampPattern(g, size, OBJECTS[name], 1);
   return { name, grid: g };
 }
@@ -220,15 +218,26 @@ function generateTarget(size) {
   return generateComposite(size);
 }
 
+// Rejette une cible trop pauvre : vide, ou entièrement peinte d'une seule couleur (ex. tout jaune).
+function tooUniform(grid, size) {
+  const total = size * size; let empty = 0; const cols = new Set();
+  for (const c of grid) { if (c === -1) empty++; else cols.add(c); }
+  if (cols.size === 0) return true;                       // rien de dessiné
+  if (empty < total * 0.1 && cols.size <= 1) return true; // tout rempli d'une seule couleur
+  return false;
+}
+
 // Tirage sans remise dans une partie (exclude = signatures déjà sorties)
 function randomTarget(size, exclude = []) {
   let best = null;
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 24; i++) {
     const t = generateTarget(size);
+    if (tooUniform(t.grid, size)) continue; // on saute les cibles trop faciles
+    best = t;
     const sig = t.grid.join(',');
     if (!exclude.includes(sig)) { t.signature = sig; return t; }
-    best = t;
   }
+  if (!best) best = generateComposite(size);
   best.signature = best.grid.join(',');
   return best;
 }

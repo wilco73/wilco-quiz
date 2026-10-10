@@ -67,7 +67,7 @@ export default function PixelGameContainer({ currentUser, entry, joinCode, onExi
   // Peinture
   if (l.phase === 'paint') {
     if (isDir) return <PixelDirectorView lobby={l} isHost={game.isHost} onLaunch={game.launchPaint} onEndRound={game.endRound} onStopGame={game.stopGame} onBack={handleExit} />;
-        return <PixelPaintView lobby={l} currentUser={currentUser} isHost={game.isHost} onPaintCell={game.paintCell} onFillArea={game.fillArea} onFillAll={game.fillAll} onClearGrid={game.clearGrid} onSetGrid={game.setGrid} onStopGame={game.stopGame} onBack={handleExit} />;
+    return <PixelPaintView lobby={l} currentUser={currentUser} isHost={game.isHost} onPaintCell={game.paintCell} onFillArea={game.fillArea} onFillAll={game.fillAll} onClearGrid={game.clearGrid} onSetGrid={game.setGrid} onStopGame={game.stopGame} onBack={handleExit} />;
   }
 
   // Fin de manche : reveal + score
