@@ -42,10 +42,12 @@ export default function PixelPaintView({ lobby, currentUser, isHost, onPaintCell
   const undo = useCallback(() => {
     const prev = historyRef.current.pop();
     if (!prev) { setCanUndo(false); return; }
+    const cur = gridRef.current;
+    // Resync serveur fiable : on rejoue CHAQUE case modifiée via onPaintCell (événement déjà câblé).
+    for (let k = 0; k < prev.length; k++) { if (prev[k] !== cur[k]) onPaintCell(k, prev[k]); }
     setGrid(prev); gridRef.current = prev;
-    onSetGrid && onSetGrid(prev);
     setCanUndo(historyRef.current.length > 0);
-  }, [onSetGrid]);
+  }, [onPaintCell]);
   useEffect(() => {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
