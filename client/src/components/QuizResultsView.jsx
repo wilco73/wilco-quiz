@@ -3,6 +3,34 @@ import { CheckCircle, XCircle, Clock, Trophy, Target, Users, ChevronDown, Chevro
 import Avatar from './Avatar';
 import ImageOrderDisplay from './ImageOrderDisplay';
 
+// Média de la question (type image/video/audio selon le type de question)
+const QMedia = ({ question }) => {
+  const t = question?.type === 'qcm' ? question?.mediaType : (['image', 'video', 'audio'].includes(question?.type) ? question?.type : '');
+  if (!question?.media || !t) return null;
+  return (
+    <div className="mt-2">
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Média de la question</p>
+      {t === 'image' && <img src={question.media} alt="" className="max-h-32 w-auto rounded border border-gray-200 dark:border-gray-600" />}
+      {t === 'video' && <video src={question.media} controls playsInline className="max-h-40 w-auto rounded border border-gray-200 dark:border-gray-600" />}
+      {t === 'audio' && <audio src={question.media} controls className="w-full max-w-xs" />}
+    </div>
+  );
+};
+
+// Média affiché AVEC la bonne réponse
+const AMedia = ({ question }) => {
+  const t = question?.answerMediaType;
+  if (!question?.answerMedia || !t) return null;
+  return (
+    <div className="mt-2">
+      <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">Média de réponse</p>
+      {t === 'image' && <img src={question.answerMedia} alt="" className="max-h-32 w-auto rounded border border-gray-200 dark:border-gray-600" />}
+      {t === 'video' && <video src={question.answerMedia} controls playsInline className="max-h-40 w-auto rounded border border-gray-200 dark:border-gray-600" />}
+      {t === 'audio' && <audio src={question.answerMedia} controls className="w-full max-w-xs" />}
+    </div>
+  );
+};
+
 const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeaveLobby, onViewScoreboard, onBackToLobbies }) => {
   const [expandedQuestions, setExpandedQuestions] = useState({});
   const [viewMode, setViewMode] = useState('personal'); // 'personal' ou 'team'
@@ -365,6 +393,8 @@ const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeav
                             {question.type === 'image_order'
                               ? <ImageOrderDisplay images={question.choices || []} />
                               : <p className="font-bold text-green-700 dark:text-green-400">{question.answer}</p>}
+                            <QMedia question={question} />
+                            <AMedia question={question} />
                           </div>
                           
                           <div className={`rounded p-3 border ${
@@ -528,6 +558,8 @@ const QuizResultsView = ({ currentLobby, quiz, currentUser, participants, onLeav
                               {question.answer}
                             </p>
                           )}
+                          <QMedia question={question} />
+                          <AMedia question={question} />
                         </div>
 
                         {/* Réponses de chaque membre */}

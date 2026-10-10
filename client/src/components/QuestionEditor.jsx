@@ -25,6 +25,8 @@ const QuestionEditor = ({
     type: 'text',
     media: '',
     mediaType: '',
+    answerMedia: '',
+    answerMediaType: '',
     points: 1,
     timer: 0,
     category: '',
@@ -53,6 +55,8 @@ const QuestionEditor = ({
         type: question.type || 'text',
         media: question.media || '',
         mediaType: question.mediaType || '',
+        answerMedia: question.answerMedia || '',
+        answerMediaType: question.answerMediaType || '',
         points: question.points || 1,
         timer: question.timer || 0,
         category: question.category || '',
@@ -75,6 +79,8 @@ const QuestionEditor = ({
       type: 'text',
       media: '',
       mediaType: '',
+      answerMedia: '',
+      answerMediaType: '',
       points: 1,
       timer: 0,
       category: '',
@@ -574,6 +580,39 @@ const QuestionEditor = ({
               />
             </div>
           )}
+
+          {/* Média de réponse (optionnel, tous types) */}
+          <div className="border-t dark:border-gray-700 pt-4">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Média de réponse <span className="text-xs font-normal text-gray-500">(optionnel — affiché avec la bonne réponse au reveal et dans le récap)</span>
+            </label>
+            <select
+              value={formData.answerMediaType || 'none'}
+              onChange={(e) => setFormData({
+                ...formData,
+                answerMediaType: e.target.value === 'none' ? '' : e.target.value,
+                answerMedia: e.target.value === 'none' ? '' : formData.answerMedia
+              })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-2"
+            >
+              <option value="none">Aucun</option>
+              <option value="image">Image</option>
+              <option value="audio">Audio</option>
+              <option value="video">Vidéo</option>
+            </select>
+            {formData.answerMediaType && (
+              <>
+                <input
+                  type="text"
+                  placeholder="URL du média de réponse"
+                  value={formData.answerMedia}
+                  onChange={(e) => setFormData({ ...formData, answerMedia: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <MediaPreview type={formData.answerMediaType} url={formData.answerMedia} />
+              </>
+            )}
+          </div>
 
           {/* Classement d'images */}
           {formData.type === 'image_order' && (

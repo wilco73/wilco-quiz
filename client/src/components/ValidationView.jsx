@@ -36,6 +36,20 @@ const MediaPreview = ({ question }) => {
   );
 };
 
+// Média affiché avec la BONNE RÉPONSE (reveal)
+const AnswerMediaPreview = ({ question }) => {
+  if (!question?.answerMedia || !question?.answerMediaType) return null;
+  const t = question.answerMediaType;
+  return (
+    <div className="mt-1 mb-2">
+      <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">Média de réponse</p>
+      {t === 'image' && <img src={question.answerMedia} alt="Réponse" className="max-h-24 sm:max-h-32 w-auto rounded border border-gray-300 dark:border-gray-600" />}
+      {t === 'video' && <video src={question.answerMedia} controls playsInline className="max-h-24 sm:max-h-40 w-auto rounded border border-gray-300 dark:border-gray-600" />}
+      {t === 'audio' && <audio src={question.answerMedia} controls className="w-full max-w-xs h-8 sm:h-10" />}
+    </div>
+  );
+};
+
 // Composant de pagination
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
   if (totalPages <= 1) return null;
@@ -280,6 +294,7 @@ const ValidationView = ({ lobbies, quizzes, onValidateAnswer }) => {
                               ? <ImageOrderDisplay images={question.choices || []} />
                               : <span className="break-all">{question.answer}</span>}
                           </div>
+                          <AnswerMediaPreview question={question} />
 
                           {/* Vue par équipe */}
                           {viewMode === 'team' && (
