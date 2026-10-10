@@ -22,6 +22,7 @@ const QuizView = ({
   const [autoplayFailed, setAutoplayFailed] = useState(false);
   const [silhouetteImageReady, setSilhouetteImageReady] = useState(false);
   const [silhouetteRotationAngle, setSilhouetteRotationAngle] = useState(0);
+  const [revealReady, setRevealReady] = useState(false); // anti-flash : bloque toute révélation juste après un changement de question
 
   // Utiliser les props renommees avec protection null
   const currentLobby = lobby;
@@ -41,6 +42,14 @@ const QuizView = ({
     setSilhouetteImageReady(false);
     // Générer un angle aléatoire entre 0 et 360 pour chaque nouvelle question
     setSilhouetteRotationAngle(Math.floor(Math.random() * 360));
+  }, [questionIndex, question?.id]);
+
+  // Anti-flash : à chaque nouvelle question, on interdit la révélation pendant ~800ms
+  // (le temps que le nouveau timer et les hasAnswered réinitialisés arrivent du serveur).
+  useEffect(() => {
+    setRevealReady(false);
+    const t = setTimeout(() => setRevealReady(true), 800);
+    return () => clearTimeout(t);
   }, [questionIndex, question?.id]);
 
   // Mettre à jour le src audio/video quand la question change (sans recréer l'élément)
@@ -229,9 +238,9 @@ const QuizView = ({
     ? myTeammates.every(p => p.hasAnswered) 
     : hasAnswered; // Si pas d'équipe, juste vérifier si l'utilisateur a répondu
   
-  const shouldRevealSilhouette = !isSilhouetteMode || isTimeExpired || allAnswered || allTeammatesAnswered;
-  // Révéler la bonne réponse en fin de question : timer écoulé OU tout le monde a répondu (jamais avant)
-  const revealAnswer = isTimeExpired || allAnswered;
+  const shouldRevealSilhouette = !isSilhouetteMode || (revealReady && (isTimeExpired || allAnswered || allTeammatesAnswered));
+  // Révéler la bonne réponse en fin de question : timer écoulé OU tout le monde a répondu (jamais avant, et pas pendant le flash de transition)
+  const revealAnswer = revealReady && (isTimeExpired || allAnswered);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-2 sm:p-4">
