@@ -16,7 +16,8 @@ const PWAInstallPrompt = () => {
     setIsStandalone(standalone);
 
     // Vérifier si déjà refusé
-    const wasDismissed = localStorage.getItem('pwa-prompt-dismissed');
+    let wasDismissed = null;
+    try { wasDismissed = localStorage.getItem('pwa-prompt-dismissed'); } catch (e) { /* stockage bloqué */ }
     if (wasDismissed) {
       const dismissedTime = parseInt(wasDismissed, 10);
       // Réafficher après 7 jours
@@ -62,7 +63,7 @@ const PWAInstallPrompt = () => {
   const handleDismiss = () => {
     setShowPrompt(false);
     setDismissed(true);
-    localStorage.setItem('pwa-prompt-dismissed', Date.now().toString());
+    try { localStorage.setItem('pwa-prompt-dismissed', Date.now().toString()); } catch (e) { /* ignore */ }
   };
 
   // Ne rien afficher si déjà installé, refusé, ou pas de prompt

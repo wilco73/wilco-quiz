@@ -12,25 +12,31 @@ export const useDarkMode = () => {
 
 export const DarkModeProvider = ({ children }) => {
   const [isDark, setIsDark] = useState(() => {
-    // Charger la préférence depuis localStorage
-    const saved = localStorage.getItem('darkMode');
-    if (saved !== null) {
-      return JSON.parse(saved);
-    }
+    // Charger la préférence depuis localStorage (protégé : certains antivirus/navigateurs bloquent l'accès)
+    try {
+      const saved = localStorage.getItem('darkMode');
+      if (saved !== null) {
+        return JSON.parse(saved);
+      }
+    } catch (e) { /* stockage indisponible */ }
     // Sinon, utiliser la préférence système
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) { return false; }
   });
 
   useEffect(() => {
-    // Sauvegarder dans localStorage
-    localStorage.setItem('darkMode', JSON.stringify(isDark));
-    
+    // Sauvegarder dans localStorage (protégé)
+    try { localStorage.setItem('darkMode', JSON.stringify(isDark)); } catch (e) { /* stockage indisponible */ }
+
     // Ajouter/retirer la classe 'dark' sur <html>
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    try {
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (e) { /* ignore */ }
   }, [isDark]);
 
   const toggleDarkMode = () => {

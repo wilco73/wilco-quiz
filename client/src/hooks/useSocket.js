@@ -49,8 +49,10 @@ export function useSocket() {
   const saveLobbySession = useCallback((lobbyId, odId, pseudo, teamName, lobbyType = 'quiz') => {
     if (lobbyId && odId) {
       const session = { lobbyId, odId, pseudo, teamName, lobbyType, timestamp: Date.now() };
-      localStorage.setItem(STORAGE_KEYS.LOBBY_SESSION, JSON.stringify(session));
-      console.log('[SOCKET] Session lobby sauvegardée:', session);
+      try {
+        localStorage.setItem(STORAGE_KEYS.LOBBY_SESSION, JSON.stringify(session));
+        console.log('[SOCKET] Session lobby sauvegardée:', session);
+      } catch (e) { /* stockage bloqué */ }
     }
   }, []);
 
@@ -74,8 +76,10 @@ export function useSocket() {
 
   // Effacer la session du lobby
   const clearLobbySession = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEYS.LOBBY_SESSION);
-    console.log('[SOCKET] Session lobby effacée');
+    try {
+      localStorage.removeItem(STORAGE_KEYS.LOBBY_SESSION);
+      console.log('[SOCKET] Session lobby effacée');
+    } catch (e) { /* ignore */ }
   }, []);
 
   // Tentative de reconnexion au lobby

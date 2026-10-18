@@ -3,14 +3,16 @@ const STORAGE_KEYS = {
 };
 
 export const saveSession = (sessionData) => {
-  localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(sessionData));
+  try { localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(sessionData)); } catch (e) { /* stockage bloqué */ }
 };
 
 export const getSession = () => {
-  const data = localStorage.getItem(STORAGE_KEYS.SESSION);
-  return data ? JSON.parse(data) : null;
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.SESSION);
+    return data ? JSON.parse(data) : null;
+  } catch (e) { return null; }
 };
 
 export const clearSession = () => {
-  localStorage.removeItem(STORAGE_KEYS.SESSION);
+  try { localStorage.removeItem(STORAGE_KEYS.SESSION); } catch (e) { /* ignore */ }
 };
