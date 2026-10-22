@@ -209,6 +209,20 @@ const OBJECTS = {
     '..KKWWWWKK..',
     '....KKKK....',
   ],
+  'Rapidball': [
+    '....KKKK....',
+    '..KKBBBBKK..',
+    '.KYBBYYBBYK.',
+    '.KYYBYYBYYK.',
+    'KBBBYYYYBBBK',
+    'KBBYYKKYYBBK',
+    'KKBYKWWKYBKK',
+    'KBKKKWWKKKBK',
+    '.KBYYKKYYBK.',
+    '.KYYBYYBYYK.',
+    '..KKBBBBKK..',
+    '....KKKK....',
+  ],
 };
 
 // Rotation d'un pattern (grille de caractères) de 90° horaire, répétée `times` fois.
