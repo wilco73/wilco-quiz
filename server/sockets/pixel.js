@@ -103,9 +103,16 @@ function computeMergeAndScore(l, target, grids) {
     for (const c in counts) { if (counts[c] > bestN) { bestN = counts[c]; bestC = parseInt(c, 10); } }
     merged[i] = bestC; // -1 si personne n'a peint cette case
   }
-  let match = 0;
-  for (let i = 0; i < n; i++) if (merged[i] === target.grid[i]) match++;
-  const score = Math.round((match / n) * 100);
+  // Score "IoU" : on ne compte QUE les cases peintes dans la cible OU par l'équipe.
+  // (On ignore les cases vides des deux côtés : sinon un grand fond vide gonfle le score.)
+  let correct = 0, relevant = 0;
+  for (let i = 0; i < n; i++) {
+    const t = target.grid[i], m = merged[i];
+    if (t === -1 && m === -1) continue; // les deux vides -> n'entre pas dans le calcul
+    relevant++;
+    if (t === m) correct++;              // bonne couleur au bon endroit
+  }
+  const score = relevant ? Math.round((correct / relevant) * 100) : 0;
   return { merged, score };
 }
 
