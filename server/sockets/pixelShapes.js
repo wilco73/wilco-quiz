@@ -153,14 +153,38 @@ const OBJECTS = {
     '..KKK..',
     '...K...',
   ],
+  'Pokeball': [
+    '....KKKK....',
+    '..KKRRRRKK..',
+    '.KRRRRRRRRK.',
+    '.KRRRRRRRRK.',
+    'KRRRRRRRRRRK',
+    'KRRRRKKRRRRK',
+    'KKRRKWWKRRKK',
+    'KWKKKWWKKKWK',
+    '.KWWWKKWWWK.',
+    '.KWWWWWWWWK.',
+    '..KKWWWWKK..',
+    '....KKKK....',
+  ],
 };
 
-function stampPattern(g, size, pattern, pad = 1) {
+// Rotation d'un pattern (grille de caractères) de 90° horaire, répétée `times` fois.
+function rotatePattern(pattern, times) {
+  const w = Math.max(...pattern.map((r) => r.length));
+  let rows = pattern.map((r) => { const a = r.split(''); while (a.length < w) a.push(' '); return a; });
+  let t = ((times % 4) + 4) % 4;
+  while (t-- > 0) {
+    const h = rows.length, ww = rows[0].length, out = [];
+    for (let x = 0; x < ww; x++) { const nr = []; for (let y = h - 1; y >= 0; y--) nr.push(rows[y][x]); out.push(nr); }
+    rows = out;
+  }
+  return rows.map((r) => r.join(''));
+}
+
+// Dessine un pattern à une position (ox, oy) et une échelle données.
+function stampPattern(g, size, pattern, ox, oy, scale) {
   const ph = pattern.length, pw = Math.max(...pattern.map((r) => r.length));
-  const avail = size - 2 * pad;
-  const scale = Math.max(1, Math.floor(avail / Math.max(pw, ph)));
-  const dw = pw * scale, dh = ph * scale;
-  const ox = Math.floor((size - dw) / 2), oy = Math.floor((size - dh) / 2);
   for (let py = 0; py < ph; py++) {
     const row = pattern[py];
     for (let px = 0; px < pw; px++) {
@@ -176,11 +200,27 @@ function stampPattern(g, size, pattern, pad = 1) {
   }
 }
 
+// Dimension max (largeur/hauteur) d'un objet, en cases de son pattern.
+function objMaxDim(name) { const pat = OBJECTS[name]; return Math.max(pat.length, Math.max(...pat.map((r) => r.length))); }
+// Objets dont le pattern tient dans une zone de côté `maxDim`.
+function objectsFitting(maxDim) { return Object.keys(OBJECTS).filter((n) => objMaxDim(n) <= maxDim); }
+
 function generateObject(size) {
   const g = blank(size);
-  const names = Object.keys(OBJECTS);
+  const names = objectsFitting(size); // seuls les objets qui tiennent dans la grille
+  if (!names.length) return generateComposite(size);
   const name = names[Math.floor(Math.random() * names.length)];
-  stampPattern(g, size, OBJECTS[name], 1);
+  // Orientation aléatoire (0/90/180/270°)
+  const pattern = rotatePattern(OBJECTS[name], Math.floor(Math.random() * 4));
+  const ph = pattern.length, pw = Math.max(...pattern.map((r) => r.length));
+  // Échelle : tient dans la grille avec une marge de 1 case
+  const avail = size - 2;
+  const scale = Math.max(1, Math.floor(avail / Math.max(pw, ph)));
+  const dw = pw * scale, dh = ph * scale;
+  // Position aléatoire (en restant dans les limites)
+  const ox = Math.floor(Math.random() * (size - dw + 1));
+  const oy = Math.floor(Math.random() * (size - dh + 1));
+  stampPattern(g, size, pattern, ox, oy, scale);
   return { name, grid: g };
 }
 
@@ -212,10 +252,61 @@ function generateComposite(size) {
   return { name: `${parts.length} éléments`, grid: g };
 }
 
+// Place un objet aléatoire (pivoté) centré dans une boîte (x0,y0,w,h), mis à l'échelle pour y tenir.
+function placeObject(g, size, x0, y0, w, h) {
+  const names = objectsFitting(Math.min(w, h)); // objets qui tiennent dans la zone
+  if (!names.length) return null;
+  const name = names[Math.floor(Math.random() * names.length)];
+  const pattern = rotatePattern(OBJECTS[name], Math.floor(Math.random() * 4));
+  const ph = pattern.length, pw = Math.max(...pattern.map((r) => r.length));
+  const scale = Math.max(1, Math.floor(Math.min(w / pw, h / ph)));
+  const dw = pw * scale, dh = ph * scale;
+  const ox = x0 + Math.floor((w - dw) / 2), oy = y0 + Math.floor((h - dh) / 2);
+  stampPattern(g, size, pattern, ox, oy, scale);
+  return name;
+}
+
+// Découpe la grille en zones (2 moitiés, ou 4 quadrants sur grande grille) pour poser plusieurs formes sans chevauchement.
+function regionsFor(size) {
+  const h = Math.floor(size / 2);
+  if (size >= 24) return [[0, 0, h, h], [h, 0, size - h, h], [0, h, h, size - h], [h, h, size - h, size - h]];
+  return Math.random() < 0.5 ? [[0, 0, h, size], [h, 0, size - h, size]] : [[0, 0, size, h], [0, h, size, size - h]];
+}
+
+// Cible "mixte" : plusieurs formes (objets ET/OU formes géométriques), une par zone.
+function generateMulti(size) {
+  const g = blank(size);
+  const parts = [];
+  const regions = regionsFor(size);
+  const quad = regions.length === 4;
+  for (const [rx, ry, rw, rh] of regions) {
+    if (quad && Math.random() < 0.25) continue; // sur grande grille, parfois laisser une zone vide
+    let placed = null;
+    if (Math.random() < 0.6) placed = placeObject(g, size, rx + 1, ry + 1, rw - 2, rh - 2); // tente un objet
+    if (placed) {
+      parts.push(placed);
+    } else {
+      const el = rnd(ELEMENTS); // une forme géométrique (y compris si aucun objet ne tient dans la zone)
+      const sMax = Math.max(3, Math.min(rw, rh) - 2);
+      const sq = ri(Math.max(3, Math.floor(sMax * 0.6)), sMax);
+      el.fn(g, size, rx + Math.floor((rw - sq) / 2), ry + Math.floor((rh - sq) / 2), sq, rnd(FG));
+      parts.push(el.name);
+    }
+  }
+  if (!parts.length) return generateComposite(size);
+  return { name: parts.join(' + '), grid: g };
+}
+
 function generateTarget(size) {
-  // Les objets ne sont lisibles qu'à partir de 16 de côté
-  if (size >= 16 && Math.random() < 0.5) return generateObject(size);
-  return generateComposite(size);
+  // < 16 : trop petit pour les objets -> formes géométriques uniquement
+  if (size < 16) return generateComposite(size);
+  // 16-19 : un objet seul OU des formes géométriques (pas de multi, trop à l'étroit)
+  if (size < 20) return Math.random() < 0.5 ? generateObject(size) : generateComposite(size);
+  // >= 20 : on ajoute les cibles "mixtes" (plusieurs formes, objets + géométriques mélangés)
+  const r = Math.random();
+  if (r < 0.30) return generateObject(size);    // un seul objet
+  if (r < 0.60) return generateComposite(size); // formes géométriques
+  return generateMulti(size);                   // mix de plusieurs formes
 }
 
 // Rejette une cible trop pauvre : vide, ou entièrement peinte d'une seule couleur (ex. tout jaune).
