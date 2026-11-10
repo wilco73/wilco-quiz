@@ -39,10 +39,23 @@ function publicLobby(l, viewerOdId) {
 async function broadcast(io, l) { try { const sockets = await io.in(room(l.code)).fetchSockets(); for (const s of sockets) s.emit('majority:lobbyState', publicLobby(l, l.socketToPlayer?.[s.id] || null)); } catch (e) { console.error('[MAJORITY] broadcast:', e.message); } }
 function clearT(l) { if (l.timer) { clearTimeout(l.timer); l.timer = null; } }
 
+// Rotation équitable : on tire parmi ceux qui ont posé le MOINS de questions,
+// donc personne ne repose une question tant que tout le monde n'est pas passé (puis nouveau cycle).
 function pickAsker(l) {
-  let pool = l.order.filter((id) => id !== l.lastAsker);
-  if (!pool.length) pool = [...l.order];
-  return pool[Math.floor(Math.random() * pool.length)];
+  l.askCounts = l.askCounts || {};
+  const min = Math.min(...l.order.map((id) => l.askCounts[id] || 0));
+  let pool = l.order.filter((id) => (l.askCounts[id] || 0) === min);
+  if (pool.length > 1) { const others = pool.filter((id) => id !== l.lastAsker); if (others.length) pool = others; }
+  const id = pool[Math.floor(Math.random() * pool.length)];
+  l.askCounts[id] = (l.askCounts[id] || 0) + 1;
+  return id;
+}
+
+// Suit la chaîne des fusions (A->B->C) sans jamais boucler.
+function resolveKey(remaps, k) {
+  const seen = new Set();
+  while (remaps[k] && remaps[k] !== k && !seen.has(k)) { seen.add(k); k = remaps[k]; }
+  return k;
 }
 function startRound(io, l) {
   clearT(l);
@@ -61,13 +74,15 @@ function startAnswering(io, l) {
 // Calcule groupes + scores à partir des réponses brutes + des fusions manuelles (remaps)
 function computeGroups(l) {
   const remaps = l.remaps || {}; // normSource -> normCible
-  const keyOf = (raw) => { let k = normalize(raw); while (remaps[k] && remaps[k] !== k) k = remaps[k]; return k; };
+  const keyOf = (raw) => resolveKey(remaps, normalize(raw));
 
   const groupsMap = {}; // key -> { label, ids: [] }
   l.order.forEach((id) => {
     const raw = (l.answers[id] || '').trim(); if (!raw) return;
     const key = keyOf(raw); if (!key) return;
-    if (!groupsMap[key]) groupsMap[key] = { key, label: raw, ids: [] };
+    if (!groupsMap[key]) groupsMap[key] = { key, label: raw, ids: [], labelIsOriginal: normalize(raw) === key };
+    // Après une fusion, on affiche de préférence la réponse "d'origine" (pas la faute de frappe)
+    if (!groupsMap[key].labelIsOriginal && normalize(raw) === key) { groupsMap[key].label = raw; groupsMap[key].labelIsOriginal = true; }
     groupsMap[key].ids.push(id);
   });
   const groups = Object.values(groupsMap).sort((a, b) => b.ids.length - a.ids.length);
@@ -155,7 +170,7 @@ function register(socket, io) {
   socket.on('majority:startGame', (data, cb) => {
     const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
     if (l.order.length < MIN_PLAYERS) return cb?.({ success: false, message: `Minimum ${MIN_PLAYERS} joueurs` });
-    l.status = 'playing'; l.roundNumber = 1; l.lastAsker = null;
+    l.status = 'playing'; l.roundNumber = 1; l.lastAsker = null; l.askCounts = {};
     l.order.forEach((id) => { l.scores[id] = 0; });
     startRound(io, l); cb?.({ success: true });
   });
@@ -189,7 +204,10 @@ function register(socket, io) {
     const l = get(data); if (!l || l.phase !== 'reveal') return cb?.({ success: false });
     if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
     const { from, to } = data; if (!from || !to || from === to) return cb?.({ success: false });
-    l.remaps = l.remaps || {}; l.remaps[from] = to;
+    l.remaps = l.remaps || {};
+    const finalTo = resolveKey(l.remaps, to);
+    if (finalTo === from) return cb?.({ success: false, message: 'Fusion circulaire impossible' });
+    l.remaps[from] = finalTo;
     computeGroups(l); broadcast(io, l); cb?.({ success: true });
   });
   // Annuler toutes les fusions de la manche

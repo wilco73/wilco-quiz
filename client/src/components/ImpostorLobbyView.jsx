@@ -50,7 +50,16 @@ export default function ImpostorLobbyView({ lobby, currentUser, isHost, onSetCon
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-1">Durée par indice (secondes)</label>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">Déroulement des indices</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[['turn','Chacun son tour'],['simultaneous','Tous en même temps']].map(([v,label])=>(
+                    <button key={v} onClick={()=>onSetConfig({clueMode:v})} className={`py-2 rounded-lg font-bold text-sm border-2 ${(lobby.clueMode||'turn')===v?'border-purple-400 bg-purple-400/10':'border-gray-700 hover:border-gray-500'}`}>{label}</button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">{(lobby.clueMode||'turn')==='simultaneous' ? "Tout le monde écrit son indice en même temps ; révélation à la fin du timer ou quand tous ont validé." : "Chacun donne son indice à tour de rôle, dans un ordre imposé."}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-1">{(lobby.clueMode||'turn')==='simultaneous' ? "Durée de la manche d'indices (secondes)" : 'Durée par indice (secondes)'}</label>
                 <input type="number" min="15" max="300" defaultValue={lobby.clueDuration}
                   onBlur={(e) => onSetConfig({ clueDuration: parseInt(e.target.value) || 60 })}
                   className="w-32 px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 outline-none" />

@@ -38,7 +38,7 @@ export default function ImpostorVoteView({ lobby, currentUser, isHost, onVote, o
 
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {/* Rappel des indices */}
-        <details className="max-w-md mx-auto mb-4 bg-gray-800/40 rounded-lg p-2">
+        <details open className="max-w-md mx-auto mb-4 bg-gray-800/40 rounded-lg p-2">
           <summary className="text-sm text-gray-400 cursor-pointer">Revoir les indices ({(lobby.clues || []).length})</summary>
           <div className="mt-2 space-y-1">
             {(lobby.clues || []).map((c, i) => (

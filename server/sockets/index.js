@@ -19,6 +19,7 @@ const registerPixelHandlers = require('./pixel');
 const registerPitchHandlers = require('./pitch');
 const registerMajorityHandlers = require('./majority');
 const registerAuctionHandlers = require('./auction');
+const registerReversePostHandlers = require('./reversepost');
 const db = require('../database');
 
 const registerMemeHandlers = require('./meme');
@@ -75,6 +76,7 @@ function setup(io) {
     registerPitchHandlers.register(socket, io);
     registerMajorityHandlers.register(socket, io);
     registerAuctionHandlers.register(socket, io);
+    registerReversePostHandlers.register(socket, io);
     mysteryHandlers(io, socket, db);
     
     registerMemeHandlers(io, socket, db);

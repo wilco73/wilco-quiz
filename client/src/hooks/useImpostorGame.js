@@ -39,7 +39,10 @@ export default function useImpostorGame(currentUser) {
   const vote = useCallback((targetId) => emitAck('impostor:vote', { code: codeRef.current, odId: currentUser?.id, targetId }), [emitAck, currentUser]);
   const submitGuess = useCallback((answer) => emitAck('impostor:submitGuess', { code: codeRef.current, odId: currentUser?.id, answer }), [emitAck, currentUser]);
   const voteGuess = useCallback((v) => emitAck('impostor:voteGuess', { code: codeRef.current, odId: currentUser?.id, vote: v }), [emitAck, currentUser]);
+  const goToVote = useCallback(() => emitAck('impostor:goToVote', { code: codeRef.current, odId: currentUser?.id }), [emitAck, currentUser]);
+  // Brouillon (sans accusé) : conservé côté serveur si le timer tombe à 0
+  const clueDraft = useCallback((text) => { if (socket) socket.emit('impostor:clueDraft', { code: codeRef.current, odId: currentUser?.id, text }); }, [socket, currentUser]);
   
 
-  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setConfig, addCustomWord, removeCustomWord, startGame, beginClues, submitClue, vote, submitGuess, voteGuess, stopGame, leaveLobby, setError };
+  return { lobby, isHost, error, loading, ended, createLobby, joinLobby, setConfig, addCustomWord, removeCustomWord, startGame, beginClues, submitClue, clueDraft, goToVote, vote, submitGuess, voteGuess, stopGame, leaveLobby, setError };
 }

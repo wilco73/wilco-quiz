@@ -14,7 +14,7 @@ function isHost(l, odId) { return l && l.hostId === odId; }
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 function recommendedImpostors(n) { return n <= 5 ? 1 : (n <= 8 ? 2 : 3); }
 function aliveIds(l) { return l.alive ? l.order.filter((id) => l.alive[id]) : [...l.order]; }
-function currentCluePlayer(l) { return (l.phase === 'clues' && l.clueOrder) ? (l.clueOrder[l.clueIndex] || null) : null; }
+function currentCluePlayer(l) { if (l.clueMode === 'simultaneous' || l.roundComplete) return null; return (l.phase === 'clues' && l.clueOrder) ? (l.clueOrder[l.clueIndex] || null) : null; }
 
 // validation souple (accents + fautes)
 function normalize(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ''); }
@@ -30,6 +30,9 @@ function publicLobby(l, viewerOdId) {
     theme: l.theme, themes: l.themes || [], customWords: l.customWords || [],
     minPlayers: MIN_PLAYERS, recommendedImpostors: recommendedImpostors(l.order.length),
     clueDuration: l.clueDuration, clueRound: l.clueRound || 0,
+    clueMode: l.clueMode || 'turn',
+    roundComplete: !!l.roundComplete,
+    simSubmittedIds: (l.phase === 'clues' && l.clueMode === 'simultaneous' && l.simSubmitted) ? Object.keys(l.simSubmitted) : [],
     currentCluePlayerId: currentCluePlayer(l),
     clueRemainingMs: l.clueEndsAt ? Math.max(0, l.clueEndsAt - Date.now()) : null,
     clues: l.clues || [],
@@ -59,15 +62,36 @@ async function broadcast(io, l) { try { const sockets = await io.in(room(l.code)
 
 function clearClueTimer(l) { if (l.clueTimer) { clearTimeout(l.clueTimer); l.clueTimer = null; } }
 function buildClueOrder(l) { const alive = aliveIds(l); const start = Math.floor(Math.random() * alive.length); return [...alive.slice(start), ...alive.slice(0, start)]; }
-function startClueTimer(io, l) { clearClueTimer(l); l.clueEndsAt = Date.now() + l.clueDuration * 1000; l.clueTimer = setTimeout(() => { recordClue(l, ''); advanceClue(io, l); }, l.clueDuration * 1000); broadcast(io, l); }
-function recordClue(l, word) { const id = currentCluePlayer(l); if (!id) return; l.clues.push({ round: l.clueRound, odId: id, word: (word || '').trim() || '…' }); }
-function advanceClue(io, l) { clearClueTimer(l); l.clueIndex += 1; if (l.clueIndex >= l.clueOrder.length) { l.phase = 'vote'; l.clueEndsAt = null; l.votes = {}; broadcast(io, l); return; } startClueTimer(io, l); }
+function startClueTimer(io, l) { clearClueTimer(l); l.clueEndsAt = Date.now() + l.clueDuration * 1000; l.clueTimer = setTimeout(() => { const id = currentCluePlayer(l); recordClue(l, (l.drafts && id && l.drafts[id]) || ''); advanceClue(io, l); }, l.clueDuration * 1000); broadcast(io, l); }
+function recordClue(l, word) { const id = currentCluePlayer(l); if (!id) return; l.clues.push({ round: l.clueRound, odId: id, word: (word || '').trim() || '…' }); if (l.drafts) delete l.drafts[id]; }
+function advanceClue(io, l) { clearClueTimer(l); l.clueIndex += 1; if (l.clueIndex >= l.clueOrder.length) { l.roundComplete = true; l.clueEndsAt = null; broadcast(io, l); return; } startClueTimer(io, l); }
+
+// Mode simultané : tout le monde écrit en même temps, un seul timer pour la manche
+function startSimRound(io, l) {
+  clearClueTimer(l);
+  l.simSubmitted = {}; l.drafts = {};
+  l.clueEndsAt = Date.now() + l.clueDuration * 1000;
+  l.clueTimer = setTimeout(() => revealSim(io, l), l.clueDuration * 1000);
+  broadcast(io, l);
+}
+// Révélation simultanée : indices validés, sinon brouillons en cours, sinon "…"
+function revealSim(io, l) {
+  if (l.phase !== 'clues' || l.roundComplete) return;
+  clearClueTimer(l);
+  (l.clueOrder || aliveIds(l)).forEach((id) => {
+    const w = String((l.simSubmitted && l.simSubmitted[id]) ?? (l.drafts && l.drafts[id]) ?? '').trim();
+    l.clues.push({ round: l.clueRound, odId: id, word: w || '…' });
+  });
+  l.simSubmitted = {}; l.drafts = {};
+  l.roundComplete = true; l.clueEndsAt = null;
+  broadcast(io, l);
+}
 
 function newClueRound(io, l) {
   l.result = null; l.pendingGuess = null; l.pendingElim = null; l.votes = {};
   l.clueRound = (l.clueRound || 0) + 1;
-  l.clueOrder = buildClueOrder(l); l.clueIndex = 0; l.phase = 'clues';
-  startClueTimer(io, l);
+  l.clueOrder = buildClueOrder(l); l.clueIndex = 0; l.phase = 'clues'; l.roundComplete = false; l.drafts = {};
+  if (l.clueMode === 'simultaneous') startSimRound(io, l); else startClueTimer(io, l);
 }
 function checkWin(l) {
   const alive = aliveIds(l);
@@ -121,7 +145,7 @@ function register(socket, io) {
       for (const [c, l] of impostorLobbies) { if (l.hostId === odId) { socket.to(room(c)).emit('impostor:gameEnded', { code: c }); clearClueTimer(l); impostorLobbies.delete(c); } }
       let themes = []; try { themes = await db.getImpostorThemes(); } catch (e) {}
       const code = generateCode();
-      const lobby = { code, hostId: odId, status: 'waiting', phase: null, mode: 'quick', impostorCount: 1, mrWhite: false, stealWin: false, theme: null, clueDuration: 60, themes, customWords: [], players: { [odId]: { odId, pseudo, avatar, avatarUrl: avatarUrl || null } }, order: [odId], socketToPlayer: {}, createdAt: Date.now() };
+      const lobby = { code, hostId: odId, status: 'waiting', phase: null, mode: 'quick', impostorCount: 1, mrWhite: false, stealWin: false, theme: null, clueDuration: 60, clueMode: 'turn', themes, customWords: [], players: { [odId]: { odId, pseudo, avatar, avatarUrl: avatarUrl || null } }, order: [odId], socketToPlayer: {}, createdAt: Date.now() };
       impostorLobbies.set(code, lobby); socket.join(room(code)); mapSocket(lobby, odId);
       cb?.({ success: true, code, lobby: publicLobby(lobby, odId), isHost: true });
     } catch (e) { console.error('[IMPOSTOR] create:', e); cb?.({ success: false, message: e.message }); }
@@ -152,6 +176,7 @@ function register(socket, io) {
     if (typeof c.stealWin === 'boolean') l.stealWin = c.stealWin;
     if ('theme' in c) l.theme = c.theme || null;
     if (Number.isInteger(c.clueDuration)) l.clueDuration = Math.max(15, Math.min(300, c.clueDuration));
+    if (c.clueMode === 'turn' || c.clueMode === 'simultaneous') l.clueMode = c.clueMode;
     broadcast(io, l); cb?.({ success: true });
   });
 
@@ -215,7 +240,7 @@ function register(socket, io) {
       });
       l.pair = { civil, impostor, theme };
       l.alive = {}; l.order.forEach((id) => { l.alive[id] = true; });
-      l.clues = []; l.clueRound = 0; l.eliminatedOrder = []; l.winner = null; l.result = null; l.pendingGuess = null; l.pendingElim = null;
+      l.clues = []; l.clueRound = 0; l.eliminatedOrder = []; l.winner = null; l.result = null; l.pendingGuess = null; l.pendingElim = null; l.roundComplete = false; l.drafts = {}; l.simSubmitted = {};
       l.status = 'playing'; l.phase = 'reveal';
       broadcast(io, l); cb?.({ success: true });
     } catch (e) { console.error('[IMPOSTOR] start:', e); cb?.({ success: false, message: e.message }); }
@@ -228,9 +253,35 @@ function register(socket, io) {
   });
 
   socket.on('impostor:submitClue', (data, cb) => {
-    const l = get(data); if (!l || l.phase !== 'clues') return cb?.({ success: false, message: 'Pas de manche en cours' });
+    const l = get(data); if (!l || l.phase !== 'clues' || l.roundComplete) return cb?.({ success: false, message: 'Pas de manche en cours' });
+    if (l.clueMode === 'simultaneous') {
+      const alive = aliveIds(l);
+      if (!alive.includes(data?.odId)) return cb?.({ success: false, message: 'Tu ne participes pas à cette manche' });
+      if (l.simSubmitted[data.odId] !== undefined) return cb?.({ success: false, message: 'Indice déjà validé' });
+      const w = (data.word || '').trim(); if (!w) return cb?.({ success: false, message: 'Indice vide' });
+      l.simSubmitted[data.odId] = w.slice(0, 30);
+      if (alive.every((id) => l.simSubmitted[id] !== undefined)) revealSim(io, l); else broadcast(io, l);
+      return cb?.({ success: true });
+    }
     if (data?.odId !== currentCluePlayer(l)) return cb?.({ success: false, message: "Ce n'est pas ton tour" });
     recordClue(l, data.word); advanceClue(io, l); cb?.({ success: true });
+  });
+
+  // Brouillon en cours de saisie (sans accusé) : conservé si le timer tombe à 0
+  socket.on('impostor:clueDraft', (data) => {
+    const l = get(data); if (!l || l.phase !== 'clues' || l.roundComplete) return;
+    const id = data?.odId; if (!id) return;
+    if (l.clueMode === 'simultaneous') { if (!aliveIds(l).includes(id) || (l.simSubmitted && l.simSubmitted[id] !== undefined)) return; }
+    else if (id !== currentCluePlayer(l)) return;
+    l.drafts = l.drafts || {}; l.drafts[id] = String(data.text || '').slice(0, 30);
+  });
+
+  // L'hôte passe aux votes une fois tous les indices visibles
+  socket.on('impostor:goToVote', (data, cb) => {
+    const l = get(data); if (!isHost(l, data?.odId)) return cb?.({ success: false, message: "Réservé à l'hôte" });
+    if (l.phase !== 'clues' || !l.roundComplete) return cb?.({ success: false, message: 'Les indices ne sont pas terminés' });
+    l.roundComplete = false; l.phase = 'vote'; l.votes = {}; l.clueEndsAt = null;
+    broadcast(io, l); cb?.({ success: true });
   });
 
   // Phase 3 : vote d'élimination

@@ -31,6 +31,7 @@ import PixelGameContainer from './components/PixelGameContainer';
 import PitchGameContainer from './components/PitchGameContainer';
 import MajorityGameContainer from './components/MajorityGameContainer';
 import AuctionGameContainer from './components/AuctionGameContainer';
+import ReversePostGameContainer from './components/ReversePostGameContainer';
 import { supabase } from './services/supabase';
 import { API_URL } from './config';
 import './App.css';
@@ -68,6 +69,7 @@ const App = () => {
   const [pitchEntry, setPitchEntry] = useState(null);
   const [majorityEntry, setMajorityEntry] = useState(null);
   const [auctionEntry, setAuctionEntry] = useState(null);
+  const [reversePostEntry, setReversePostEntry] = useState(null);
 
   // Synchroniser myAnswerRef avec myAnswer
   useEffect(() => {
@@ -98,7 +100,10 @@ const App = () => {
   const handleJoinMajority = (code) => { setMajorityEntry({ entry: 'join', code}); setView('majority-game'); };
 
   const handleCreateAuction = () => { setAuctionEntry({ entry: 'create'}); setView('auction-game'); };
-  const handleJoinAuction = (code) => { setAuctionEntry({ entry: 'join', code}); setView('auction-game'); };  
+  const handleJoinAuction = (code) => { setAuctionEntry({ entry: 'join', code}); setView('auction-game'); };
+
+  const handleCreateReversePost = () => { setReversePostEntry({ entry: 'create' }); setView('reversepost-game'); };
+  const handleJoinReversePost = (code) => { setReversePostEntry({ entry: 'join', code }); setView('reversepost-game'); };  
 
   // ========== SAUVEGARDE URGENTE QUAND TIMER BAS ==========
   // Envoyer immédiatement le brouillon quand il reste peu de temps
@@ -828,7 +833,7 @@ const App = () => {
     'admin-monitoring', 'admin-validation', 'admin-users',
     'admin-game-settings', 'admin-meme-templates', 'admin-auction',
     'meme-editor-test', 'meme-game-test', 'burger-game', 'wilpost-game', 'impostor-game',
-    'pixel-game', 'pitch-game', 'majority-game', 'auction-game',
+    'pixel-game', 'pitch-game', 'majority-game', 'auction-game', 'reversepost-game',
   ];
   const useMainLayout = currentUser && layoutViews.includes(view);
 
@@ -853,6 +858,8 @@ const App = () => {
             onJoinMajority={handleJoinMajority}
             onCreateAuction={handleCreateAuction}
             onJoinAuction={handleJoinAuction}
+            onCreateReversePost={handleCreateReversePost}
+            onJoinReversePost={handleJoinReversePost}
             onJoinMysteryLobby={(lobby) => {
               setCurrentMysteryLobby(lobby);
               setView('mystery-game');
@@ -1099,6 +1106,15 @@ const App = () => {
             entry={auctionEntry?.entry || 'join'}
             joinCode={auctionEntry?.code}
             onExit={() => { setAuctionEntry(null); setView('lobby-list'); }}
+          />
+        );
+      case 'reversepost-game':
+        return (
+          <ReversePostGameContainer
+            currentUser={currentUser}
+            entry={reversePostEntry?.entry || 'join'}
+            joinCode={reversePostEntry?.code}
+            onExit={() => { setReversePostEntry(null); setView('lobby-list'); }}
           />
         );
       default:

@@ -29,6 +29,8 @@ const LobbyList = ({
   onJoinMajority,
   onCreateAuction,
   onJoinAuction,
+  onCreateReversePost,
+  onJoinReversePost,
 }) => {
   const [gameSettings, setGameSettings] = useState([]);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -52,6 +54,8 @@ const LobbyList = ({
   const [showMajorityJoin, setShowMajorityJoin] = useState(false);
   const [auctionJoinCode, setAuctionJoinCode] = useState('');
   const [showAuctionJoin, setShowAuctionJoin] = useState(false);
+  const [reversePostJoinCode, setReversePostJoinCode] = useState('');
+  const [showReversePostJoin, setShowReversePostJoin] = useState(false);
 
 
   const availableLobbies = lobbies.filter(l => l.status === 'waiting' || l.status === 'playing');
@@ -152,6 +156,7 @@ const LobbyList = ({
       'pitch': ['pitch','Match de Pitch'],
       'majority': ['majority','Majorité'],
       'auction': ['auction','Encan Clandestin','encan'],
+      'reversepost': ['reversepost','Post-it inversé','postit-inverse'],
     };
     
     const variations = idVariations[gameId] || [gameId];
@@ -655,6 +660,71 @@ const LobbyList = ({
                 </div>
               ) : (
                 <button onClick={() => setShowWilpostJoin(true)} className="bg-gradient-to-r from-gray-600 to-gray-700 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02]">
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="text-3xl">🔑</div>
+                    <div>
+                      <h4 className="text-lg font-bold">Rejoindre avec code</h4>
+                      <p className="text-white/80 text-sm">Entrez le code d'une partie privée</p>
+                    </div>
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+
+      {/* ==================== SECTION Post-it inversé ==================== */}
+      {isGameEnabled('reversepost') && (
+        <section className="mb-6 sm:mb-8">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
+            🔄 Post-it inversé
+          </h2>
+
+          {currentUser && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
+              {canCreateLobby('reversepost') ? (
+                <button
+                  onClick={onCreateReversePost}
+                  disabled={loadingCreate}
+                  className={`bg-gradient-to-r from-sky-500 to-indigo-500 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02] ${loadingCreate ? 'opacity-50' : ''}`}
+                >
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="text-3xl">🔄</div>
+                    <div>
+                      <h4 className="text-lg font-bold">{loadingCreate ? 'Création...' : 'Créer une partie'}</h4>
+                      <p className="text-white/80 text-sm">Choisis ton mot, devine celui des autres</p>
+                    </div>
+                  </div>
+                </button>
+              ) : (
+                <div></div>
+              )}
+
+              {showReversePostJoin ? (
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-xl p-4 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={reversePostJoinCode}
+                    onChange={(e) => setReversePostJoinCode(e.target.value.toUpperCase())}
+                    placeholder="CODE"
+                    className="dark:text-white flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-mono text-lg uppercase focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    maxLength={4}
+                    autoFocus
+                    onKeyPress={(e) => e.key === 'Enter' && reversePostJoinCode.trim() && onJoinReversePost(reversePostJoinCode)}
+                  />
+                  <button
+                    onClick={() => onJoinReversePost(reversePostJoinCode)}
+                    disabled={!reversePostJoinCode.trim()}
+                    className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                  >
+                    OK
+                  </button>
+                  <button onClick={() => { setShowReversePostJoin(false); setReversePostJoinCode(''); }} className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">✕</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowReversePostJoin(true)} className="bg-gradient-to-r from-gray-600 to-gray-700 rounded-xl shadow-sm hover:shadow-lg p-4 transition-all text-left active:scale-[0.98] hover:scale-[1.02]">
                   <div className="flex items-center gap-3 text-white">
                     <div className="text-3xl">🔑</div>
                     <div>

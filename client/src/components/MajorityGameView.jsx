@@ -22,6 +22,12 @@ export default function MajorityGameView({ lobby, currentUser, isHost, onSetQues
   const isAsker = lobby.askerId === currentUser?.id;
   const iAnswered = (lobby.answeredIds || []).includes(currentUser?.id);
   const submitQ = () => { if (question.trim()) { onSetQuestion(question.trim()); setQuestion(''); } };
+
+  // Score en temps réel : cumul + (pendant le reveal) les points de la manche en cours
+  const roundPts = lobby.phase === 'reveal' ? (lobby.roundScores || {}) : {};
+  const board = lobby.players
+    .map((p) => ({ ...p, score: lobby.scores?.[p.odId] || 0, delta: roundPts[p.odId] }))
+    .sort((a, b) => (b.score + (b.delta || 0)) - (a.score + (a.delta || 0)));
   const submitA = () => { if (answer.trim()) onAnswer(answer.trim()); };
 
   const Header = (
@@ -38,6 +44,19 @@ export default function MajorityGameView({ lobby, currentUser, isHost, onSetQues
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-gray-900 to-black text-white rounded-xl overflow-hidden">
       {Header}
+      <div className="shrink-0 px-3 pb-2 flex flex-wrap justify-center gap-1.5">
+        {board.map((p, i) => (
+          <span key={p.odId} className={`text-xs rounded-full px-2.5 py-1 ${p.odId === currentUser?.id ? 'bg-emerald-600/30 ring-1 ring-emerald-400' : 'bg-gray-800/80'}`}>
+            <span className="text-gray-500 mr-1">{i + 1}.</span>
+            {p.odId === lobby.askerId && '🎤 '}{p.pseudo} <b>{p.score}</b>
+            {p.delta !== undefined && (
+              <span className={`ml-1 font-bold ${p.delta > 0 ? 'text-green-400' : p.delta < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                {p.delta > 0 ? `+${p.delta}` : p.delta < 0 ? `${p.delta}` : '±0'}
+              </span>
+            )}
+          </span>
+        ))}
+      </div>
       <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col items-center justify-center text-center gap-4">
 
         {/* ASK */}
@@ -92,6 +111,7 @@ export default function MajorityGameView({ lobby, currentUser, isHost, onSetQues
                 </div>
               ))}
               {(!lobby.groups || lobby.groups.length === 0) && <p className="text-gray-500 text-sm">Aucune réponse.</p>}
+              <p className="text-[11px] text-gray-500">Plus gros groupe +1 · réponse seule −1 · autres 0 · tout le monde pareil = personne ne marque</p>
             </div>
             {isHost && (lobby.groups || []).length > 1 && (
               <div className="mt-2 mb-3 p-2 rounded-lg bg-gray-800/60 text-left">

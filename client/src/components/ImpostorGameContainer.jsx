@@ -49,7 +49,7 @@ export default function ImpostorGameContainer({ currentUser, entry, joinCode, on
   }
 
   if (l.phase === 'clues') {
-    return <ImpostorGameView lobby={l} currentUser={currentUser} isHost={game.isHost} onSubmitClue={game.submitClue} onStopGame={game.stopGame} onBack={handleExit} />;
+    return <ImpostorGameView lobby={l} currentUser={currentUser} isHost={game.isHost} onSubmitClue={game.submitClue} onClueDraft={game.clueDraft} onGoToVote={game.goToVote} onStopGame={game.stopGame} onBack={handleExit} />;
   }
 
   if (l.phase === 'vote' || l.phase === 'guess') {
